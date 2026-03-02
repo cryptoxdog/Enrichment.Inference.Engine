@@ -1,0 +1,20 @@
+replicaCount: 1
+
+image:
+  tag: "dev-latest"
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false
+
+pdb:
+  enabled: false
+
+config:
+  LOG_LEVEL: "DEBUG"
+  DEFAULT_MAX_VARIATIONS: "2"
+  MAX_CONCURRENT_VARIATIONS: "2"
+
+affinity: {}

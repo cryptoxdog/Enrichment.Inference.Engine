@@ -1,0 +1,11 @@
+════════════════════════════════════════
+ Enrichment API {{ .Chart.AppVersion }}
+════════════════════════════════════════
+
+Health:  kubectl port-forward svc/enrichment-api {{ .Values.service.port }}:{{ .Values.service.port }}
+         curl http://localhost:{{ .Values.service.port }}/api/v1/health
+
+Enrich:  curl -X POST http://localhost:{{ .Values.service.port }}/api/v1/enrich \
+           -H "X-API-Key: <your-client-key>" \
+           -H "Content-Type: application/json" \
+           -d '{"entity": {"name": "test"}}'

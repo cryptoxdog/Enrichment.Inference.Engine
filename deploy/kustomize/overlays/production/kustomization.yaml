@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: enrichment
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: enrichment-api
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: add
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: app
+                        operator: In
+                        values: ["enrichment-api"]
+                  topologyKey: kubernetes.io/hostname
+  - target:
+      kind: PodDisruptionBudget
+      name: enrichment-api
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+
+configMapGenerator:
+  - name: enrichment-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=WARNING
+      - DEFAULT_MAX_VARIATIONS=5
+      - MAX_CONCURRENT_VARIATIONS=3
+
+images:
+  - name: ghcr.io/OWNER/domain-enrichment-api
+    newTag: v2.2.0

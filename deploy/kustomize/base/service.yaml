@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrichment-api
+  labels:
+    app: enrichment-api
+spec:
+  type: ClusterIP
+  selector:
+    app: enrichment-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
