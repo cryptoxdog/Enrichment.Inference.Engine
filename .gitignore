@@ -5,6 +5,10 @@ Odoo-side client module/
 # Documentation (separate)
 docs/
 
+# Cursor IDE
+.cursor/
+.cursor-commands
+
 # Python
 __pycache__/
 *.py[cod]
