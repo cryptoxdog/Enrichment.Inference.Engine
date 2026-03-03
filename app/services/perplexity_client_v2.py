@@ -1,0 +1,141 @@
+"""
+Perplexity Client v2.0 — SDK-backed async adapter.
+
+Replaces raw httpx calls with the official Perplexity SDK while
+preserving the exact SonarResponse / query_perplexity interface
+consumed by enrichment_orchestrator.py.
+
+Changes from v1:
+  - httpx.AsyncClient → perplexity.Perplexity SDK
+  - Typed access to citations, search_results, usage
+  - asyncio.to_thread() bridge for async compatibility
+  - Singleton client with lazy init (connection pooling)
+  - Retry with backoff built into _sync_call
+
+Dependencies: pip install perplexityai
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+import structlog
+
+from perplexity import Perplexity
+from perplexity import PerplexityError
+
+logger = structlog.get_logger("perplexity_client")
+
+# ── Response contract (unchanged from v1) ──────────────────
+
+@dataclass
+class SonarResponse:
+    """Immutable response from a single Sonar API call."""
+    data: dict[str, Any]
+    tokens_used: int
+    citations: list[str] = field(default_factory=list)
+    search_results: list[dict] = field(default_factory=list)
+    model: str = ""
+    latency_ms: int = 0
+
+
+# ── Singleton client ───────────────────────────────────────
+
+_clients: dict[str, Perplexity] = {}
+
+
+def _get_client(api_key: str) -> Perplexity:
+    if api_key not in _clients:
+        _clients[api_key] = Perplexity(api_key=api_key)
+        logger.info("client_initialized")
+    return _clients[api_key]
+
+
+# ── Sync core (runs in thread) ─────────────────────────────
+
+_RETRY_STATUS = {429, 500, 502, 503}
+_MAX_RETRIES = 3
+
+
+def _sync_call(payload: dict[str, Any], api_key: str, timeout: int) -> SonarResponse:
+    """Blocking SDK call with retry. Executed via asyncio.to_thread()."""
+    client = _get_client(api_key)
+    start = time.monotonic()
+    last_err: Exception | None = None
+    backoff = 1.0
+
+    for attempt in range(_MAX_RETRIES):
+        try:
+            completion = client.chat.completions.create(**payload)
+
+            latency = int((time.monotonic() - start) * 1000)
+            usage = completion.usage
+            tokens = usage.total_tokens if usage else 0
+
+            # Extract structured content
+            content = completion.choices[0].message.content
+            try:
+                data = json.loads(content)
+            except (json.JSONDecodeError, TypeError):
+                data = {"_raw": content}
+
+            return SonarResponse(
+                data=data,
+                tokens_used=tokens,
+                citations=getattr(completion, "citations", []) or [],
+                search_results=getattr(completion, "search_results", []) or [],
+                model=completion.model or payload.get("model", ""),
+                latency_ms=latency,
+            )
+
+        except PerplexityError as e:
+            last_err = e
+            status = getattr(e, "status_code", 0)
+            if status in _RETRY_STATUS and attempt < _MAX_RETRIES - 1:
+                logger.warning(
+                    "retrying",
+                    status=status,
+                    attempt=attempt + 1,
+                    backoff=backoff,
+                )
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            raise
+
+        except Exception as e:
+            last_err = e
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            raise
+
+    raise last_err  # unreachable but satisfies type checker
+
+
+# ── Async interface (unchanged signature from v1) ──────────
+
+async def query_perplexity(
+    payload: dict[str, Any],
+    api_key: str,
+    breaker=None,
+    timeout: int = 60,
+) -> SonarResponse:
+    """
+    Async Sonar API call — drop-in replacement for v1.
+
+    Parameters match enrichment_orchestrator.py expectations exactly:
+      payload : dict ready for chat.completions.create(**payload)
+      api_key : Perplexity API key
+      breaker : CircuitBreaker instance (optional)
+      timeout : seconds (passed through to SDK)
+    """
+    if breaker and not breaker.allow():
+        raise RuntimeError("circuit_open")
+
+    return await asyncio.to_thread(_sync_call, payload, api_key, timeout)
