@@ -2,12 +2,12 @@
 Search Parameter Optimizer v2 (search_optimizer_v2.py)
 
 Fully domain-agnostic. Zero hardcoded field maps or industry data.
-All domain knowledge injected via DomainClassification from field_classifier_v2.
+All domain knowledge injected via DomainClassification from field_classifier.
 
 Deterministic resolver: (mode, target_fields, signals, classification) → SonarConfig
 
 Integration:
-  field_classifier_v2.auto_classify_domain(yaml) → DomainClassification
+  field_classifier.auto_classify_domain(yaml) → DomainClassification
   DomainClassification + EntitySignals → search_optimizer_v2.resolve() → SonarConfig
   SonarConfig → prompt_builder.build_prompt() → payload
   payload → perplexity_client.query_perplexity()
@@ -462,7 +462,7 @@ def resolve_from_classification(
     search_plan_mode: str,
     target_fields: list[str],
     signals: EntitySignals,
-    classification: Any,  # DomainClassification from field_classifier_v2
+    classification: Any,  # DomainClassification from field_classifier
     budget_tokens: int | None = None,
     force_model: SonarModel | None = None,
 ) -> SonarConfig:

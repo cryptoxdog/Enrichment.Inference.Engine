@@ -14,7 +14,7 @@ in the domain YAML ontology. This module:
   4. Produces confidence scores bounded by input minimums
   5. Feeds unlock analysis back to search_optimizer_v2 for target selection
 
-YAML contract consumed (same spec as field_classifier_v2):
+YAML contract consumed (same spec as field_classifier):
   ontology.nodes.{Entity}.properties.{field}:
     managed_by: computed | inference | derived
     derived_from: [field_a, field_b]          # REQUIRED for inference
@@ -263,7 +263,7 @@ class InferenceResult:
         Fields successfully derived at high confidence → INFERRABLE
         Fields with all-but-one input → difficulty downgrade suggestion
         """
-        from field_classifier_v2 import FieldDifficulty  # deferred import
+        from field_classifier import FieldDifficulty  # deferred import
         patches: dict[str, str] = {}
         for name, r in self.derived.items():
             if r.confidence >= 0.7:
