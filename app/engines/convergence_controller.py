@@ -23,6 +23,10 @@ from ..models.schemas import EnrichRequest, EnrichResponse
 from ..core.config import Settings
 from ..services.idempotency import IdempotencyStore
 from .meta_prompt_planner import MetaPromptPlanner, SearchPlan
+# TODO(P1): convergence_controller uses InferenceBridge v1 API (.run(), .derived_fields).
+# inference_bridge_v2.py has a different API (build_derivation_graph + run_inference).
+# Migration requires: (1) adapter class wrapping v2 API, or (2) rewrite controller
+# to use v2 API directly. See gap analysis for details. Do NOT just swap imports.
 from .inference_bridge import InferenceBridge
 
 logger = structlog.get_logger("convergence_controller")
