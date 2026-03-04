@@ -1,5 +1,5 @@
 """
-Field Difficulty Classifier v2 (field_classifier_v2.py)
+Field Difficulty Classifier v2 (field_classifier.py)
 
 Fully domain-agnostic. Zero hardcoded industry data.
 All domain knowledge comes from the YAML spec — nothing else.
