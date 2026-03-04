@@ -43,7 +43,7 @@ from ...services.crm_field_scanner import (
     generate_seed_yaml,
     scan_crm_fields,
 )
-from ...engines.convergence.enrichment_profile import (
+from ...services.enrichment_profile import (
     EnrichmentProfile,
     ProfileRegistry,
     allocate_budget,
