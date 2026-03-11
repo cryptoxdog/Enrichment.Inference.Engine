@@ -240,7 +240,9 @@ def _apply_scoring_proposals(
     """Append approved scoring dimension proposals to the scoring list."""
     for sp in proposed_dims:
         if sp.field_name in approved_fields:
-            scoring.append({"field": sp.field_name, "type": sp.dimension_type, "auto_proposed": True})
+            scoring.append(
+                {"field": sp.field_name, "type": sp.dimension_type, "auto_proposed": True}
+            )
 
 
 class _FieldAcc:

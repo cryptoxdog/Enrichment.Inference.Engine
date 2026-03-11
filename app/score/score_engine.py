@@ -142,9 +142,7 @@ def _eval_weighted_set(criterion: ICPFieldCriterion, value: Any) -> float:
         if total_weight == 0:
             return 0.0
         matched_weight = sum(
-            criterion.set_weights.get(str(v), 0.0)
-            for v in value
-            if str(v) in criterion.set_weights
+            criterion.set_weights.get(str(v), 0.0) for v in value if str(v) in criterion.set_weights
         )
         return min(matched_weight / total_weight, 1.0)
     return criterion.set_weights.get(str(value), 0.0)
@@ -173,9 +171,7 @@ def _evaluate_criterion(
 # ── Dimension Scorers ─────────────────────────────────────────
 
 
-def _missing_fit_field(
-    criterion: ICPFieldCriterion, total_weight: float
-) -> MissingField:
+def _missing_fit_field(criterion: ICPFieldCriterion, total_weight: float) -> MissingField:
     """Build a MissingField entry for a criterion that cannot be scored."""
     impact = criterion.weight / max(total_weight, 1.0)
     return MissingField(
@@ -252,7 +248,10 @@ def score_fit(
 
         fields_present += 1
         contrib, weighted = _fit_field_contribution(
-            criterion, value, conf, total_weight,
+            criterion,
+            value,
+            conf,
+            total_weight,
             field_sources.get(criterion.field_name, "enrichment"),
         )
         contributions.append(contrib)

@@ -158,8 +158,10 @@ def _collect_gate_fields(domain_spec: dict[str, Any]) -> set[str]:
 def _collect_scoring_fields(domain_spec: dict[str, Any]) -> set[str]:
     """Extract all property names referenced in scoring dimension definitions."""
     scoring_fields: set[str] = set()
-    dims = domain_spec.get("scoring_dimensions", domain_spec.get("scoring", {}).get("dimensions", []))
-    for dim in (dims if isinstance(dims, list) else []):
+    dims = domain_spec.get(
+        "scoring_dimensions", domain_spec.get("scoring", {}).get("dimensions", [])
+    )
+    for dim in dims if isinstance(dims, list) else []:
         if isinstance(dim, dict):
             for key in ("candidate_property", "candidate_prop", "source"):
                 val = dim.get(key)
@@ -207,13 +209,26 @@ def _props_from_node(
     result: list[DomainProperty] = []
     if isinstance(props, dict):
         for name, prop_def in props.items():
-            result.append(_parse_domain_property(name, prop_def, gate_fields, scoring_fields, inference_inputs, inference_outputs))
+            result.append(
+                _parse_domain_property(
+                    name, prop_def, gate_fields, scoring_fields, inference_inputs, inference_outputs
+                )
+            )
     elif isinstance(props, list):
         for prop_def in props:
             if isinstance(prop_def, dict):
                 name = prop_def.get("name", "")
                 if name:
-                    result.append(_parse_domain_property(name, prop_def, gate_fields, scoring_fields, inference_inputs, inference_outputs))
+                    result.append(
+                        _parse_domain_property(
+                            name,
+                            prop_def,
+                            gate_fields,
+                            scoring_fields,
+                            inference_inputs,
+                            inference_outputs,
+                        )
+                    )
     return result
 
 
@@ -227,7 +242,9 @@ def _extract_domain_properties(
     properties: list[DomainProperty] = []
     for node_def in _iter_node_defs(domain_spec):
         properties.extend(
-            _props_from_node(node_def, gate_fields, scoring_fields, inference_inputs, inference_outputs)
+            _props_from_node(
+                node_def, gate_fields, scoring_fields, inference_inputs, inference_outputs
+            )
         )
     return properties
 
