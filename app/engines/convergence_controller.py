@@ -191,10 +191,7 @@ def _check_pass_convergence(
     new_fields = len(current.enriched_fields) + len(current.inferred_fields)
     prev_fields = len(prev.enriched_fields) + len(prev.inferred_fields)
     if delta < MIN_DELTA and new_fields <= prev_fields:
-        reason = (
-            f"delta={delta:.3f} < {MIN_DELTA}, "
-            f"new_fields={new_fields} <= prev={prev_fields}"
-        )
+        reason = f"delta={delta:.3f} < {MIN_DELTA}, new_fields={new_fields} <= prev={prev_fields}"
         return True, reason
     return False, ""
 
@@ -209,9 +206,7 @@ def _assemble_convergence_response(
     for pr in state.pass_results:
         enriched_or_inferred.update(pr.enriched_fields.keys())
         enriched_or_inferred.update(pr.inferred_fields.keys())
-    final_fields = {
-        k: v for k, v in state.known_fields.items() if k in enriched_or_inferred
-    }
+    final_fields = {k: v for k, v in state.known_fields.items() if k in enriched_or_inferred}
     avg_confidence = sum(state.confidence_map.get(k, 0) for k in final_fields) / max(
         len(final_fields), 1
     )
