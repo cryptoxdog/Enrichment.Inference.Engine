@@ -13,9 +13,9 @@ from app.engines.search_optimizer import EntitySignals, SearchMode
 
 def test_field_classification():
     """Test auto-classification from domain YAML."""
-    print("="*60)
+    print("=" * 60)
     print("TEST 1: Field Auto-Classification")
-    print("="*60)
+    print("=" * 60)
 
     # Load example domain
     with open("examples/plasticos_domain.yaml") as f:
@@ -45,12 +45,13 @@ def test_field_classification():
 
 def test_search_optimizer(classification):
     """Test search optimizer decision tree."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 2: Search Optimizer Decision Tree")
-    print("="*60)
+    print("=" * 60)
 
     # Patch optimizer with our classification
     from optimizers import search_optimizer
+
     search_optimizer.FIELD_DIFFICULTY = classification.field_map
 
     scenarios = [
@@ -115,7 +116,7 @@ def test_search_optimizer(classification):
         )
 
         if config.disable_search:
-            print(f"    → SKIP (all inferrable)")
+            print("    → SKIP (all inferrable)")
         else:
             print(f"    → Model: {config.model.value}")
             print(f"    → Context: {config.context_size.value}")
@@ -127,9 +128,9 @@ def test_search_optimizer(classification):
 
 def test_batch_cost():
     """Estimate cost for batch enrichment."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 3: Batch Cost Estimation")
-    print("="*60)
+    print("=" * 60)
 
     lead_count = 500
     passes = 3
@@ -143,10 +144,16 @@ def test_batch_cost():
     per_lead = total / lead_count
 
     print(f"\n{lead_count} leads × {passes} passes:")
-    print(f"  Pass 1 (discovery):   ${pass1_cost:.3f}/lead × {lead_count} = ${pass1_cost * lead_count:.2f}")
-    print(f"  Pass 2 (targeted):    ${pass2_cost:.3f}/lead × {lead_count} = ${pass2_cost * lead_count:.2f}")
-    print(f"  Pass 3 (verification): ${pass3_cost:.3f}/lead × {lead_count} = ${pass3_cost * lead_count:.2f}")
-    print(f"  ─────────────────────────────────────")
+    print(
+        f"  Pass 1 (discovery):   ${pass1_cost:.3f}/lead × {lead_count} = ${pass1_cost * lead_count:.2f}"
+    )
+    print(
+        f"  Pass 2 (targeted):    ${pass2_cost:.3f}/lead × {lead_count} = ${pass2_cost * lead_count:.2f}"
+    )
+    print(
+        f"  Pass 3 (verification): ${pass3_cost:.3f}/lead × {lead_count} = ${pass3_cost * lead_count:.2f}"
+    )
+    print("  ─────────────────────────────────────")
     print(f"  Total: ${total:.2f}")
     print(f"  Per lead: ${per_lead:.4f}")
 
@@ -156,6 +163,6 @@ if __name__ == "__main__":
     test_search_optimizer(classification)
     test_batch_cost()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ All tests complete")
-    print("="*60)
+    print("=" * 60)

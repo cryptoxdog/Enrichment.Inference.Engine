@@ -86,10 +86,7 @@ class KBResolver:
 
             meta = kb.get("metadata", {})
             polymer = (
-                meta.get("polymertype")
-                or meta.get("materialtype")
-                or meta.get("kbname")
-                or yf.stem
+                meta.get("polymertype") or meta.get("materialtype") or meta.get("kbname") or yf.stem
             )
             key = polymer.upper().replace(" ", "_")
 
@@ -165,8 +162,14 @@ class KBResolver:
                         target_keys.append(k)
 
         if entity:
-            for hint in ("polymer", "material", "material_type", "Industry",
-                         "x_material_type", "material_profile"):
+            for hint in (
+                "polymer",
+                "material",
+                "material_type",
+                "Industry",
+                "x_material_type",
+                "material_profile",
+            ):
                 val = entity.get(hint)
                 if val and isinstance(val, str):
                     key = val.upper().replace(" ", "_")
@@ -203,7 +206,8 @@ class KBResolver:
 
             # Rules — high confidence only, skip empty conclusions (M9 fix)
             rules = [
-                r for r in self.index.inference_rules
+                r
+                for r in self.index.inference_rules
                 if r.get("_polymer") == key
                 and float(r.get("confidence", 0)) >= confidence_threshold
             ]

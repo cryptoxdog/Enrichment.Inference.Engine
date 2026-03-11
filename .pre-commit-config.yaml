@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: audit-engine
+        name: L9 Contract Audit
+        entry: python tools/audit_engine.py --strict
+        language: python
+        pass_filenames: false
+        always_run: true
+
+      - id: verify-contracts
+        name: L9 Contract Verification
+        entry: python tools/verify_contracts.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [push]

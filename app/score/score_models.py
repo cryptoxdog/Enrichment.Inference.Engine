@@ -12,12 +12,13 @@ import math
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
 # ── Enums ─────────────────────────────────────────────────────
+
 
 class ScoreDimension(str, Enum):
     FIT = "fit"
@@ -61,8 +62,10 @@ class RecommendationType(str, Enum):
 
 # ── Field Contribution ────────────────────────────────────────
 
+
 class FieldContribution(BaseModel):
     """How a single enriched field contributed to a dimension score."""
+
     field_name: str
     dimension: ScoreDimension
     raw_value: Any = None
@@ -75,11 +78,11 @@ class FieldContribution(BaseModel):
 
 class MissingField(BaseModel):
     """A field the scoring profile expected but the entity lacked."""
+
     field_name: str
     dimension: ScoreDimension
     impact_estimate: float = Field(
-        ge=0.0, le=1.0,
-        description="Estimated score improvement if this field were present"
+        ge=0.0, le=1.0, description="Estimated score improvement if this field were present"
     )
     is_gate_critical: bool = False
     recommendation: RecommendationType = RecommendationType.ENRICH_FIELD
@@ -87,8 +90,10 @@ class MissingField(BaseModel):
 
 # ── Dimension Score ───────────────────────────────────────────
 
+
 class DimensionScore(BaseModel):
     """Score for a single dimension with full provenance."""
+
     dimension: ScoreDimension
     score: float = Field(ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0)
@@ -98,8 +103,7 @@ class DimensionScore(BaseModel):
     fields_evaluated: int = 0
     fields_present: int = 0
     coverage: float = Field(
-        ge=0.0, le=1.0, default=0.0,
-        description="fields_present / fields_evaluated"
+        ge=0.0, le=1.0, default=0.0, description="fields_present / fields_evaluated"
     )
     decayed_score: float | None = None
     decay_factor: float = 1.0
@@ -107,8 +111,10 @@ class DimensionScore(BaseModel):
 
 # ── Score Record ──────────────────────────────────────────────
 
+
 class ScoreProvenance(BaseModel):
     """Full provenance chain for a score."""
+
     enrichment_run_id: str | None = None
     graph_match_id: str | None = None
     signal_ids: list[str] = Field(default_factory=list)
@@ -120,6 +126,7 @@ class ScoreProvenance(BaseModel):
 
 class ScoreRecord(BaseModel):
     """Complete scoring output for a single entity."""
+
     score_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     entity_id: str
     domain: str
@@ -149,8 +156,10 @@ class ScoreRecord(BaseModel):
 
 # ── ICP Definition ────────────────────────────────────────────
 
+
 class ICPFieldCriterion(BaseModel):
     """Single field criterion in an ICP definition."""
+
     field_name: str
     field_type: ICPFieldType
     target_value: Any = None
@@ -165,6 +174,7 @@ class ICPFieldCriterion(BaseModel):
 
 class ICPDefinition(BaseModel):
     """Domain-specific Ideal Customer Profile."""
+
     icp_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     domain: str
@@ -187,8 +197,10 @@ class ICPDefinition(BaseModel):
 
 # ── Scoring Profile ───────────────────────────────────────────
 
+
 class DecayConfig(BaseModel):
     """Per-dimension decay configuration."""
+
     dimension: ScoreDimension
     half_life_days: float = 30.0
     min_score: float = 0.0
@@ -222,13 +234,16 @@ DEFAULT_TIER_THRESHOLDS: dict[ScoreTier, float] = {
 
 class ScoringProfile(BaseModel):
     """Customer-configurable scoring profile."""
+
     profile_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     domain: str
     description: str = ""
     version: str = "1.0.0"
 
-    dimension_weights: dict[ScoreDimension, float] = Field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+    dimension_weights: dict[ScoreDimension, float] = Field(
+        default_factory=lambda: dict(DEFAULT_WEIGHTS)
+    )
     decay_configs: list[DecayConfig] = Field(default_factory=lambda: list(DEFAULT_DECAY_CONFIGS))
     tier_thresholds: dict[ScoreTier, float] = Field(
         default_factory=lambda: dict(DEFAULT_TIER_THRESHOLDS)
@@ -236,16 +251,19 @@ class ScoringProfile(BaseModel):
     icp: ICPDefinition | None = None
 
     confidence_floor: float = Field(
-        ge=0.0, le=1.0, default=0.30,
-        description="Minimum confidence to include a field contribution"
+        ge=0.0,
+        le=1.0,
+        default=0.30,
+        description="Minimum confidence to include a field contribution",
     )
     gate_penalty: float = Field(
-        ge=0.0, le=1.0, default=0.50,
-        description="Maximum composite score when gate-critical fields are missing"
+        ge=0.0,
+        le=1.0,
+        default=0.50,
+        description="Maximum composite score when gate-critical fields are missing",
     )
     min_fields_for_score: int = Field(
-        ge=1, default=3,
-        description="Minimum present fields to produce a score (else disqualified)"
+        ge=1, default=3, description="Minimum present fields to produce a score (else disqualified)"
     )
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -280,6 +298,7 @@ class ScoringProfile(BaseModel):
 
 # ── Batch Scoring ─────────────────────────────────────────────
 
+
 class BatchScoreRequest(BaseModel):
     entity_ids: list[str]
     scoring_profile_id: str
@@ -297,11 +316,12 @@ class BatchScoreResponse(BaseModel):
     scoring_duration_ms: float = 0.0
     enrichment_triggers: list[str] = Field(
         default_factory=list,
-        description="Entity IDs that should be re-enriched based on missing fields"
+        description="Entity IDs that should be re-enriched based on missing fields",
     )
 
 
 # ── Helpers ───────────────────────────────────────────────────
+
 
 def compute_decay_factor(
     days_elapsed: float,

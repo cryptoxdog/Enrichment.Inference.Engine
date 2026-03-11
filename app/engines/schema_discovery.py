@@ -12,6 +12,7 @@ Output is a SchemaProposal that can be:
   - Emitted as PacketEnvelope(packettype="schema_proposal")
   - Fed to the graph engine's DomainPackLoader for next sync
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from typing import Any
 @dataclass
 class PropertySpec:
     """A proposed field addition to the domain schema."""
+
     name: str
     field_type: str  # "string" | "float" | "integer" | "boolean" | "enum" | "list"
     discovered_by: str  # "enrichment" | "inference"
@@ -35,6 +37,7 @@ class PropertySpec:
 @dataclass
 class SchemaProposal:
     """Proposed schema evolution from a convergence run."""
+
     current_version: str
     proposed_version: str
     stage: str  # "discovered" | "inferred" | "proposed"
@@ -71,41 +74,53 @@ class SchemaDiscoveryEngine:
         # Enrichment-discovered fields
         for fname, value in enriched_fields.items():
             if fname not in self._current:
-                new_props.append(PropertySpec(
-                    name=fname,
-                    field_type=self._infer_type(value),
-                    discovered_by="enrichment",
-                    discovery_confidence=confidence_map.get(fname, 0.5),
-                    managed_by="enrichment",
-                    sample_values=[value] if value is not None else [],
-                    fill_rate=fill_rates.get(fname, 0.0),
-                ))
+                new_props.append(
+                    PropertySpec(
+                        name=fname,
+                        field_type=self._infer_type(value),
+                        discovered_by="enrichment",
+                        discovery_confidence=confidence_map.get(fname, 0.5),
+                        managed_by="enrichment",
+                        sample_values=[value] if value is not None else [],
+                        fill_rate=fill_rates.get(fname, 0.0),
+                    )
+                )
 
         # Inference-derived fields
         for fname, value in inferred_fields.items():
             if fname not in self._current:
-                new_props.append(PropertySpec(
-                    name=fname,
-                    field_type=self._infer_type(value),
-                    discovered_by="inference",
-                    discovery_confidence=confidence_map.get(fname, 0.7),
-                    managed_by="computed",
-                    derived_from=self._find_dependencies(fname),
-                    sample_values=[value] if value is not None else [],
-                    fill_rate=fill_rates.get(fname, 0.0),
-                ))
+                new_props.append(
+                    PropertySpec(
+                        name=fname,
+                        field_type=self._infer_type(value),
+                        discovered_by="inference",
+                        discovery_confidence=confidence_map.get(fname, 0.7),
+                        managed_by="computed",
+                        derived_from=self._find_dependencies(fname),
+                        sample_values=[value] if value is not None else [],
+                        fill_rate=fill_rates.get(fname, 0.0),
+                    )
+                )
 
         # Propose gates for high-fill-rate fields
         proposed_gates = []
         for prop in new_props:
-            if prop.fill_rate >= self.GATE_THRESHOLD and prop.field_type in ("float", "integer", "boolean"):
-                proposed_gates.append({
-                    "field": prop.name,
-                    "gate_type": "boolean" if prop.field_type == "boolean" else "range",
-                    "confidence": prop.discovery_confidence,
-                })
+            if prop.fill_rate >= self.GATE_THRESHOLD and prop.field_type in (
+                "float",
+                "integer",
+                "boolean",
+            ):
+                proposed_gates.append(
+                    {
+                        "field": prop.name,
+                        "gate_type": "boolean" if prop.field_type == "boolean" else "range",
+                        "confidence": prop.discovery_confidence,
+                    }
+                )
 
-        stage = "inferred" if any(p.discovered_by == "inference" for p in new_props) else "discovered"
+        stage = (
+            "inferred" if any(p.discovered_by == "inference" for p in new_props) else "discovered"
+        )
         proposed_version = self._bump_version(stage)
 
         return SchemaProposal(

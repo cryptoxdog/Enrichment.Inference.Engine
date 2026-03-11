@@ -15,20 +15,18 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from score_models import (
     BatchScoreRequest,
-    BatchScoreResponse,
-    ICPDefinition,
     ScoreDimension,
-    ScoreRecord,
     ScoreTier,
     ScoringProfile,
 )
 
 
 # ── Dependency stubs (replaced by DI in production) ───────────
+
 
 def get_score_engine():
     """Injected by app startup."""
@@ -56,6 +54,7 @@ def get_score_store():
 
 
 # ── Request / Response Models ─────────────────────────────────
+
 
 class ScoreEntityRequest(BaseModel):
     entity_id: str
@@ -127,6 +126,7 @@ class CompareScoresRequest(BaseModel):
 
 # ── Packet Envelope Helper ────────────────────────────────────
 
+
 def _envelope(
     payload: dict[str, Any],
     service: str = "score",
@@ -156,6 +156,7 @@ router = APIRouter(prefix="/score", tags=["score"])
 
 
 # -- Score Endpoints -------------------------------------------
+
 
 @router.post("/entity", response_model=None)
 async def score_entity(
@@ -277,6 +278,7 @@ async def rescore_entity(
 
 # -- Explain Endpoints -----------------------------------------
 
+
 @router.post("/explain", response_model=None)
 async def explain_score(
     req: ExplainRequest,
@@ -330,6 +332,7 @@ async def compare_scores(
 
 
 # -- Decay Endpoints -------------------------------------------
+
 
 @router.post("/decay/preview", response_model=None)
 async def preview_decay(
@@ -416,6 +419,7 @@ async def apply_decay_batch(
 
 # -- Profile Endpoints -----------------------------------------
 
+
 @router.post("/profile", response_model=None)
 async def create_profile(
     req: ProfileCreateRequest,
@@ -486,6 +490,7 @@ async def get_profile(
 
 
 # -- Tier Distribution -----------------------------------------
+
 
 @router.get("/distribution/{domain}", response_model=None)
 async def get_tier_distribution(

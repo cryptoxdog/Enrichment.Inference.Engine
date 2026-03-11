@@ -9,8 +9,7 @@ graph affinity integration, and full field-level provenance.
 from __future__ import annotations
 
 import time
-import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from score_models import (
@@ -36,9 +35,11 @@ from score_models import (
 
 # ── Protocols ─────────────────────────────────────────────────
 
+
 @runtime_checkable
 class EntityDataProvider(Protocol):
     """Provides enriched entity data for scoring."""
+
     def get_entity_fields(self, entity_id: str, domain: str) -> dict[str, Any]: ...
     def get_field_confidences(self, entity_id: str) -> dict[str, float]: ...
     def get_field_sources(self, entity_id: str) -> dict[str, str]: ...
@@ -47,6 +48,7 @@ class EntityDataProvider(Protocol):
 @runtime_checkable
 class GraphAffinityProvider(Protocol):
     """Provides graph match scores from GRAPH engine."""
+
     def get_graph_affinity(self, entity_id: str, domain: str) -> float: ...
     def get_community_id(self, entity_id: str) -> str | None: ...
     def get_match_rank(self, entity_id: str) -> int | None: ...
@@ -55,6 +57,7 @@ class GraphAffinityProvider(Protocol):
 @runtime_checkable
 class SignalProvider(Protocol):
     """Provides engagement/intent signals from SIGNAL service."""
+
     def get_engagement_score(self, entity_id: str) -> float: ...
     def get_intent_score(self, entity_id: str) -> float: ...
     def get_readiness_score(self, entity_id: str) -> float: ...
@@ -64,6 +67,7 @@ class SignalProvider(Protocol):
 @runtime_checkable
 class ProfileStore(Protocol):
     """Stores and retrieves scoring profiles."""
+
     def get_profile(self, profile_id: str) -> ScoringProfile | None: ...
     def save_profile(self, profile: ScoringProfile) -> None: ...
     def list_profiles(self, domain: str) -> list[ScoringProfile]: ...
@@ -72,6 +76,7 @@ class ProfileStore(Protocol):
 @runtime_checkable
 class ScoreStore(Protocol):
     """Persists score records."""
+
     def save_score(self, record: ScoreRecord) -> None: ...
     def get_score(self, entity_id: str, domain: str) -> ScoreRecord | None: ...
     def get_scores_batch(self, entity_ids: list[str], domain: str) -> list[ScoreRecord]: ...
@@ -79,6 +84,7 @@ class ScoreStore(Protocol):
 
 
 # ── ICP Field Matching ────────────────────────────────────────
+
 
 def _evaluate_criterion(
     criterion: ICPFieldCriterion,
@@ -91,7 +97,9 @@ def _evaluate_criterion(
     match criterion.field_type:
         case ICPFieldType.EXACT_MATCH:
             if isinstance(value, str) and isinstance(criterion.target_value, str):
-                return 1.0 if value.strip().lower() == criterion.target_value.strip().lower() else 0.0
+                return (
+                    1.0 if value.strip().lower() == criterion.target_value.strip().lower() else 0.0
+                )
             return 1.0 if value == criterion.target_value else 0.0
 
         case ICPFieldType.RANGE:
@@ -153,6 +161,7 @@ def _evaluate_criterion(
 
 # ── Dimension Scorers ─────────────────────────────────────────
 
+
 def score_fit(
     entity_fields: dict[str, Any],
     field_confidences: dict[str, float],
@@ -189,13 +198,15 @@ def score_fit(
 
         if value is None or conf < profile.confidence_floor:
             impact = criterion.weight / max(total_weight, 1.0)
-            missing.append(MissingField(
-                field_name=criterion.field_name,
-                dimension=ScoreDimension.FIT,
-                impact_estimate=min(impact, 1.0),
-                is_gate_critical=criterion.is_gate_critical,
-                recommendation=RecommendationType.ENRICH_FIELD,
-            ))
+            missing.append(
+                MissingField(
+                    field_name=criterion.field_name,
+                    dimension=ScoreDimension.FIT,
+                    impact_estimate=min(impact, 1.0),
+                    is_gate_critical=criterion.is_gate_critical,
+                    recommendation=RecommendationType.ENRICH_FIELD,
+                )
+            )
             continue
 
         fields_present += 1
@@ -210,21 +221,22 @@ def score_fit(
         except ValueError:
             source = ScoreSource.ENRICHMENT
 
-        contributions.append(FieldContribution(
-            field_name=criterion.field_name,
-            dimension=ScoreDimension.FIT,
-            raw_value=value,
-            contribution=min(weighted / max(total_weight, 0.01), 1.0),
-            confidence=conf,
-            source=source,
-            match_type=criterion.field_type,
-            match_detail=criterion.description or f"ICP match: {criterion.field_name}",
-        ))
+        contributions.append(
+            FieldContribution(
+                field_name=criterion.field_name,
+                dimension=ScoreDimension.FIT,
+                raw_value=value,
+                contribution=min(weighted / max(total_weight, 0.01), 1.0),
+                confidence=conf,
+                source=source,
+                match_type=criterion.field_type,
+                match_detail=criterion.description or f"ICP match: {criterion.field_name}",
+            )
+        )
 
     raw_score = total_weighted_score / total_weight if total_weight > 0 else 0.0
     avg_conf = (
-        sum(c.confidence for c in contributions) / len(contributions)
-        if contributions else 0.0
+        sum(c.confidence for c in contributions) / len(contributions) if contributions else 0.0
     )
     coverage = fields_present / len(fit_criteria) if fit_criteria else 0.0
 
@@ -250,12 +262,14 @@ def score_intent(
     missing: list[MissingField] = []
 
     if signal_provider is None:
-        missing.append(MissingField(
-            field_name="intent_signals",
-            dimension=ScoreDimension.INTENT,
-            impact_estimate=0.50,
-            recommendation=RecommendationType.CAPTURE_SIGNAL,
-        ))
+        missing.append(
+            MissingField(
+                field_name="intent_signals",
+                dimension=ScoreDimension.INTENT,
+                impact_estimate=0.50,
+                recommendation=RecommendationType.CAPTURE_SIGNAL,
+            )
+        )
         return DimensionScore(
             dimension=ScoreDimension.INTENT,
             score=0.0,
@@ -268,15 +282,17 @@ def score_intent(
     last_signal = signal_provider.get_last_signal_at(entity_id)
     confidence = 0.70 if last_signal else 0.30
 
-    contributions = [FieldContribution(
-        field_name="intent_score",
-        dimension=ScoreDimension.INTENT,
-        raw_value=intent,
-        contribution=intent,
-        confidence=confidence,
-        source=ScoreSource.SIGNAL,
-        match_detail="Aggregated intent signals (multi-stakeholder, pricing page, etc.)",
-    )]
+    contributions = [
+        FieldContribution(
+            field_name="intent_score",
+            dimension=ScoreDimension.INTENT,
+            raw_value=intent,
+            contribution=intent,
+            confidence=confidence,
+            source=ScoreSource.SIGNAL,
+            match_detail="Aggregated intent signals (multi-stakeholder, pricing page, etc.)",
+        )
+    ]
 
     return DimensionScore(
         dimension=ScoreDimension.INTENT,
@@ -299,12 +315,14 @@ def score_engagement(
     missing: list[MissingField] = []
 
     if signal_provider is None:
-        missing.append(MissingField(
-            field_name="engagement_signals",
-            dimension=ScoreDimension.ENGAGEMENT,
-            impact_estimate=0.40,
-            recommendation=RecommendationType.CAPTURE_SIGNAL,
-        ))
+        missing.append(
+            MissingField(
+                field_name="engagement_signals",
+                dimension=ScoreDimension.ENGAGEMENT,
+                impact_estimate=0.40,
+                recommendation=RecommendationType.CAPTURE_SIGNAL,
+            )
+        )
         return DimensionScore(
             dimension=ScoreDimension.ENGAGEMENT,
             score=0.0,
@@ -317,15 +335,17 @@ def score_engagement(
     last_signal = signal_provider.get_last_signal_at(entity_id)
     confidence = 0.75 if last_signal else 0.25
 
-    contributions = [FieldContribution(
-        field_name="engagement_score",
-        dimension=ScoreDimension.ENGAGEMENT,
-        raw_value=engagement,
-        contribution=engagement,
-        confidence=confidence,
-        source=ScoreSource.SIGNAL,
-        match_detail="Rolling 30d decay-weighted engagement score",
-    )]
+    contributions = [
+        FieldContribution(
+            field_name="engagement_score",
+            dimension=ScoreDimension.ENGAGEMENT,
+            raw_value=engagement,
+            contribution=engagement,
+            confidence=confidence,
+            source=ScoreSource.SIGNAL,
+            match_detail="Rolling 30d decay-weighted engagement score",
+        )
+    ]
 
     return DimensionScore(
         dimension=ScoreDimension.ENGAGEMENT,
@@ -354,37 +374,45 @@ def score_readiness(
     if signal_provider is not None:
         readiness_signal = signal_provider.get_readiness_score(entity_id)
         components.append(readiness_signal)
-        contributions.append(FieldContribution(
-            field_name="readiness_signal",
-            dimension=ScoreDimension.READINESS,
-            raw_value=readiness_signal,
-            contribution=readiness_signal * 0.5,
-            confidence=0.70,
-            source=ScoreSource.SIGNAL,
-            match_detail="Signal-derived readiness (deal stage, proposal views, etc.)",
-        ))
+        contributions.append(
+            FieldContribution(
+                field_name="readiness_signal",
+                dimension=ScoreDimension.READINESS,
+                raw_value=readiness_signal,
+                contribution=readiness_signal * 0.5,
+                confidence=0.70,
+                source=ScoreSource.SIGNAL,
+                match_detail="Signal-derived readiness (deal stage, proposal views, etc.)",
+            )
+        )
     else:
-        missing.append(MissingField(
-            field_name="readiness_signals",
-            dimension=ScoreDimension.READINESS,
-            impact_estimate=0.30,
-            recommendation=RecommendationType.CAPTURE_SIGNAL,
-        ))
+        missing.append(
+            MissingField(
+                field_name="readiness_signals",
+                dimension=ScoreDimension.READINESS,
+                impact_estimate=0.30,
+                recommendation=RecommendationType.CAPTURE_SIGNAL,
+            )
+        )
 
     if field_confidences:
         avg_conf = sum(field_confidences.values()) / len(field_confidences)
-        completeness = sum(1 for v in entity_fields.values() if v is not None) / max(len(entity_fields), 1)
-        data_readiness = (avg_conf * 0.6 + completeness * 0.4)
+        completeness = sum(1 for v in entity_fields.values() if v is not None) / max(
+            len(entity_fields), 1
+        )
+        data_readiness = avg_conf * 0.6 + completeness * 0.4
         components.append(data_readiness)
-        contributions.append(FieldContribution(
-            field_name="data_readiness",
-            dimension=ScoreDimension.READINESS,
-            raw_value=data_readiness,
-            contribution=data_readiness * 0.5,
-            confidence=avg_conf,
-            source=ScoreSource.ENRICHMENT,
-            match_detail=f"Data completeness ({completeness:.0%}) x confidence ({avg_conf:.2f})",
-        ))
+        contributions.append(
+            FieldContribution(
+                field_name="data_readiness",
+                dimension=ScoreDimension.READINESS,
+                raw_value=data_readiness,
+                contribution=data_readiness * 0.5,
+                confidence=avg_conf,
+                source=ScoreSource.ENRICHMENT,
+                match_detail=f"Data completeness ({completeness:.0%}) x confidence ({avg_conf:.2f})",
+            )
+        )
 
     score = sum(components) / len(components) if components else 0.0
     confidence = 0.60 if components else 0.0
@@ -412,12 +440,14 @@ def score_graph_affinity(
     missing: list[MissingField] = []
 
     if graph_provider is None:
-        missing.append(MissingField(
-            field_name="graph_affinity",
-            dimension=ScoreDimension.GRAPH_AFFINITY,
-            impact_estimate=0.20,
-            recommendation=RecommendationType.RE_SCORE,
-        ))
+        missing.append(
+            MissingField(
+                field_name="graph_affinity",
+                dimension=ScoreDimension.GRAPH_AFFINITY,
+                impact_estimate=0.20,
+                recommendation=RecommendationType.RE_SCORE,
+            )
+        )
         return DimensionScore(
             dimension=ScoreDimension.GRAPH_AFFINITY,
             score=0.0,
@@ -431,15 +461,17 @@ def score_graph_affinity(
     rank = graph_provider.get_match_rank(entity_id)
     confidence = 0.85 if community else 0.50
 
-    contributions = [FieldContribution(
-        field_name="graph_affinity_score",
-        dimension=ScoreDimension.GRAPH_AFFINITY,
-        raw_value=affinity,
-        contribution=affinity,
-        confidence=confidence,
-        source=ScoreSource.GRAPH,
-        match_detail=f"Graph match rank={rank}, community={community}",
-    )]
+    contributions = [
+        FieldContribution(
+            field_name="graph_affinity_score",
+            dimension=ScoreDimension.GRAPH_AFFINITY,
+            raw_value=affinity,
+            contribution=affinity,
+            confidence=confidence,
+            source=ScoreSource.GRAPH,
+            match_detail=f"Graph match rank={rank}, community={community}",
+        )
+    ]
 
     return DimensionScore(
         dimension=ScoreDimension.GRAPH_AFFINITY,
@@ -454,6 +486,7 @@ def score_graph_affinity(
 
 
 # ── Core Scoring Engine ──────────────────────────────────────
+
 
 class ScoreEngine:
     """
@@ -501,9 +534,7 @@ class ScoreEngine:
         readiness = score_readiness(
             self._signal_provider, entity_id, entity_fields, field_confidences, profile
         )
-        graph_aff = score_graph_affinity(
-            self._graph_provider, entity_id, profile.domain, profile
-        )
+        graph_aff = score_graph_affinity(self._graph_provider, entity_id, profile.domain, profile)
 
         dimension_scores = {
             ScoreDimension.FIT: fit,
@@ -579,10 +610,7 @@ class ScoreEngine:
                 trigger_entities.append(eid)
 
         scored_count = len(scores) - disqualified
-        avg_composite = (
-            sum(s.composite_score for s in scores) / len(scores)
-            if scores else 0.0
-        )
+        avg_composite = sum(s.composite_score for s in scores) / len(scores) if scores else 0.0
         duration = (time.monotonic() - start) * 1000
 
         return BatchScoreResponse(
@@ -607,8 +635,7 @@ class ScoreEngine:
 
         if previous:
             new_record.provenance.enrichment_run_id = (
-                new_record.provenance.enrichment_run_id
-                or previous.provenance.enrichment_run_id
+                new_record.provenance.enrichment_run_id or previous.provenance.enrichment_run_id
             )
             new_record.provenance.signal_ids = list(
                 set(previous.provenance.signal_ids + new_record.provenance.signal_ids)

@@ -32,15 +32,17 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from .field_confidence import FieldConfidenceMap, FieldSource
+from .field_confidence import FieldConfidenceMap
 
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class ConvergenceMode(str, Enum):
     """What kind of enrichment pass to run."""
+
     DISCOVERY = "discovery"
     TARGETED = "targeted"
     VERIFICATION = "verification"
@@ -48,12 +50,14 @@ class ConvergenceMode(str, Enum):
 
 class ApprovalMode(str, Enum):
     """Schema-proposal approval policy."""
+
     AUTO = "auto"
     HUMAN = "human"
 
 
 class ConvergenceReason(str, Enum):
     """Why the convergence loop terminated."""
+
     THRESHOLD_MET = "threshold_met"
     BUDGET_EXHAUSTED = "budget_exhausted"
     MAX_PASSES = "max_passes"
@@ -64,6 +68,7 @@ class ConvergenceReason(str, Enum):
 
 class SchemaProposalSource(str, Enum):
     """How a proposed field was discovered."""
+
     ENRICHMENT = "enrichment"
     INFERENCE = "inference"
 
@@ -71,6 +76,7 @@ class SchemaProposalSource(str, Enum):
 # ---------------------------------------------------------------------------
 # Cost tracking (lightweight, embedded in responses)
 # ---------------------------------------------------------------------------
+
 
 class CostSummary(BaseModel):
     """Cumulative token + cost breakdown across all passes."""
@@ -90,6 +96,7 @@ class CostSummary(BaseModel):
 # ---------------------------------------------------------------------------
 # Schema proposals
 # ---------------------------------------------------------------------------
+
 
 class SchemaProposal(BaseModel):
     """A proposed addition to the customer's domain YAML.
@@ -132,6 +139,7 @@ class ApprovalDecision(BaseModel):
 # Per-pass snapshot
 # ---------------------------------------------------------------------------
 
+
 class PassResult(BaseModel):
     """Immutable snapshot of one convergence pass.
 
@@ -164,6 +172,7 @@ class PassResult(BaseModel):
 # Convergence request
 # ---------------------------------------------------------------------------
 
+
 class ConvergeRequest(BaseModel):
     """Initiates a multi-pass enrichment-inference convergence loop.
 
@@ -195,6 +204,7 @@ class ConvergeRequest(BaseModel):
     def parse_schema_string(cls, v: Any) -> Optional[Dict[str, str]]:
         if isinstance(v, str):
             import json
+
             try:
                 parsed = json.loads(v)
                 return parsed if isinstance(parsed, dict) else None
@@ -206,6 +216,7 @@ class ConvergeRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Convergence response
 # ---------------------------------------------------------------------------
+
 
 class ConvergeResponse(BaseModel):
     """Full result of a convergence loop (or a snapshot if still running)."""
@@ -260,6 +271,7 @@ class ConvergeResponse(BaseModel):
 # Convergence telemetry report
 # ---------------------------------------------------------------------------
 
+
 class ConvergenceReport(BaseModel):
     """Pass-over-pass telemetry proving diminishing-cost convergence.
 
@@ -284,6 +296,7 @@ class ConvergenceReport(BaseModel):
 # ---------------------------------------------------------------------------
 # Batch wrappers
 # ---------------------------------------------------------------------------
+
 
 class BatchConvergeRequest(BaseModel):
     """Batch convergence for multiple entities with shared budget."""

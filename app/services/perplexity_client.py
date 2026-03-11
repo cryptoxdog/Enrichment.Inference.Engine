@@ -32,9 +32,11 @@ logger = structlog.get_logger("perplexity_client")
 
 # ── Response contract (unchanged from v1) ──────────────────
 
+
 @dataclass
 class SonarResponse:
     """Immutable response from a single Sonar API call."""
+
     data: dict[str, Any]
     tokens_used: int
     citations: list[str] = field(default_factory=list)
@@ -119,6 +121,7 @@ def _sync_call(payload: dict[str, Any], api_key: str, timeout: int) -> SonarResp
 
 
 # ── Async interface (unchanged signature from v1) ──────────
+
 
 async def query_perplexity(
     payload: dict[str, Any],

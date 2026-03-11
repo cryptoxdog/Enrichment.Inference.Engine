@@ -34,12 +34,14 @@ class EnrichRequest(BaseModel):
 
     # The record's current field values
     entity: dict[str, Any] = Field(
-        ..., description="Record fields as key-value pairs.",
+        ...,
+        description="Record fields as key-value pairs.",
     )
 
     # What kind of record (Account, Lead, res.partner, etc)
     object_type: str = Field(
-        ..., description="Source object API name.",
+        ...,
+        description="Source object API name.",
     )
 
     # What fields to enrich — JSON dict of {field_name: type_string}
@@ -51,12 +53,14 @@ class EnrichRequest(BaseModel):
 
     # Natural language instruction
     objective: str = Field(
-        ..., description="What the enrichment should accomplish.",
+        ...,
+        description="What the enrichment should accomplish.",
     )
 
     # KB domain selector (e.g., "HDPE", "PP", "recycling")
     kb_context: str | None = Field(
-        default=None, description="KB profile identifier for selective injection.",
+        default=None,
+        description="KB profile identifier for selective injection.",
     )
 
     # Tuning knobs
@@ -65,7 +69,8 @@ class EnrichRequest(BaseModel):
 
     # Idempotency — caller can supply a UUID to prevent duplicate processing
     idempotency_key: str | None = Field(
-        default=None, description="Caller-supplied UUID for dedup.",
+        default=None,
+        description="Caller-supplied UUID for dedup.",
     )
 
     @field_validator("schema_", mode="before")
@@ -83,6 +88,7 @@ class EnrichRequest(BaseModel):
 
 class BatchEnrichRequest(BaseModel):
     """Batch enrichment — up to 50 entities in one HTTP call."""
+
     entities: list[EnrichRequest] = Field(..., max_length=50)
 
 

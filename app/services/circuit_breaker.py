@@ -17,7 +17,6 @@ logger = structlog.get_logger("circuit_breaker")
 
 
 class CircuitBreaker:
-
     def __init__(self, failure_threshold: int = 5, cooldown: int = 60):
         self.failure_threshold = failure_threshold
         self.cooldown = cooldown

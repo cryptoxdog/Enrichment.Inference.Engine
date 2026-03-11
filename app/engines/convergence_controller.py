@@ -11,6 +11,7 @@ Config: max_passes=3, convergence_threshold=2.0, min_delta=0.05
 Consumed by: chassis handlers.py (action="enrich" with mode="converge")
 Produces: Final EnrichResponse with merged fields from all passes + inference results
 """
+
 from __future__ import annotations
 
 import time
@@ -35,6 +36,7 @@ MIN_DELTA = 0.05
 @dataclass
 class PassResult:
     """Result of a single enrichment+inference pass."""
+
     pass_number: int
     enriched_fields: dict[str, Any] = field(default_factory=dict)
     inferred_fields: dict[str, Any] = field(default_factory=dict)
@@ -47,6 +49,7 @@ class PassResult:
 @dataclass
 class ConvergenceState:
     """Accumulated state across all passes."""
+
     known_fields: dict[str, Any] = field(default_factory=dict)
     confidence_map: dict[str, float] = field(default_factory=dict)
     inferred_fields: dict[str, Any] = field(default_factory=dict)
@@ -123,6 +126,7 @@ async def run_convergence_loop(
         # --- SINGLE-PASS ENRICHMENT ---
         if enricher is None:
             from ..engines.enrichment_orchestrator import enrich_entity
+
             enricher = enrich_entity
 
         pass_response: EnrichResponse = await enricher(
@@ -156,9 +160,7 @@ async def run_convergence_loop(
         for field_name, value in inference_result.derived_fields.items():
             state.inferred_fields[field_name] = value
             state.known_fields[field_name] = value
-            state.confidence_map[field_name] = inference_result.confidence_map.get(
-                field_name, 0.7
-            )
+            state.confidence_map[field_name] = inference_result.confidence_map.get(field_name, 0.7)
 
         if hasattr(inference_result, "unlock_map"):
             state.unlock_map = inference_result.unlock_map
@@ -198,9 +200,8 @@ async def run_convergence_loop(
         enriched_or_inferred.update(pr.inferred_fields.keys())
     final_fields = {k: v for k, v in all_fields.items() if k in enriched_or_inferred}
 
-    avg_confidence = (
-        sum(state.confidence_map.get(k, 0) for k in final_fields)
-        / max(len(final_fields), 1)
+    avg_confidence = sum(state.confidence_map.get(k, 0) for k in final_fields) / max(
+        len(final_fields), 1
     )
 
     return EnrichResponse(

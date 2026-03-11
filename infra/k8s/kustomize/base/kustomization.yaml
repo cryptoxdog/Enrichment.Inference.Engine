@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: enrichment
+
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - rbac.yaml
+  - network-policy.yaml
+  - redis.yaml
+
+configMapGenerator:
+  - name: enrichment-config
+    literals:
+      - REDIS_URL=redis://redis:6379/0
+      - KB_DIR=/app/kb
+      - LOG_LEVEL=INFO
+      - PERPLEXITY_MODEL=sonar-reasoning
+      - DEFAULT_CONSENSUS_THRESHOLD=0.65
+      - DEFAULT_MAX_VARIATIONS=5
+      - DEFAULT_TIMEOUT_SECONDS=120
+      - MAX_CONCURRENT_VARIATIONS=3
+      - CB_FAILURE_THRESHOLD=5
+      - CB_COOLDOWN_SECONDS=60

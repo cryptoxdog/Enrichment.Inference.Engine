@@ -157,8 +157,10 @@ def _extract_domain_properties(
                 gate_fields.add(val)
 
     scoring_fields: set[str] = set()
-    dims = domain_spec.get("scoring_dimensions", domain_spec.get("scoring", {}).get("dimensions", []))
-    for dim in (dims if isinstance(dims, list) else []):
+    dims = domain_spec.get(
+        "scoring_dimensions", domain_spec.get("scoring", {}).get("dimensions", [])
+    )
+    for dim in dims if isinstance(dims, list) else []:
         if isinstance(dim, dict):
             for prop_key in ("candidate_property", "candidate_prop", "source"):
                 val = dim.get(prop_key)
@@ -179,7 +181,11 @@ def _extract_domain_properties(
 
     ontology = domain_spec.get("ontology", domain_spec)
     nodes = ontology.get("nodes", ontology.get("entities", []))
-    node_iter = list(nodes.values()) if isinstance(nodes, dict) else (nodes if isinstance(nodes, list) else [])
+    node_iter = (
+        list(nodes.values())
+        if isinstance(nodes, dict)
+        else (nodes if isinstance(nodes, list) else [])
+    )
 
     for node_def in node_iter:
         if not isinstance(node_def, dict):
@@ -187,32 +193,49 @@ def _extract_domain_properties(
         props = node_def.get("properties", {})
         if isinstance(props, dict):
             for prop_name, prop_def in props.items():
-                properties.append(_parse_domain_property(
-                    prop_name, prop_def, gate_fields, scoring_fields,
-                    inference_inputs, inference_outputs,
-                ))
+                properties.append(
+                    _parse_domain_property(
+                        prop_name,
+                        prop_def,
+                        gate_fields,
+                        scoring_fields,
+                        inference_inputs,
+                        inference_outputs,
+                    )
+                )
         elif isinstance(props, list):
             for prop_def in props:
                 if isinstance(prop_def, dict):
                     pname = prop_def.get("name", "")
                     if pname:
-                        properties.append(_parse_domain_property(
-                            pname, prop_def, gate_fields, scoring_fields,
-                            inference_inputs, inference_outputs,
-                        ))
+                        properties.append(
+                            _parse_domain_property(
+                                pname,
+                                prop_def,
+                                gate_fields,
+                                scoring_fields,
+                                inference_inputs,
+                                inference_outputs,
+                            )
+                        )
 
     return properties
 
 
 def _parse_domain_property(
-    name: str, prop_def: Any,
-    gate_fields: set[str], scoring_fields: set[str],
-    inference_inputs: set[str], inference_outputs: set[str],
+    name: str,
+    prop_def: Any,
+    gate_fields: set[str],
+    scoring_fields: set[str],
+    inference_inputs: set[str],
+    inference_outputs: set[str],
 ) -> DomainProperty:
     if not isinstance(prop_def, dict):
         return DomainProperty(
-            name=name, field_type=str(prop_def) if prop_def else "string",
-            is_gate=name in gate_fields, is_scoring=name in scoring_fields,
+            name=name,
+            field_type=str(prop_def) if prop_def else "string",
+            is_gate=name in gate_fields,
+            is_scoring=name in scoring_fields,
             is_inference_input=name in inference_inputs,
             is_inference_output=name in inference_outputs,
         )
@@ -236,7 +259,7 @@ def _normalize(name: str) -> str:
     norm = name.strip().lower()
     for prefix in ("x_", "custom_", "cf_", "c_", "__c"):
         if norm.startswith(prefix):
-            norm = norm[len(prefix):]
+            norm = norm[len(prefix) :]
             break
     return norm.replace("-", "_").replace(" ", "_").strip("_")
 
@@ -291,8 +314,14 @@ def scan_crm_fields(
 ) -> ScanResult:
     """Map CRM fields against domain ontology. Classify matched/unmapped/missing."""
     domain_meta = domain_spec.get("domain", domain_spec.get("metadata", {}))
-    domain_id = (domain_meta.get("id", "") or domain_meta.get("name", "unknown")) if isinstance(domain_meta, dict) else "unknown"
-    domain_version = domain_meta.get("version", "0.0.0") if isinstance(domain_meta, dict) else "0.0.0"
+    domain_id = (
+        (domain_meta.get("id", "") or domain_meta.get("name", "unknown"))
+        if isinstance(domain_meta, dict)
+        else "unknown"
+    )
+    domain_version = (
+        domain_meta.get("version", "0.0.0") if isinstance(domain_meta, dict) else "0.0.0"
+    )
 
     domain_properties = _extract_domain_properties(domain_spec)
     domain_lookup: dict[str, DomainProperty] = {_normalize(p.name): p for p in domain_properties}
@@ -306,26 +335,35 @@ def scan_crm_fields(
         if crm_norm in domain_lookup:
             prop = domain_lookup[crm_norm]
             matched_domain_keys.add(crm_norm)
-            matched.append(FieldMapping(
-                crm_field=crm_field.name, domain_property=prop.name,
-                status=FieldMatchStatus.MATCHED,
-                type_compatible=_type_compatible(crm_field.field_type, prop.field_type),
-                impact_tier=_classify_impact(prop),
-            ))
+            matched.append(
+                FieldMapping(
+                    crm_field=crm_field.name,
+                    domain_property=prop.name,
+                    status=FieldMatchStatus.MATCHED,
+                    type_compatible=_type_compatible(crm_field.field_type, prop.field_type),
+                    impact_tier=_classify_impact(prop),
+                )
+            )
         else:
-            unmapped.append(FieldMapping(
-                crm_field=crm_field.name, domain_property=None,
-                status=FieldMatchStatus.UNMAPPED,
-            ))
+            unmapped.append(
+                FieldMapping(
+                    crm_field=crm_field.name,
+                    domain_property=None,
+                    status=FieldMatchStatus.UNMAPPED,
+                )
+            )
 
     missing: list[FieldMapping] = []
     for norm_name, prop in domain_lookup.items():
         if norm_name not in matched_domain_keys:
-            missing.append(FieldMapping(
-                crm_field=None, domain_property=prop.name,
-                status=FieldMatchStatus.MISSING,
-                impact_tier=_classify_impact(prop),
-            ))
+            missing.append(
+                FieldMapping(
+                    crm_field=None,
+                    domain_property=prop.name,
+                    status=FieldMatchStatus.MISSING,
+                    impact_tier=_classify_impact(prop),
+                )
+            )
     missing.sort(key=lambda m: _IMPACT_RANK.get(m.impact_tier, 99))
 
     total_domain = len(domain_properties)
@@ -334,15 +372,25 @@ def scan_crm_fields(
     scan_hash = hashlib.sha256(scan_input.encode()).hexdigest()[:16]
 
     result = ScanResult(
-        domain_id=domain_id, domain_version=domain_version,
-        total_crm_fields=len(crm_fields), total_domain_properties=total_domain,
-        matched=matched, unmapped=unmapped, missing=missing,
-        coverage_ratio=round(coverage, 4), scan_hash=scan_hash,
+        domain_id=domain_id,
+        domain_version=domain_version,
+        total_crm_fields=len(crm_fields),
+        total_domain_properties=total_domain,
+        matched=matched,
+        unmapped=unmapped,
+        missing=missing,
+        coverage_ratio=round(coverage, 4),
+        scan_hash=scan_hash,
     )
-    logger.info("crm_scan_complete", extra={
-        "domain": domain_id, "matched": result.matched_count,
-        "missing": result.missing_count, "coverage": result.coverage_ratio,
-    })
+    logger.info(
+        "crm_scan_complete",
+        extra={
+            "domain": domain_id,
+            "matched": result.matched_count,
+            "missing": result.missing_count,
+            "coverage": result.coverage_ratio,
+        },
+    )
     return result
 
 
@@ -372,13 +420,20 @@ def generate_seed_yaml(
         seed_properties.append(prop_entry)
 
     domain_meta = domain_template.get("domain", domain_template.get("metadata", {}))
-    base_id = domain_meta.get("id", scan_result.domain_id) if isinstance(domain_meta, dict) else scan_result.domain_id
+    base_id = (
+        domain_meta.get("id", scan_result.domain_id)
+        if isinstance(domain_meta, dict)
+        else scan_result.domain_id
+    )
 
     seed_yaml: dict[str, Any] = {
         "domain": {"id": f"customer-{base_id}", "name": base_id, "version": "0.1.0-seed"},
         "ontology": {"nodes": [{"label": "Partner", "properties": seed_properties}]},
     }
-    logger.info("seed_yaml_generated", extra={"domain": seed_yaml["domain"]["id"], "properties": len(seed_properties)})
+    logger.info(
+        "seed_yaml_generated",
+        extra={"domain": seed_yaml["domain"]["id"], "properties": len(seed_properties)},
+    )
     return seed_yaml
 
 
@@ -397,13 +452,13 @@ def _acquisition_method(prop: DomainProperty) -> str:
 
 def _why_it_matters(prop: DomainProperty, impact: ImpactTier) -> str:
     reasons = {
-        ImpactTier.GATE_CRITICAL: f"\'{prop.name}\' is a gate filter — missing blocks all matching.",
-        ImpactTier.SCORING_CRITICAL: f"\'{prop.name}\' is a scoring dimension — missing degrades rank quality.",
-        ImpactTier.INFERENCE_INPUT: f"\'{prop.name}\' feeds inference rules — missing blocks grade/tier derivation.",
-        ImpactTier.ENRICHABLE: f"\'{prop.name}\' can be discovered via AI enrichment.",
-        ImpactTier.NICE_TO_HAVE: f"\'{prop.name}\' provides additional entity context.",
+        ImpactTier.GATE_CRITICAL: f"'{prop.name}' is a gate filter — missing blocks all matching.",
+        ImpactTier.SCORING_CRITICAL: f"'{prop.name}' is a scoring dimension — missing degrades rank quality.",
+        ImpactTier.INFERENCE_INPUT: f"'{prop.name}' feeds inference rules — missing blocks grade/tier derivation.",
+        ImpactTier.ENRICHABLE: f"'{prop.name}' can be discovered via AI enrichment.",
+        ImpactTier.NICE_TO_HAVE: f"'{prop.name}' provides additional entity context.",
     }
-    return reasons.get(impact, f"\'{prop.name}\' is a domain property.")
+    return reasons.get(impact, f"'{prop.name}' is a domain property.")
 
 
 def generate_discovery_report(
@@ -421,7 +476,9 @@ def generate_discovery_report(
     for rank, mapping in enumerate(scan_result.missing, start=1):
         if not mapping.domain_property:
             continue
-        prop = prop_lookup.get(_normalize(mapping.domain_property), DomainProperty(name=mapping.domain_property))
+        prop = prop_lookup.get(
+            _normalize(mapping.domain_property), DomainProperty(name=mapping.domain_property)
+        )
         impact = mapping.impact_tier
         method = _acquisition_method(prop)
 
@@ -434,16 +491,24 @@ def generate_discovery_report(
         if method == "enrichment":
             enrichable_count += 1
 
-        entries.append(DiscoveryReportEntry(
-            field_name=mapping.domain_property, field_type=prop.field_type,
-            impact_tier=impact, impact_rank=rank,
-            description=prop.description or f"Domain property: {prop.name}",
-            why_it_matters=_why_it_matters(prop, impact),
-            acquisition_method=method,
-        ))
+        entries.append(
+            DiscoveryReportEntry(
+                field_name=mapping.domain_property,
+                field_type=prop.field_type,
+                impact_tier=impact,
+                impact_rank=rank,
+                description=prop.description or f"Domain property: {prop.name}",
+                why_it_matters=_why_it_matters(prop, impact),
+                acquisition_method=method,
+            )
+        )
 
-    estimated_cost = enrichable_count * entity_count * _ESTIMATED_TOKENS_PER_FIELD * _TOKEN_RATE_PER_1K / 1000
-    report_hash = hashlib.sha256(f"{scan_result.scan_hash}:{len(entries)}:{entity_count}".encode()).hexdigest()[:16]
+    estimated_cost = (
+        enrichable_count * entity_count * _ESTIMATED_TOKENS_PER_FIELD * _TOKEN_RATE_PER_1K / 1000
+    )
+    report_hash = hashlib.sha256(
+        f"{scan_result.scan_hash}:{len(entries)}:{entity_count}".encode()
+    ).hexdigest()[:16]
 
     return DiscoveryReport(
         domain_id=scan_result.domain_id,
@@ -464,35 +529,57 @@ def generate_discovery_report(
 
 def scan_result_to_dict(result: ScanResult) -> dict[str, Any]:
     return {
-        "domain_id": result.domain_id, "domain_version": result.domain_version,
+        "domain_id": result.domain_id,
+        "domain_version": result.domain_version,
         "total_crm_fields": result.total_crm_fields,
         "total_domain_properties": result.total_domain_properties,
-        "matched_count": result.matched_count, "unmapped_count": result.unmapped_count,
-        "missing_count": result.missing_count, "coverage_ratio": result.coverage_ratio,
+        "matched_count": result.matched_count,
+        "unmapped_count": result.unmapped_count,
+        "missing_count": result.missing_count,
+        "coverage_ratio": result.coverage_ratio,
         "scan_hash": result.scan_hash,
-        "matched": [{"crm_field": m.crm_field, "domain_property": m.domain_property, "type_compatible": m.type_compatible} for m in result.matched],
+        "matched": [
+            {
+                "crm_field": m.crm_field,
+                "domain_property": m.domain_property,
+                "type_compatible": m.type_compatible,
+            }
+            for m in result.matched
+        ],
         "unmapped": [{"crm_field": m.crm_field} for m in result.unmapped],
-        "missing": [{"domain_property": m.domain_property, "impact_tier": m.impact_tier.value} for m in result.missing],
+        "missing": [
+            {"domain_property": m.domain_property, "impact_tier": m.impact_tier.value}
+            for m in result.missing
+        ],
     }
 
 
 def discovery_report_to_dict(report: DiscoveryReport) -> dict[str, Any]:
     return {
         "domain_id": report.domain_id,
-        "customer_fields": report.customer_fields, "domain_fields": report.domain_fields,
+        "customer_fields": report.customer_fields,
+        "domain_fields": report.domain_fields,
         "coverage_pct": report.coverage_pct,
         "gate_blocked_count": report.gate_blocked_count,
         "scoring_degraded_count": report.scoring_degraded_count,
         "estimated_enrichment_cost_usd": report.estimated_enrichment_cost_usd,
         "report_hash": report.report_hash,
         "missing_fields": [
-            {"field_name": e.field_name, "field_type": e.field_type, "impact_tier": e.impact_tier.value,
-             "impact_rank": e.impact_rank, "why_it_matters": e.why_it_matters, "acquisition_method": e.acquisition_method}
+            {
+                "field_name": e.field_name,
+                "field_type": e.field_type,
+                "impact_tier": e.impact_tier.value,
+                "impact_rank": e.impact_rank,
+                "why_it_matters": e.why_it_matters,
+                "acquisition_method": e.acquisition_method,
+            }
             for e in report.missing_entries
         ],
         "summary": {
-            "headline": f"You have {report.customer_fields} fields. Your domain needs {report.domain_fields}. You\'re missing {len(report.missing_entries)} fields.",
-            "matching_impact": f"{report.gate_blocked_count} gate-critical fields missing — entities cannot be matched." if report.gate_blocked_count > 0 else "No gate-critical fields missing.",
+            "headline": f"You have {report.customer_fields} fields. Your domain needs {report.domain_fields}. You're missing {len(report.missing_entries)} fields.",
+            "matching_impact": f"{report.gate_blocked_count} gate-critical fields missing — entities cannot be matched."
+            if report.gate_blocked_count > 0
+            else "No gate-critical fields missing.",
             "enrichment_estimate": f"Estimated cost: ${report.estimated_enrichment_cost_usd:,.2f}",
         },
     }

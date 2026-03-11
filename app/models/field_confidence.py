@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, field_validator
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class FieldSource(str, Enum):
     """Origin of a field value inside the convergence loop."""
 
@@ -39,6 +40,7 @@ class FieldSource(str, Enum):
 # ---------------------------------------------------------------------------
 # Core model
 # ---------------------------------------------------------------------------
+
 
 class FieldConfidence(BaseModel):
     """Confidence record for a single field on a single entity.
@@ -71,6 +73,7 @@ class FieldConfidence(BaseModel):
 # ---------------------------------------------------------------------------
 # Aggregate wrapper
 # ---------------------------------------------------------------------------
+
 
 class FieldConfidenceMap(BaseModel):
     """Keyed collection of :class:`FieldConfidence` records with aggregate helpers.
@@ -128,11 +131,7 @@ class FieldConfidenceMap(BaseModel):
 
     def confident_fields(self, threshold: float = 0.65) -> Dict[str, Any]:
         """Return ``{field_name: value}`` for fields meeting *threshold*."""
-        return {
-            name: fc.value
-            for name, fc in self.fields.items()
-            if fc.confidence >= threshold
-        }
+        return {name: fc.value for name, fc in self.fields.items() if fc.confidence >= threshold}
 
     def source_breakdown(self) -> Dict[FieldSource, int]:
         """Count of fields per :class:`FieldSource`."""
@@ -164,6 +163,7 @@ class FieldConfidenceMap(BaseModel):
 # ---------------------------------------------------------------------------
 # Builder: consensus payloads → per-field confidence
 # ---------------------------------------------------------------------------
+
 
 def compute_field_confidences(
     validated_payloads: Sequence[Dict[str, Any]],
@@ -234,15 +234,17 @@ def compute_field_confidences(
         avg_conf = statistics.mean(confs) if confs else 0.0
         combined = round(agreement * avg_conf * penalty * value_agreement, 4)
 
-        fcm.set(FieldConfidence(
-            field_name=field_name,
-            value=winner_value,
-            confidence=combined,
-            source=FieldSource.ENRICHMENT,
-            variation_agreement=round(value_agreement, 4),
-            pass_discovered=pass_number,
-            kb_fragment_ids=kb_ids,
-        ))
+        fcm.set(
+            FieldConfidence(
+                field_name=field_name,
+                value=winner_value,
+                confidence=combined,
+                source=FieldSource.ENRICHMENT,
+                variation_agreement=round(value_agreement, 4),
+                pass_discovered=pass_number,
+                kb_fragment_ids=kb_ids,
+            )
+        )
 
     return fcm
 
@@ -251,5 +253,6 @@ def _hashable(v: Any) -> str:
     """Produce a stable string key for any JSON-serialisable value."""
     if isinstance(v, (list, dict)):
         import json
+
         return json.dumps(v, sort_keys=True, default=str)
     return str(v)

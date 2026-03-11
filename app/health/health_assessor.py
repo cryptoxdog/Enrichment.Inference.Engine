@@ -12,7 +12,6 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Protocol, Sequence
-from uuid import uuid4
 
 from .health_models import (
     AssessmentConfig,
@@ -34,6 +33,7 @@ from .health_models import (
 
 
 # ─── Data Source Protocols ────────────────────────────────────
+
 
 class EntityRecord(Protocol):
     """Minimal entity record protocol — adapters for CRM-specific stores."""
@@ -82,6 +82,7 @@ class EntityDataStore(Protocol):
 
 
 # ─── Entity Health Assessor ──────────────────────────────────
+
 
 class HealthAssessor:
     """Core HEALTH engine. Assesses entities and produces actionable health data."""
@@ -138,8 +139,14 @@ class HealthAssessor:
                 low_conf_count += 1
 
         actions = self._recommend_actions(
-            record, filled, expected, gate_missing, scoring_missing,
-            freshness, avg_conf, consistency,
+            record,
+            filled,
+            expected,
+            gate_missing,
+            scoring_missing,
+            freshness,
+            avg_conf,
+            consistency,
         )
 
         return EntityHealth(
@@ -247,55 +254,68 @@ class HealthAssessor:
         actions: list[RecommendedAction] = []
 
         for gf in gate_missing:
-            actions.append(RecommendedAction(
-                action=HealthAction.FILL_MISSING,
-                field_name=gf,
-                reason=f"Gate-critical field '{gf}' is missing — blocks all matching",
-                priority=1.0,
-            ))
+            actions.append(
+                RecommendedAction(
+                    action=HealthAction.FILL_MISSING,
+                    field_name=gf,
+                    reason=f"Gate-critical field '{gf}' is missing — blocks all matching",
+                    priority=1.0,
+                )
+            )
 
         if freshness < 0.30:
-            actions.append(RecommendedAction(
-                action=HealthAction.REFRESH_STALE,
-                reason=f"Entity freshness {freshness:.2f} below 0.30 — data is stale",
-                priority=0.90,
-            ))
+            actions.append(
+                RecommendedAction(
+                    action=HealthAction.REFRESH_STALE,
+                    reason=f"Entity freshness {freshness:.2f} below 0.30 — data is stale",
+                    priority=0.90,
+                )
+            )
 
         for sf in scoring_missing[:5]:
-            actions.append(RecommendedAction(
-                action=HealthAction.FILL_MISSING,
-                field_name=sf,
-                reason=f"Scoring field '{sf}' is missing — degrades match quality",
-                priority=0.75,
-            ))
+            actions.append(
+                RecommendedAction(
+                    action=HealthAction.FILL_MISSING,
+                    field_name=sf,
+                    reason=f"Scoring field '{sf}' is missing — degrades match quality",
+                    priority=0.75,
+                )
+            )
 
         low_conf_fields = [
-            (k, v) for k, v in record.field_confidences.items()
+            (k, v)
+            for k, v in record.field_confidences.items()
             if v < self._config.confidence_floor and k in expected
         ]
         for fname, conf in sorted(low_conf_fields, key=lambda x: x[1])[:5]:
-            actions.append(RecommendedAction(
-                action=HealthAction.VERIFY_FIELD,
-                field_name=fname,
-                reason=f"Field '{fname}' confidence {conf:.2f} below threshold {self._config.confidence_floor}",
-                priority=0.60,
-            ))
+            actions.append(
+                RecommendedAction(
+                    action=HealthAction.VERIFY_FIELD,
+                    field_name=fname,
+                    reason=f"Field '{fname}' confidence {conf:.2f} below threshold {self._config.confidence_floor}",
+                    priority=0.60,
+                )
+            )
 
         if consistency < 0.70:
             crm = record.crm_values
             enriched = record.fields
             conflicts = [
-                k for k in expected
-                if crm.get(k) is not None and enriched.get(k) is not None
+                k
+                for k in expected
+                if crm.get(k) is not None
+                and enriched.get(k) is not None
                 and not self._values_agree(crm[k], enriched[k])
             ]
             for cf in conflicts[:3]:
-                actions.append(RecommendedAction(
-                    action=HealthAction.RESOLVE_CONFLICT,
-                    field_name=cf,
-                    reason=f"CRM and enriched values disagree for '{cf}'",
-                    priority=0.55,
-                ))
+                actions.append(
+                    RecommendedAction(
+                        action=HealthAction.RESOLVE_CONFLICT,
+                        field_name=cf,
+                        reason=f"CRM and enriched values disagree for '{cf}'",
+                        priority=0.55,
+                    )
+                )
 
         actions.sort(key=lambda a: a.priority, reverse=True)
         return actions
@@ -357,22 +377,26 @@ class HealthAssessor:
                 sorted(s["value_counts"].items(), key=lambda x: x[1], reverse=True)[:10]
             )
 
-            result.append(FieldHealth(
-                field_name=fname,
-                fill_rate=round(fill_rate, 4),
-                avg_confidence=round(avg_conf, 4),
-                min_confidence=round(s["conf_min"], 4) if fc > 0 else 0.0,
-                max_confidence=round(s["conf_max"], 4) if fc > 0 else 0.0,
-                staleness_p50_days=round(p50, 2),
-                staleness_p90_days=round(p90, 2),
-                outlier_count=s["outlier_count"],
-                total_entities=n,
-                value_distribution=top_values,
-                is_gate_critical=fname in gate_set,
-                is_scoring_dimension=fname in scoring_set,
-            ))
+            result.append(
+                FieldHealth(
+                    field_name=fname,
+                    fill_rate=round(fill_rate, 4),
+                    avg_confidence=round(avg_conf, 4),
+                    min_confidence=round(s["conf_min"], 4) if fc > 0 else 0.0,
+                    max_confidence=round(s["conf_max"], 4) if fc > 0 else 0.0,
+                    staleness_p50_days=round(p50, 2),
+                    staleness_p90_days=round(p90, 2),
+                    outlier_count=s["outlier_count"],
+                    total_entities=n,
+                    value_distribution=top_values,
+                    is_gate_critical=fname in gate_set,
+                    is_scoring_dimension=fname in scoring_set,
+                )
+            )
 
-        result.sort(key=lambda fh: (not fh.is_gate_critical, not fh.is_scoring_dimension, fh.health_score))
+        result.sort(
+            key=lambda fh: (not fh.is_gate_critical, not fh.is_scoring_dimension, fh.health_score)
+        )
         return result
 
     # ─── Internal: CRM Health ─────────────────────────────────
@@ -400,10 +424,7 @@ class HealthAssessor:
         graph_cov = graph_synced / total_entities_domain if total_entities_domain > 0 else 0.0
 
         gate_fhs = [fh for fh in field_health if fh.is_gate_critical]
-        gate_fill = (
-            sum(fh.fill_rate for fh in gate_fhs) / len(gate_fhs)
-            if gate_fhs else 1.0
-        )
+        gate_fill = sum(fh.fill_rate for fh in gate_fhs) / len(gate_fhs) if gate_fhs else 1.0
 
         ai_ready = compute_ai_readiness(
             avg_comp, avg_fresh, avg_conf, enrichment_cov, graph_cov, gate_fill
@@ -473,15 +494,17 @@ class HealthAssessor:
                 continue
 
             if eh.gate_fields_missing:
-                triggers.append(EnrichmentTrigger(
-                    entity_id=eh.entity_id,
-                    domain=eh.domain,
-                    reason=TriggerReason.GATE_FIELD_MISSING,
-                    priority=1.0,
-                    target_fields=eh.gate_fields_missing,
-                    current_health=eh.composite_health,
-                    metadata={"gate_fields": eh.gate_fields_missing},
-                ))
+                triggers.append(
+                    EnrichmentTrigger(
+                        entity_id=eh.entity_id,
+                        domain=eh.domain,
+                        reason=TriggerReason.GATE_FIELD_MISSING,
+                        priority=1.0,
+                        target_fields=eh.gate_fields_missing,
+                        current_health=eh.composite_health,
+                        metadata={"gate_fields": eh.gate_fields_missing},
+                    )
+                )
                 continue
 
             if eh.freshness < 0.30:
@@ -509,14 +532,16 @@ class HealthAssessor:
                 ):
                     target_fields.append(action.field_name)
 
-            triggers.append(EnrichmentTrigger(
-                entity_id=eh.entity_id,
-                domain=eh.domain,
-                reason=reason,
-                priority=priority,
-                target_fields=target_fields[:20],
-                current_health=eh.composite_health,
-            ))
+            triggers.append(
+                EnrichmentTrigger(
+                    entity_id=eh.entity_id,
+                    domain=eh.domain,
+                    reason=reason,
+                    priority=priority,
+                    target_fields=target_fields[:20],
+                    current_health=eh.composite_health,
+                )
+            )
 
         triggers.sort(key=lambda t: t.priority, reverse=True)
         return triggers

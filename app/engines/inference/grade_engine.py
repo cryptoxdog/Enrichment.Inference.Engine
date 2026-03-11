@@ -71,7 +71,9 @@ def _evaluate_grade_condition(cond: GradeCondition, entity: dict[str, Any]) -> b
     return False
 
 
-def _score_grade(grade_def: GradeDefinition, entity: dict[str, Any]) -> tuple[float, list[str], list[str]]:
+def _score_grade(
+    grade_def: GradeDefinition, entity: dict[str, Any]
+) -> tuple[float, list[str], list[str]]:
     met: list[str] = []
     missed: list[str] = []
     for cond in grade_def.conditions:

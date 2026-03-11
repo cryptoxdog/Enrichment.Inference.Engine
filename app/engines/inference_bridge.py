@@ -15,6 +15,7 @@ Each rule has:
 Aligned with graph repo's DomainSpec field metadata:
   managed_by: computed, derived_from: [...], discovery_confidence: 0.85
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ from typing import Any
 @dataclass
 class InferenceResult:
     """Output of a single inference pass."""
+
     derived_fields: dict[str, Any] = field(default_factory=dict)
     confidence_map: dict[str, float] = field(default_factory=dict)
     rules_fired: int = 0
@@ -69,19 +71,26 @@ class InferenceBridge:
             input_confidences = [conf_map.get(r, 0.7) for r in requires]
             if min(input_confidences, default=1.0) < min_confidence:
                 result.rules_skipped += 1
-                result.rule_trace.append({
-                    "rule": name, "status": "skipped",
-                    "reason": f"input confidence below {min_confidence}",
-                })
+                result.rule_trace.append(
+                    {
+                        "rule": name,
+                        "status": "skipped",
+                        "reason": f"input confidence below {min_confidence}",
+                    }
+                )
                 continue
 
             # Fire conditions
             try:
                 derived = self._evaluate_rule(rule, working)
             except Exception as e:
-                result.rule_trace.append({
-                    "rule": name, "status": "error", "reason": str(e),
-                })
+                result.rule_trace.append(
+                    {
+                        "rule": name,
+                        "status": "error",
+                        "reason": str(e),
+                    }
+                )
                 continue
 
             if derived:
@@ -96,11 +105,14 @@ class InferenceBridge:
                     working[field_name] = value
                     conf_map[field_name] = derived_conf
 
-                result.rule_trace.append({
-                    "rule": name, "status": "fired",
-                    "produced": list(derived.keys()),
-                    "confidence": derived_conf,
-                })
+                result.rule_trace.append(
+                    {
+                        "rule": name,
+                        "status": "fired",
+                        "produced": list(derived.keys()),
+                        "confidence": derived_conf,
+                    }
+                )
 
         return result
 
@@ -115,9 +127,7 @@ class InferenceBridge:
             for r in self._rules
         ]
 
-    def _evaluate_rule(
-        self, rule: dict, entity: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _evaluate_rule(self, rule: dict, entity: dict[str, Any]) -> dict[str, Any]:
         """Evaluate a single rule's conditions and compute outputs."""
         conditions = rule.get("conditions", [])
         produces = rule.get("produces", {})
@@ -162,9 +172,7 @@ class InferenceBridge:
 
         return derived
 
-    def _compute_field(
-        self, computation: dict, entity: dict[str, Any]
-    ) -> Any:
+    def _compute_field(self, computation: dict, entity: dict[str, Any]) -> Any:
         """Execute a field computation."""
         method = computation.get("method", "static")
 
@@ -218,9 +226,7 @@ class InferenceBridge:
             for r in remaining:
                 deps = set(r.get("requires", []))
                 unresolved_deps = deps - resolved
-                producer_deps = {
-                    d for d in unresolved_deps if d in produces_map
-                }
+                producer_deps = {d for d in unresolved_deps if d in produces_map}
                 if not producer_deps:
                     sorted_rules.append(r)
                     resolved.update(r.get("produces", {}).keys())

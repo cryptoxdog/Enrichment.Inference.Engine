@@ -12,8 +12,7 @@ from __future__ import annotations
 import math
 import statistics
 from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any, Sequence
+from typing import Any
 
 from .health_models import (
     FieldHealth,
@@ -23,6 +22,7 @@ from .health_models import (
 
 
 # ─── Outlier Detection ───────────────────────────────────────
+
 
 class OutlierResult:
     __slots__ = ("field_name", "entity_id", "value", "z_score", "reason")
@@ -73,13 +73,15 @@ def detect_numeric_outliers(
         z = abs(val - mean) / stdev
         if z >= z_threshold:
             direction = "above" if val > mean else "below"
-            outliers.append(OutlierResult(
-                field_name=field_name,
-                entity_id=entity_id,
-                value=val,
-                z_score=z,
-                reason=f"Value {val} is {z:.1f}σ {direction} mean ({mean:.2f})",
-            ))
+            outliers.append(
+                OutlierResult(
+                    field_name=field_name,
+                    entity_id=entity_id,
+                    value=val,
+                    z_score=z,
+                    reason=f"Value {val} is {z:.1f}σ {direction} mean ({mean:.2f})",
+                )
+            )
 
     return outliers
 
@@ -108,24 +110,39 @@ def detect_categorical_outliers(
     for val, eids in freq.items():
         if len(eids) <= threshold and len(eids) < n * 0.05:
             for eid in eids:
-                outliers.append(OutlierResult(
-                    field_name=field_name,
-                    entity_id=eid,
-                    value=val,
-                    z_score=0.0,
-                    reason=f"Value '{val}' appears in only {len(eids)}/{n} entities ({len(eids)/n:.1%})",
-                ))
+                outliers.append(
+                    OutlierResult(
+                        field_name=field_name,
+                        entity_id=eid,
+                        value=val,
+                        z_score=0.0,
+                        reason=f"Value '{val}' appears in only {len(eids)}/{n} entities ({len(eids) / n:.1%})",
+                    )
+                )
 
     return outliers
 
 
 # ─── Distribution Analysis ───────────────────────────────────
 
+
 class DistributionStats:
     __slots__ = (
-        "field_name", "field_type", "count", "null_count", "fill_rate",
-        "mean", "median", "stdev", "min_val", "max_val", "p25", "p75",
-        "unique_count", "top_values", "entropy",
+        "field_name",
+        "field_type",
+        "count",
+        "null_count",
+        "fill_rate",
+        "mean",
+        "median",
+        "stdev",
+        "min_val",
+        "max_val",
+        "p25",
+        "p75",
+        "unique_count",
+        "top_values",
+        "entropy",
     )
 
     def __init__(self, field_name: str, field_type: str):
@@ -217,6 +234,7 @@ def analyze_distribution(
 
 # ─── Field Health Recommendations ─────────────────────────────
 
+
 def recommend_field_actions(
     field_health: FieldHealth,
     distribution: DistributionStats,
@@ -228,55 +246,66 @@ def recommend_field_actions(
 
     if field_health.fill_rate < 0.50:
         priority = 1.0 if field_health.is_gate_critical else 0.80
-        actions.append(RecommendedAction(
-            action=HealthAction.FILL_MISSING,
-            field_name=fname,
-            reason=f"Fill rate {field_health.fill_rate:.0%} — "
-                   f"{'gate-critical, blocks matching' if field_health.is_gate_critical else 'below 50% threshold'}",
-            priority=priority,
-        ))
+        actions.append(
+            RecommendedAction(
+                action=HealthAction.FILL_MISSING,
+                field_name=fname,
+                reason=f"Fill rate {field_health.fill_rate:.0%} — "
+                f"{'gate-critical, blocks matching' if field_health.is_gate_critical else 'below 50% threshold'}",
+                priority=priority,
+            )
+        )
 
     if field_health.avg_confidence < 0.50 and field_health.fill_rate > 0.30:
-        actions.append(RecommendedAction(
-            action=HealthAction.VERIFY_FIELD,
-            field_name=fname,
-            reason=f"Avg confidence {field_health.avg_confidence:.2f} — values present but unreliable",
-            priority=0.75,
-        ))
+        actions.append(
+            RecommendedAction(
+                action=HealthAction.VERIFY_FIELD,
+                field_name=fname,
+                reason=f"Avg confidence {field_health.avg_confidence:.2f} — values present but unreliable",
+                priority=0.75,
+            )
+        )
 
     if field_health.staleness_p50_days > 60:
-        actions.append(RecommendedAction(
-            action=HealthAction.REFRESH_STALE,
-            field_name=fname,
-            reason=f"Median staleness {field_health.staleness_p50_days:.0f} days — data likely outdated",
-            priority=0.65,
-        ))
+        actions.append(
+            RecommendedAction(
+                action=HealthAction.REFRESH_STALE,
+                field_name=fname,
+                reason=f"Median staleness {field_health.staleness_p50_days:.0f} days — data likely outdated",
+                priority=0.65,
+            )
+        )
 
     if outlier_count > 0:
-        actions.append(RecommendedAction(
-            action=HealthAction.FLAG_OUTLIER,
-            field_name=fname,
-            reason=f"{outlier_count} outlier values detected — may indicate data quality issues",
-            priority=0.55,
-        ))
+        actions.append(
+            RecommendedAction(
+                action=HealthAction.FLAG_OUTLIER,
+                field_name=fname,
+                reason=f"{outlier_count} outlier values detected — may indicate data quality issues",
+                priority=0.55,
+            )
+        )
 
     if distribution.field_type == "categorical" and distribution.entropy is not None:
         if distribution.unique_count <= 2 and distribution.fill_rate > 0.80:
             pass
         elif distribution.entropy < 0.5 and distribution.unique_count > 5:
-            actions.append(RecommendedAction(
-                action=HealthAction.VERIFY_FIELD,
-                field_name=fname,
-                reason=f"Low entropy ({distribution.entropy:.2f}) with {distribution.unique_count} categories — "
-                       f"possible over-concentration or default values",
-                priority=0.45,
-            ))
+            actions.append(
+                RecommendedAction(
+                    action=HealthAction.VERIFY_FIELD,
+                    field_name=fname,
+                    reason=f"Low entropy ({distribution.entropy:.2f}) with {distribution.unique_count} categories — "
+                    f"possible over-concentration or default values",
+                    priority=0.45,
+                )
+            )
 
     actions.sort(key=lambda a: a.priority, reverse=True)
     return actions
 
 
 # ─── Full Field Diagnostic ────────────────────────────────────
+
 
 class FieldDiagnostic:
     __slots__ = ("field_health", "distribution", "outliers", "recommendations")
@@ -303,7 +332,12 @@ class FieldDiagnostic:
             "outlier_count": len(self.outliers),
             "outliers": [o.to_dict() for o in self.outliers[:20]],
             "recommendations": [
-                {"action": r.action.value, "field": r.field_name, "reason": r.reason, "priority": r.priority}
+                {
+                    "action": r.action.value,
+                    "field": r.field_name,
+                    "reason": r.reason,
+                    "priority": r.priority,
+                }
                 for r in self.recommendations
             ],
         }

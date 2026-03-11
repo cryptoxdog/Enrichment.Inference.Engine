@@ -131,7 +131,12 @@ def infer(entity_fields: dict[str, Any], registry: RuleRegistry) -> InferenceRes
                     _, ex_pri, ex_conf, _ = existing
                     if (rule.priority, rule.confidence) <= (ex_pri, ex_conf):
                         continue
-                best_output[field_name] = (field_value, rule.priority, rule.confidence, rule.rule_id)
+                best_output[field_name] = (
+                    field_value,
+                    rule.priority,
+                    rule.confidence,
+                    rule.rule_id,
+                )
                 derivation_chains.setdefault(field_name, []).append(rule.rule_id)
                 if field_name not in working:
                     new_fields_this_cascade[field_name] = field_value

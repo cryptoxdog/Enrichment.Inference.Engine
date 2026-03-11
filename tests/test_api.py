@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import os
 
-os.environ.update({
-    "PERPLEXITY_API_KEY": "test-key",
-    "API_SECRET_KEY": "test-secret-key-32-chars-long!!",
-    "API_KEY_HASH": "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1",
-    "KB_DIR": "./kb",
-    "REDIS_URL": "redis://localhost:6379/0",
-})
+os.environ.update(
+    {
+        "PERPLEXITY_API_KEY": "test-key",
+        "API_SECRET_KEY": "test-secret-key-32-chars-long!!",
+        "API_KEY_HASH": "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1",
+        "KB_DIR": "./kb",
+        "REDIS_URL": "redis://localhost:6379/0",
+    }
+)
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,34 +47,55 @@ class TestHealth:
 
 class TestAuth:
     def test_missing_key_401(self):
-        r = client.post("/api/v1/enrich", json={
-            "entity": {}, "object_type": "Account", "objective": "test",
-        })
+        r = client.post(
+            "/api/v1/enrich",
+            json={
+                "entity": {},
+                "object_type": "Account",
+                "objective": "test",
+            },
+        )
         assert r.status_code == 401
 
     def test_wrong_key_403(self):
-        r = client.post("/api/v1/enrich", json={
-            "entity": {}, "object_type": "Account", "objective": "test",
-        }, headers={"X-API-Key": "wrong"})
+        r = client.post(
+            "/api/v1/enrich",
+            json={
+                "entity": {},
+                "object_type": "Account",
+                "objective": "test",
+            },
+            headers={"X-API-Key": "wrong"},
+        )
         assert r.status_code == 403
 
     def test_valid_key_passes(self):
-        r = client.post("/api/v1/enrich", json={
-            "entity": {"Name": "Test"}, "object_type": "Account",
-            "objective": "test", "max_variations": 2,
-        }, headers=AUTH)
+        r = client.post(
+            "/api/v1/enrich",
+            json={
+                "entity": {"Name": "Test"},
+                "object_type": "Account",
+                "objective": "test",
+                "max_variations": 2,
+            },
+            headers=AUTH,
+        )
         assert r.status_code == 200
 
 
 class TestEnrich:
     def test_response_structure(self):
-        r = client.post("/api/v1/enrich", json={
-            "entity": {"Name": "Acme Corp", "BillingCountry": "US"},
-            "object_type": "Account",
-            "schema": '{"Industry": "string", "Description": "string"}',
-            "objective": "Classify industry",
-            "max_variations": 2,
-        }, headers=AUTH)
+        r = client.post(
+            "/api/v1/enrich",
+            json={
+                "entity": {"Name": "Acme Corp", "BillingCountry": "US"},
+                "object_type": "Account",
+                "schema": '{"Industry": "string", "Description": "string"}',
+                "objective": "Classify industry",
+                "max_variations": 2,
+            },
+            headers=AUTH,
+        )
         assert r.status_code == 200
         body = r.json()
         assert "state" in body
@@ -81,38 +104,58 @@ class TestEnrich:
         assert "kb_fragment_ids" in body
 
     def test_schema_as_dict(self):
-        r = client.post("/api/v1/enrich", json={
-            "entity": {"Name": "Test"},
-            "object_type": "Lead",
-            "schema": {"Industry": "string"},
-            "objective": "test",
-            "max_variations": 2,
-        }, headers=AUTH)
+        r = client.post(
+            "/api/v1/enrich",
+            json={
+                "entity": {"Name": "Test"},
+                "object_type": "Lead",
+                "schema": {"Industry": "string"},
+                "objective": "test",
+                "max_variations": 2,
+            },
+            headers=AUTH,
+        )
         assert r.status_code == 200
 
 
 class TestBatch:
     def test_returns_structured(self):
-        r = client.post("/api/v1/enrich/batch", json={
-            "entities": [
-                {"entity": {"Name": "A"}, "object_type": "Account",
-                 "objective": "test", "max_variations": 2},
-                {"entity": {"Name": "B"}, "object_type": "Account",
-                 "objective": "test", "max_variations": 2},
-            ]
-        }, headers=AUTH)
+        r = client.post(
+            "/api/v1/enrich/batch",
+            json={
+                "entities": [
+                    {
+                        "entity": {"Name": "A"},
+                        "object_type": "Account",
+                        "objective": "test",
+                        "max_variations": 2,
+                    },
+                    {
+                        "entity": {"Name": "B"},
+                        "object_type": "Account",
+                        "objective": "test",
+                        "max_variations": 2,
+                    },
+                ]
+            },
+            headers=AUTH,
+        )
         assert r.status_code == 200
         body = r.json()
         assert body["total"] == 2
         assert "total_tokens_used" in body
 
     def test_rejects_over_50(self):
-        r = client.post("/api/v1/enrich/batch", json={
-            "entities": [
-                {"entity": {"Name": f"Co{i}"}, "object_type": "Account", "objective": "t"}
-                for i in range(51)
-            ]
-        }, headers=AUTH)
+        r = client.post(
+            "/api/v1/enrich/batch",
+            json={
+                "entities": [
+                    {"entity": {"Name": f"Co{i}"}, "object_type": "Account", "objective": "t"}
+                    for i in range(51)
+                ]
+            },
+            headers=AUTH,
+        )
         assert r.status_code == 422
 
 

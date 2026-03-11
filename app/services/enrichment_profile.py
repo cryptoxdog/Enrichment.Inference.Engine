@@ -119,15 +119,17 @@ def select_entities(profile: EnrichmentProfile, store: EntityStore) -> list[Enti
     refs: list[EntityRef] = []
     for entity in raw:
         priority = _compute_priority(entity)
-        refs.append(EntityRef(
-            entity_id=str(entity.get("entity_id", entity.get("id", ""))),
-            priority_score=priority,
-            null_count=int(entity.get("null_count", 0)),
-            staleness_days=int(entity.get("staleness_days", 0)),
-            avg_confidence=float(entity.get("avg_confidence", 0.0)),
-            failed_matches=int(entity.get("failed_matches", 0)),
-            gate_fields_missing=int(entity.get("gate_fields_missing", 0)),
-        ))
+        refs.append(
+            EntityRef(
+                entity_id=str(entity.get("entity_id", entity.get("id", ""))),
+                priority_score=priority,
+                null_count=int(entity.get("null_count", 0)),
+                staleness_days=int(entity.get("staleness_days", 0)),
+                avg_confidence=float(entity.get("avg_confidence", 0.0)),
+                failed_matches=int(entity.get("failed_matches", 0)),
+                gate_fields_missing=int(entity.get("gate_fields_missing", 0)),
+            )
+        )
 
     refs.sort(key=lambda r: r.priority_score, reverse=True)
     return refs[: profile.batch_size]
@@ -162,7 +164,9 @@ def allocate_budget(
     for entity in entities:
         share = entity.priority_score / total_priority
         raw_tokens = int(share * max_budget_tokens)
-        clamped = max(MIN_TOKENS_PER_ENTITY, min(raw_tokens, MAX_TOKENS_PER_ENTITY, tokens_remaining))
+        clamped = max(
+            MIN_TOKENS_PER_ENTITY, min(raw_tokens, MAX_TOKENS_PER_ENTITY, tokens_remaining)
+        )
         tokens_remaining -= clamped
 
         variations = 3
@@ -177,13 +181,15 @@ def allocate_budget(
         elif entity.null_count > 5:
             passes = 2
 
-        budgets.append(EntityBudget(
-            entity_id=entity.entity_id,
-            allocated_tokens=clamped,
-            priority_score=entity.priority_score,
-            suggested_variations=variations,
-            suggested_passes=passes,
-        ))
+        budgets.append(
+            EntityBudget(
+                entity_id=entity.entity_id,
+                allocated_tokens=clamped,
+                priority_score=entity.priority_score,
+                suggested_variations=variations,
+                suggested_passes=passes,
+            )
+        )
 
         if tokens_remaining <= 0:
             break

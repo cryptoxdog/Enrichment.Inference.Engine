@@ -23,11 +23,19 @@ class ValidationError(Exception):
 
 # Type coercion map — covers every type Salesforce and Odoo use
 TYPE_MAP: dict[str, type] = {
-    "string": str, "text": str, "char": str,
-    "float": float, "number": float, "decimal": float, "currency": float,
-    "integer": int, "int": int,
-    "boolean": bool, "bool": bool,
-    "list": list, "array": list,
+    "string": str,
+    "text": str,
+    "char": str,
+    "float": float,
+    "number": float,
+    "decimal": float,
+    "currency": float,
+    "integer": int,
+    "int": int,
+    "boolean": bool,
+    "bool": bool,
+    "list": list,
+    "array": list,
 }
 
 
@@ -62,7 +70,8 @@ def validate_response(
     if not isinstance(fields, dict):
         # LLM might put fields at top level
         fields = {
-            k: v for k, v in payload.items()
+            k: v
+            for k, v in payload.items()
             if k not in ("confidence", "reasoning", "sources", "citations", "explanation")
         }
 
@@ -102,9 +111,7 @@ def validate_response(
                 normalized[k] = v.strip()[:4096]
             elif isinstance(v, list):
                 # Dedup preserving order
-                normalized[k] = list(dict.fromkeys(
-                    str(i).strip()[:256] for i in v[:50] if i
-                ))
+                normalized[k] = list(dict.fromkeys(str(i).strip()[:256] for i in v[:50] if i))
             else:
                 normalized[k] = v
 
@@ -122,13 +129,9 @@ def _coerce(value: Any, expected: type) -> Any:
 
     if expected == list:
         if isinstance(value, list):
-            return list(dict.fromkeys(
-                str(v).strip()[:256] for v in value if v
-            ))
+            return list(dict.fromkeys(str(v).strip()[:256] for v in value if v))
         if isinstance(value, str):
-            return list(dict.fromkeys(
-                s.strip()[:256] for s in value.split(",") if s.strip()
-            ))
+            return list(dict.fromkeys(s.strip()[:256] for s in value.split(",") if s.strip()))
         return [str(value)]
 
     if expected in (int, float):

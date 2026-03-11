@@ -16,6 +16,7 @@ PacketEnvelope alignment:
     - address.sourcenode: "enrichment-engine"
     - contenthash: SHA-256 of canonical payload
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -73,11 +74,14 @@ def inflate_ingress(raw: dict[str, Any]) -> dict[str, Any]:
             "user_id": raw.get("user_id"),
         },
         "content_hash": _compute_hash(action, payload, tenant),
-        "lineage": raw.get("lineage", {
-            "parent_ids": [],
-            "derivation_type": "api_request",
-            "generation": 0,
-        }),
+        "lineage": raw.get(
+            "lineage",
+            {
+                "parent_ids": [],
+                "derivation_type": "api_request",
+                "generation": 0,
+            },
+        ),
         "governance": {
             "intent": raw.get("intent", action),
             "compliance_tags": raw.get("compliance_tags", []),
@@ -91,12 +95,14 @@ def inflate_ingress(raw: dict[str, Any]) -> dict[str, Any]:
 
     # Propagate hop_trace
     envelope["hop_trace"] = raw.get("hop_trace", [])
-    envelope["hop_trace"].append({
-        "node": "enrichment-engine",
-        "action": "receive",
-        "status": "received",
-        "timestamp": envelope["timestamp"],
-    })
+    envelope["hop_trace"].append(
+        {
+            "node": "enrichment-engine",
+            "action": "receive",
+            "status": "received",
+            "timestamp": envelope["timestamp"],
+        }
+    )
 
     return envelope
 
@@ -144,12 +150,14 @@ def deflate_egress(
 
     # Update hop_trace
     hop_trace = list(envelope.get("hop_trace", []))
-    hop_trace.append({
-        "node": "enrichment-engine",
-        "action": "respond",
-        "status": "completed",
-        "timestamp": timestamp,
-    })
+    hop_trace.append(
+        {
+            "node": "enrichment-engine",
+            "action": "respond",
+            "status": "completed",
+            "timestamp": timestamp,
+        }
+    )
     result["hop_trace"] = hop_trace
 
     return result
@@ -188,23 +196,27 @@ def delegate_to_node(
 
     # Append delegation link
     chain = list(envelope.get("delegation_chain", []))
-    chain.append({
-        "delegator": "enrichment-engine",
-        "delegatee": target_node,
-        "scope": permissions,
-        "timestamp": timestamp,
-    })
+    chain.append(
+        {
+            "delegator": "enrichment-engine",
+            "delegatee": target_node,
+            "scope": permissions,
+            "timestamp": timestamp,
+        }
+    )
     derived["delegation_chain"] = chain
 
     # Append hop entry
     hop_trace = list(envelope.get("hop_trace", []))
-    hop_trace.append({
-        "node": "enrichment-engine",
-        "action": "delegate",
-        "status": "delegated",
-        "timestamp": timestamp,
-        "target": target_node,
-    })
+    hop_trace.append(
+        {
+            "node": "enrichment-engine",
+            "action": "delegate",
+            "status": "delegated",
+            "timestamp": timestamp,
+            "target": target_node,
+        }
+    )
     derived["hop_trace"] = hop_trace
 
     # Force audit

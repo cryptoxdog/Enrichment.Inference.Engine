@@ -1,0 +1,84 @@
+// ============================================================
+// QW-1: Grafana Alloy config (replaces Promtail — EOL March 2, 2026)
+// Save as: monitoring/alloy/config.alloy
+// Docs: https://grafana.com/docs/alloy/latest/
+// ============================================================
+
+// ── Discover Docker containers ──────────────────────────────
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// ── Relabel: extract container name, service, compose project ─
+discovery.relabel "docker_labels" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+}
+
+// ── Scrape container logs ───────────────────────────────────
+loki.source.docker "containers" {
+  host    = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.docker_labels.output
+
+  forward_to    = [loki.process.pipeline.receiver]
+  refresh_interval = "5s"
+}
+
+// ── Parse JSON structured logs ──────────────────────────────
+loki.process "pipeline" {
+  // Try to parse as JSON; if it fails, pass through as-is
+  stage.json {
+    expressions = {
+      level     = "level",
+      logger    = "logger",
+      message   = "message",
+      timestamp = "timestamp",
+      trace_id  = "trace_id",
+      span_id   = "span_id",
+    }
+  }
+
+  // Set the log level label for filtering
+  stage.labels {
+    values = {
+      level  = "",
+      logger = "",
+    }
+  }
+
+  // Use embedded timestamp if present
+  stage.timestamp {
+    source = "timestamp"
+    format = "2006-01-02T15:04:05.000Z07:00"
+  }
+
+  // Use message field as the log line
+  stage.output {
+    source = "message"
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+// ── Ship to Loki ────────────────────────────────────────────
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+
+    // Retry on failure
+    retry_on_http_429 = true
+  }
+}

@@ -1,0 +1,70 @@
+# prometheus_rules/slo_alerts.yml
+# P2-5: Prometheus alert rules for SLO breaches
+
+groups:
+  - name: slo_alerts
+    interval: 1m
+    rules:
+      # SLO-1: API Availability
+      - alert: SLOBreachAPIAvailability
+        expr: |
+          (
+            sum(rate(http_requests_total{status!~"5.."}[1h]))
+            / sum(rate(http_requests_total[1h]))
+            * 100
+          ) < 99.5
+        for: 5m
+        labels:
+          severity: critical
+          slo: api_availability
+          team: platform
+        annotations:
+          summary: "API availability below SLO"
+          description: "Current: {{ $value | humanizePercentage }}. Target: 99.5%"
+          dashboard: "https://grafana.company.com/d/slo"
+          runbook: "https://wiki.company.com/runbooks/api-availability"
+
+      # SLO-2: API Latency
+      - alert: SLOBreachAPILatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[15m])
+          ) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          slo: api_latency
+          team: api
+        annotations:
+          summary: "API p95 latency above SLO"
+          description: "Current: {{ $value }}s. Target: <0.5s"
+
+      # SLO-3: Neo4j Query Success
+      - alert: SLOBreachNeo4jSuccess
+        expr: |
+          (
+            sum(rate(neo4j_queries_total{status="success"}[30m]))
+            / sum(rate(neo4j_queries_total[30m]))
+            * 100
+          ) < 99.9
+        for: 10m
+        labels:
+          severity: critical
+          slo: neo4j_success_rate
+          team: data
+        annotations:
+          summary: "Neo4j query success rate below SLO"
+          description: "Current: {{ $value | humanizePercentage }}. Target: 99.9%"
+
+      # Error Budget Exhaustion Warning
+      - alert: ErrorBudgetLow
+        expr: |
+          ((0.5 - (100 - (sum(rate(http_requests_total{status!~"5.."}[30d])) / sum(rate(http_requests_total[30d])) * 100))) / 0.5) * 100 < 20
+        for: 1h
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Error budget critically low"
+          description: "Only {{ $value }}% of monthly error budget remains"
+          action: "Freeze feature releases, focus on reliability"

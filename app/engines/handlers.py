@@ -15,17 +15,18 @@ Registered actions:
     - converge:  Multi-pass convergence loop
     - discover:  Schema discovery (Seed tier)
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import structlog
 
-from ..core.config import Settings, get_settings
+from ..core.config import get_settings
 from ..engines.convergence_controller import run_convergence_loop
 from ..engines.enrichment_orchestrator import enrich_batch, enrich_entity
 from ..engines.schema_discovery import SchemaDiscoveryEngine
-from ..models.schemas import BatchEnrichRequest, EnrichRequest, EnrichResponse
+from ..models.schemas import BatchEnrichRequest, EnrichRequest
 from ..services.domain_yaml_reader import DomainYamlReader
 from ..services.idempotency import IdempotencyStore
 from ..services.kbresolver import KBResolver
@@ -88,6 +89,7 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
         if config.inference_rules_path:
             import yaml
             from pathlib import Path
+
             rules_path = Path(config.inference_rules_path)
             if rules_path.exists():
                 with open(rules_path) as f:

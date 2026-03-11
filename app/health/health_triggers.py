@@ -9,7 +9,6 @@ applied to the HEALTH service.
 
 from __future__ import annotations
 
-import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -22,6 +21,7 @@ from .health_models import (
 
 
 # ─── Trigger Store Protocol ──────────────────────────────────
+
 
 class TriggerStore(Protocol):
     """Persistence layer for enrichment triggers."""
@@ -38,6 +38,7 @@ class TriggerStore(Protocol):
 
 # ─── Enrichment Dispatcher Protocol ─────────────────────────
 
+
 class EnrichmentDispatcher(Protocol):
     """Interface to the ENRICH service for queueing re-enrichment."""
 
@@ -52,6 +53,7 @@ class EnrichmentDispatcher(Protocol):
 
 
 # ─── Trigger Configuration ───────────────────────────────────
+
 
 class TriggerConfig:
     __slots__ = (
@@ -81,6 +83,7 @@ class TriggerConfig:
 
 
 # ─── Trigger Engine ──────────────────────────────────────────
+
 
 class TriggerEngine:
     """Manages the HEALTH → ENRICH trigger lifecycle.
@@ -122,7 +125,10 @@ class TriggerEngine:
 
             day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             day_triggers = self._store.get_recent_for_entity(trigger.entity_id, day_start)
-            if len(day_triggers) + entity_trigger_counts[trigger.entity_id] >= self._config.max_triggers_per_entity_per_day:
+            if (
+                len(day_triggers) + entity_trigger_counts[trigger.entity_id]
+                >= self._config.max_triggers_per_entity_per_day
+            ):
                 rate_limited += 1
                 continue
 
@@ -189,11 +195,13 @@ class TriggerEngine:
                 dispatched += 1
             except Exception as exc:
                 failed += 1
-                failures.append({
-                    "trigger_id": str(trigger.trigger_id),
-                    "entity_id": trigger.entity_id,
-                    "error": str(exc),
-                })
+                failures.append(
+                    {
+                        "trigger_id": str(trigger.trigger_id),
+                        "entity_id": trigger.entity_id,
+                        "error": str(exc),
+                    }
+                )
 
         return DispatchResult(
             dispatched=dispatched,
@@ -239,6 +247,7 @@ class TriggerEngine:
 
 
 # ─── Result Models ────────────────────────────────────────────
+
 
 class IngestResult:
     __slots__ = ("total_received", "accepted", "deduplicated", "rate_limited")
@@ -287,8 +296,12 @@ class DispatchResult:
 
 class QueueStatus:
     __slots__ = (
-        "domain", "pending_count", "dispatched_last_hour",
-        "hourly_capacity", "remaining_capacity", "batch_size",
+        "domain",
+        "pending_count",
+        "dispatched_last_hour",
+        "hourly_capacity",
+        "remaining_capacity",
+        "batch_size",
     )
 
     def __init__(

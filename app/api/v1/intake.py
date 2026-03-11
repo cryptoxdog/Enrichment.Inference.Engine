@@ -17,8 +17,6 @@ from pydantic import BaseModel, Field
 
 from ...services.crm_field_scanner import (
     CRMField,
-    DiscoveryReport,
-    ScanResult,
     discovery_report_to_dict,
     generate_discovery_report,
     generate_seed_yaml,
@@ -42,7 +40,9 @@ class CRMFieldInput(BaseModel):
 class ScanRequest(BaseModel):
     crm_fields: list[CRMFieldInput]
     domain: str = Field(..., description="Domain YAML identifier (e.g., 'plastics-recycling')")
-    entity_count: int = Field(default=1, ge=1, description="Number of CRM entities for cost estimation")
+    entity_count: int = Field(
+        default=1, ge=1, description="Number of CRM entities for cost estimation"
+    )
 
 
 class ScanResponse(BaseModel):

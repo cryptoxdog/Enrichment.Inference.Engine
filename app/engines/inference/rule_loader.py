@@ -143,7 +143,9 @@ class HotReloadableRegistry:
         self._path = Path(domain_yaml_path)
         self._lock = threading.Lock()
         self._registry = load_rules(self._path)
-        logger.info("rule_loader.init: loaded %d rules from %s", len(self._registry), self._path.name)
+        logger.info(
+            "rule_loader.init: loaded %d rules from %s", len(self._registry), self._path.name
+        )
 
     @property
     def registry(self) -> RuleRegistry:
