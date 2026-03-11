@@ -166,7 +166,7 @@ class SchemaDiscoveryEngine:
             return "list"
         return "string"
 
-    def _find_dependencies(self) -> list[str]:
+    def _find_dependencies(self, _field_name: str = "") -> list[str]:
         """Placeholder — in production, traced from InferenceBridge rule_trace."""
         return []
 
