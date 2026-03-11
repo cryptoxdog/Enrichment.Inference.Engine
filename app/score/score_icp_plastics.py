@@ -125,7 +125,6 @@ def build_plastics_recycling_icp() -> ICPDefinition:
                 dimension=ScoreDimension.FIT,
                 description="Geographic proximity to feedstock sources",
             ),
-
             # ── READINESS Dimension ───────────────────────────
             ICPFieldCriterion(
                 field_name="has_procurement_contact",
@@ -151,7 +150,6 @@ def build_plastics_recycling_icp() -> ICPDefinition:
                 dimension=ScoreDimension.READINESS,
                 description="Supply contract up for renewal within 90 days",
             ),
-
             # ── INTENT Dimension ──────────────────────────────
             ICPFieldCriterion(
                 field_name="pricing_page_visits",
@@ -200,5 +198,3 @@ def get_plastics_field_summary() -> dict[str, dict]:
                 for c in criteria
             ],
         }
-    return summary
-'''
