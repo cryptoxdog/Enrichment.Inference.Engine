@@ -23,11 +23,7 @@ from ..models.schemas import EnrichRequest, EnrichResponse
 from ..core.config import Settings
 from ..services.idempotency import IdempotencyStore
 from .meta_prompt_planner import MetaPromptPlanner, SearchPlan
-# TODO(P1): convergence_controller uses InferenceBridge v1 API (.run(), .derived_fields).
-# inference_bridge_v2.py has a different API (build_derivation_graph + run_inference).
-# Migration requires: (1) adapter class wrapping v2 API, or (2) rewrite controller
-# to use v2 API directly. See gap analysis for details. Do NOT just swap imports.
-from .inference_bridge import InferenceBridge
+from .inference_bridge_adapter import InferenceBridge
 
 logger = structlog.get_logger("convergence_controller")
 
@@ -58,6 +54,7 @@ class ConvergenceState:
     total_tokens: int = 0
     converged: bool = False
     convergence_reason: str = ""
+    unlock_map: dict[str, float] = field(default_factory=dict)
 
 
 async def run_convergence_loop(
@@ -68,6 +65,7 @@ async def run_convergence_loop(
     enricher=None,
     inference_rules: list[dict] | None = None,
     domain_hints: dict[str, Any] | None = None,
+    domain_spec: dict[str, Any] | None = None,
 ) -> EnrichResponse:
     """
     Multi-pass convergence loop.
@@ -92,7 +90,10 @@ async def run_convergence_loop(
     start = time.monotonic()
     state = ConvergenceState()
     planner = MetaPromptPlanner()
-    bridge = InferenceBridge(rules=inference_rules or [])
+    bridge = InferenceBridge(
+        rules=inference_rules or [],
+        domain_spec=domain_spec,
+    )
 
     # Seed known_fields from the entity's existing data
     state.known_fields = {k: v for k, v in request.entity.items() if v is not None}
@@ -113,6 +114,7 @@ async def run_convergence_loop(
             domain_hints=domain_hints or {},
             inference_rule_catalog=bridge.get_rule_catalog(),
             pass_number=pass_num,
+            unlock_map=state.unlock_map,
         )
 
         # --- BUILD PASS-SPECIFIC REQUEST ---
@@ -157,6 +159,9 @@ async def run_convergence_loop(
             state.confidence_map[field_name] = inference_result.confidence_map.get(
                 field_name, 0.7
             )
+
+        if hasattr(inference_result, "unlock_map"):
+            state.unlock_map = inference_result.unlock_map
 
         state.pass_results.append(pass_result)
 

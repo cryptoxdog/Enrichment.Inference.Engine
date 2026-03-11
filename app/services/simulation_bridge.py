@@ -926,15 +926,9 @@ def generate_executive_brief(
         f"ENRICH → GRAPH pipeline against the {domain_id} domain specification. "
         f"Every number below is empirical — computed from deterministic gate evaluation, "
         f"weighted scoring, Louvain community detection, and rule-based inference. "
-        f"No projections, no AI-generated estimates.
-
-"
-        + "
-
-".join(narrative_parts)
-        + f"
-
-**Combined effect**: These leverage points compound. Better matching "
+        f"No projections, no AI-generated estimates.\n\n"
+        + "\n\n".join(narrative_parts)
+        + f"\n\n**Combined effect**: These leverage points compound. Better matching "
         f"({enriched_stats.gate_pass_rate}% pass rate) feeds better scoring "
         f"({enriched_stats.avg_composite_score:.2f} avg), which feeds better community "
         f"detection ({enriched_stats.communities_found} clusters), which enables cluster-based "
