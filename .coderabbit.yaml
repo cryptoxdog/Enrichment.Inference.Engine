@@ -1,14 +1,30 @@
-language: en-US
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: graph
+# layer: [governance]
+# tags: [L9_TEMPLATE, pr-review]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# CodeRabbit — L9 contract-aware review
+# Contract files: docs/contracts/
+
 reviews:
-  profile: assertive
-  request_changes_workflow: true
-  high_level_summary: true
-  poem: false
-  review_status: true
-  collapse_walkthrough: false
-  auto_review:
-    enabled: true
-    drafts: false
-    base_branches: [main, staging]
-chat:
-  auto_reply: true
+  instructions: |
+    This repo follows the L9 Constellation architecture. Check ALL code against
+    these rules (violations are CRITICAL):
+
+    1. No eval(), exec(), pickle.loads() anywhere
+    2. No f-string interpolation in Cypher or SQL - use parameterized queries
+    3. No FastAPI imports in engine/ - chassis owns HTTP
+    4. No raw HTTP calls between nodes - use delegate_to_node()
+    5. No direct writes to packetstore - use ingest_packet()
+    6. No redefining PacketEnvelope/TenantContext/ExecuteRequest - import from l9-core
+    7. No configuring structlog or logging.basicConfig in engine/ - chassis does it
+    8. No bare except: clauses
+    9. No NotImplementedError stubs
+    10. All packet_type values must be lowercase snake_case from the registry
+
+    Contract files are in docs/contracts/. Reference them in your review.
