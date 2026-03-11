@@ -48,12 +48,15 @@ class MetaPromptPlanner:
         domain_hints: dict[str, Any],
         inference_rule_catalog: list[dict],
         pass_number: int,
+        unlock_map: dict[str, float] | None = None,
     ) -> SearchPlan:
         if pass_number == 1:
             return self._plan_discovery(entity, domain_hints)
 
         missing = self._find_high_value_gaps(
-            entity, known_fields, inferred_fields, domain_hints, inference_rule_catalog
+            entity, known_fields, inferred_fields,
+            domain_hints, inference_rule_catalog,
+            unlock_map=unlock_map,
         )
 
         if len(missing) <= 2:
@@ -150,6 +153,7 @@ class MetaPromptPlanner:
         inferred_fields: dict[str, Any],
         hints: dict[str, Any],
         rule_catalog: list[dict],
+        unlock_map: dict[str, float] | None = None,
     ) -> list[dict]:
         """
         Score every missing field by information gain:
@@ -179,6 +183,19 @@ class MetaPromptPlanner:
                             ),
                         }
                     )
+
+        # v2 unlock_map: strategic targeting from derivation graph analysis
+        if unlock_map:
+            for field_name, unlock_value in unlock_map.items():
+                if field_name not in all_known:
+                    gaps.append({
+                        "field": field_name,
+                        "gain": min(0.95, 0.5 + (0.1 * unlock_value)),
+                        "reason": (
+                            f"v2 unlock_map: finding this field unblocks "
+                            f"{unlock_value:.0f} downstream derivation(s)"
+                        ),
+                    })
 
         # Priority fields from domain hints not yet known
         for f in priority:

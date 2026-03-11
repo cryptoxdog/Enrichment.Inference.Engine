@@ -6,11 +6,9 @@ Test script for search optimizer — validates all decision paths.
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import yaml
-from optimizers.field_classifier import auto_classify_domain
-from optimizers.search_optimizer import resolve, EntitySignals, SearchMode
+from app.engines.field_classifier import auto_classify_domain, extract_field_meta
+from app.engines.search_optimizer import EntitySignals, SearchMode
 
 
 def test_field_classification():
