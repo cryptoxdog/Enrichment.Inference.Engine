@@ -87,9 +87,7 @@ class TestSchemaProposer:
             for _ in range(10)
         ]
         ps = propose_schema(results, current_yaml, domain="plastics_recycling")
-        existing_proposals = [
-            p for p in ps.proposed_fields if p.field_name == "polymer_type"
-        ]
+        existing_proposals = [p for p in ps.proposed_fields if p.field_name == "polymer_type"]
         assert len(existing_proposals) == 0
 
     def test_apply_proposals_updates_yaml(self, current_yaml):

@@ -17,7 +17,6 @@ from score_models import (
     FieldContribution,
     MissingField,
     ScoreRecord,
-    ScoringProfile,
 )
 
 
@@ -324,7 +323,6 @@ class ScoreExplainer:
     def explain(
         self,
         record: ScoreRecord,
-        profile: ScoringProfile,
     ) -> ScoreExplanation:
         """Generate full explanation for a ScoreRecord."""
         dim_explanations: list[DimensionExplanation] = []
@@ -392,20 +390,18 @@ class ScoreExplainer:
     def explain_batch(
         self,
         records: list[ScoreRecord],
-        profile: ScoringProfile,
     ) -> list[ScoreExplanation]:
         """Generate explanations for a batch of score records."""
-        return [self.explain(r, profile) for r in records]
+        return [self.explain(r) for r in records]
 
     def compare_scores(
         self,
         before: ScoreRecord,
         after: ScoreRecord,
-        profile: ScoringProfile,
     ) -> dict[str, Any]:
         """Compare two score records for the same entity (before/after enrichment)."""
-        exp_before = self.explain(before, profile)
-        exp_after = self.explain(after, profile)
+        exp_before = self.explain(before)
+        exp_after = self.explain(after)
 
         dimension_deltas: dict[str, dict[str, float]] = {}
         for dim_after in exp_after.dimension_explanations:

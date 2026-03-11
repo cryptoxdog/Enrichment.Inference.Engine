@@ -3,6 +3,7 @@
 KB resolve → prompt build → fan-out Perplexity variations →
 validate → consensus → uncertainty → response.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,8 +42,10 @@ async def enrich_pipeline(
     prompts = build_variation_prompts(
         request=request,
         kb_context=kb_ctx,
-        n=min(request.max_variations or settings.default_max_variations,
-              settings.max_concurrent_variations),
+        n=min(
+            request.max_variations or settings.default_max_variations,
+            settings.max_concurrent_variations,
+        ),
     )
 
     # 3. Fan-out to Perplexity (bounded concurrency)

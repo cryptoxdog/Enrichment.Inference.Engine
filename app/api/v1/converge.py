@@ -46,6 +46,8 @@ from ...engines.convergence.enrichment_profile import (
 
 logger = logging.getLogger(__name__)
 
+MAX_LIMIT = 100
+
 router = APIRouter(prefix="/v1", tags=["convergence"], dependencies=[Depends(verify_api_key)])
 
 _state_store: LoopStateStore | None = None
@@ -123,7 +125,7 @@ class BatchConvergeResponse(BaseModel):
     run_ids: list[str] = Field(default_factory=list)
 
 
-@router.post("/converge", response_model=ConvergeSingleResponse)
+@router.post("/converge")
 async def converge_single(body: ConvergeRequestBody) -> ConvergeSingleResponse:
     """Run full multi-pass convergence for a single entity."""
     store = _get_state_store()
@@ -213,7 +215,7 @@ async def converge_single(body: ConvergeRequestBody) -> ConvergeSingleResponse:
     )
 
 
-@router.post("/converge/batch", response_model=BatchConvergeResponse)
+@router.post("/converge/batch")
 async def converge_batch(body: BatchConvergeRequestBody) -> BatchConvergeResponse:
     """Batch convergence with profile-based entity selection and budget allocation."""
     registry = _get_profile_registry()
@@ -338,7 +340,7 @@ async def get_pending_proposals(domain: str) -> dict[str, Any]:
     }
 
 
-@router.post("/scan", response_model=DiscoveryReport)
+@router.post("/scan")
 async def scan_crm(body: ScanRequestBody) -> DiscoveryReport:
     """CRM field scanner — Seed tier entry point."""
     domain_spec = _domain_specs.get(body.domain)

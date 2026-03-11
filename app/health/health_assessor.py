@@ -140,7 +140,6 @@ class HealthAssessor:
 
         actions = self._recommend_actions(
             record,
-            filled,
             expected,
             gate_missing,
             scoring_missing,
@@ -243,7 +242,6 @@ class HealthAssessor:
     def _recommend_actions(
         self,
         record: EntityRecord,
-        filled: set[str],
         expected: set[str],
         gate_missing: list[str],
         scoring_missing: list[str],

@@ -25,6 +25,7 @@ from app.models.field_confidence import (
 # FieldSource enum
 # ---------------------------------------------------------------------------
 
+
 class TestFieldSource:
     """Verify all expected enum members exist and serialise correctly."""
 
@@ -53,6 +54,7 @@ class TestFieldSource:
 # FieldConfidence model
 # ---------------------------------------------------------------------------
 
+
 class TestFieldConfidence:
     """Tests for FieldConfidence Pydantic model."""
 
@@ -77,9 +79,7 @@ class TestFieldConfidence:
         assert fc.confidence == 1.0
 
     def test_variation_agreement_optional_none(self):
-        fc = FieldConfidence(
-            field_name="x", source=FieldSource.CRM, variation_agreement=None
-        )
+        fc = FieldConfidence(field_name="x", source=FieldSource.CRM, variation_agreement=None)
         assert fc.variation_agreement is None
 
     def test_variation_agreement_valid_float(self):
@@ -134,6 +134,7 @@ class TestFieldConfidence:
 # ---------------------------------------------------------------------------
 # FieldConfidenceMap aggregate
 # ---------------------------------------------------------------------------
+
 
 class TestFieldConfidenceMap:
     """Tests for FieldConfidenceMap aggregate container."""
@@ -275,13 +276,12 @@ class TestFieldConfidenceMap:
 # compute_field_confidences builder
 # ---------------------------------------------------------------------------
 
+
 class TestComputeFieldConfidences:
     """Tests for compute_field_confidences builder function."""
 
     def test_perfect_agreement_high_confidence(self, mock_consensus_payloads):
-        fcm = compute_field_confidences(
-            mock_consensus_payloads, total_attempted=5, pass_number=1
-        )
+        fcm = compute_field_confidences(mock_consensus_payloads, total_attempted=5, pass_number=1)
         # polymer_type: 5/5 agree on "HDPE"
         pt = fcm.get("polymer_type")
         assert pt is not None
@@ -290,9 +290,7 @@ class TestComputeFieldConfidences:
         assert pt.variation_agreement == 1.0
 
     def test_partial_agreement_lower_confidence(self, mock_consensus_payloads):
-        fcm = compute_field_confidences(
-            mock_consensus_payloads, total_attempted=5, pass_number=1
-        )
+        fcm = compute_field_confidences(mock_consensus_payloads, total_attempted=5, pass_number=1)
         # mfi_range: 4/5 agree on "0.5-3.0", 1 disagrees
         mr = fcm.get("mfi_range")
         assert mr is not None
@@ -366,9 +364,7 @@ class TestComputeFieldConfidences:
         assert fcm.get("certs").value == ["ISO 9001", "R2"]
 
     def test_source_always_enrichment(self, mock_consensus_payloads):
-        fcm = compute_field_confidences(
-            mock_consensus_payloads, total_attempted=5
-        )
+        fcm = compute_field_confidences(mock_consensus_payloads, total_attempted=5)
         for fc in fcm:
             assert fc.source == FieldSource.ENRICHMENT
 

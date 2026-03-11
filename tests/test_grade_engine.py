@@ -7,11 +7,9 @@ Source: 195 lines | Target coverage: 85%
 
 from __future__ import annotations
 
-import pytest
 
 from app.engines.inference.grade_engine import (
     classify as compute_grade,
-    GradeResult,
 )
 
 

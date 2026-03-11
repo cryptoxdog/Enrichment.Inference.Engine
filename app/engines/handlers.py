@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import aiofiles
 import structlog
 
 from ..core.config import get_settings
@@ -92,7 +93,7 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
 
             rules_path = Path(config.inference_rules_path)
             if rules_path.exists():
-                with open(rules_path) as f:
+                with aiofiles.open(rules_path) as f:
                     inference_rules = yaml.safe_load(f) or []
 
     response = await run_convergence_loop(

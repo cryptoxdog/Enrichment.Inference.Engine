@@ -1,7 +1,7 @@
 """domain-enrichment-api — FastAPI entrypoint."""
+
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
 
 import structlog
@@ -9,7 +9,7 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import get_settings, Settings
+from .config import get_settings
 from .logging_config import setup_logging
 from .auth import verify_api_key
 from .circuit_breaker import CircuitBreaker

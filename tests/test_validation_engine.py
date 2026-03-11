@@ -8,7 +8,6 @@ Source: ~200 lines | Target coverage: 90%
 
 from __future__ import annotations
 
-import pytest
 
 from app.services.validation_engine import validate_response, _coerce
 
@@ -20,6 +19,7 @@ coerce_value = _coerce
 # ---------------------------------------------------------------------------
 # Schema Coercion
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaCoercion:
     """Expand schema coercion tests."""
@@ -56,6 +56,7 @@ class TestSchemaCoercion:
 # Validation Rules
 # ---------------------------------------------------------------------------
 
+
 class TestValidationRules:
     """Field-level validation rules."""
 
@@ -91,7 +92,9 @@ class TestValidationRules:
         schema = {"polymer_type": "string"}
         result = validate_payload(payload, schema)
         # Schema discovery: unknown fields should be kept
-        assert "unknown_field" in result.validated_fields or "polymer_type" in result.validated_fields
+        assert (
+            "unknown_field" in result.validated_fields or "polymer_type" in result.validated_fields
+        )
 
     def test_empty_payload(self):
         result = validate_payload({}, {})

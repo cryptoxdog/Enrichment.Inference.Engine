@@ -37,15 +37,19 @@ class TestEnrichmentOrchestrator:
     @pytest.fixture
     def mock_kb_resolver(self):
         resolver = MagicMock()
-        resolver.resolve = MagicMock(return_value={
-            "fragments": ["polymers.hdpe"],
-            "content": "HDPE: MFI 0.1-25 g/10min",
-        })
+        resolver.resolve = MagicMock(
+            return_value={
+                "fragments": ["polymers.hdpe"],
+                "content": "HDPE: MFI 0.1-25 g/10min",
+            }
+        )
         return resolver
 
     @pytest.mark.asyncio
     async def test_returns_enrich_response(self, basic_request, mock_settings, mock_kb_resolver):
-        with patch("app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock) as mock_pplx:
+        with patch(
+            "app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock
+        ) as mock_pplx:
             mock_pplx.return_value = {
                 "confidence": 0.85,
                 "polymer_type": "HDPE",
@@ -56,7 +60,9 @@ class TestEnrichmentOrchestrator:
 
     @pytest.mark.asyncio
     async def test_response_has_fields(self, basic_request, mock_settings, mock_kb_resolver):
-        with patch("app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock) as mock_pplx:
+        with patch(
+            "app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock
+        ) as mock_pplx:
             mock_pplx.return_value = {
                 "confidence": 0.85,
                 "polymer_type": "HDPE",
@@ -67,14 +73,20 @@ class TestEnrichmentOrchestrator:
 
     @pytest.mark.asyncio
     async def test_response_has_confidence(self, basic_request, mock_settings, mock_kb_resolver):
-        with patch("app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock) as mock_pplx:
+        with patch(
+            "app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock
+        ) as mock_pplx:
             mock_pplx.return_value = {"confidence": 0.85, "x": "val"}
             response = await enrich_entity(basic_request, mock_settings, mock_kb_resolver)
             assert 0.0 <= response.confidence <= 1.0
 
     @pytest.mark.asyncio
-    async def test_response_has_processing_time(self, basic_request, mock_settings, mock_kb_resolver):
-        with patch("app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock) as mock_pplx:
+    async def test_response_has_processing_time(
+        self, basic_request, mock_settings, mock_kb_resolver
+    ):
+        with patch(
+            "app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock
+        ) as mock_pplx:
             mock_pplx.return_value = {"confidence": 0.85, "x": "val"}
             response = await enrich_entity(basic_request, mock_settings, mock_kb_resolver)
             assert response.processing_time_ms >= 0
@@ -86,6 +98,8 @@ class TestEnrichmentOrchestrator:
         idem_store.get = AsyncMock(return_value=None)
         idem_store.set = AsyncMock()
 
-        with patch("app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock) as mock_pplx:
+        with patch(
+            "app.engines.enrichment_orchestrator.call_perplexity", new_callable=AsyncMock
+        ) as mock_pplx:
             mock_pplx.return_value = {"confidence": 0.85, "x": "val"}
             await enrich_entity(basic_request, mock_settings, mock_kb_resolver, idem_store)

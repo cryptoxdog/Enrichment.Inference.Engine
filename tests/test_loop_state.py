@@ -14,16 +14,22 @@ from app.engines.convergence.loop_state import (
     LoopStateStore,
     LoopStatus,
 )
-from app.models.loop_schemas import PassResult, ConvergenceMode, CostSummary
-from app.models.field_confidence import FieldConfidenceMap, FieldConfidence, FieldSource
+from app.models.loop_schemas import PassResult, CostSummary
 
 
 class TestLoopStatus:
     """Tests for LoopStatus enum."""
 
     def test_all_statuses_present(self):
-        expected = {"running", "converged", "max_passes", "budget_exhausted",
-                    "human_hold", "diminishing_returns", "failed"}
+        expected = {
+            "running",
+            "converged",
+            "max_passes",
+            "budget_exhausted",
+            "human_hold",
+            "diminishing_returns",
+            "failed",
+        }
         actual = {s.value for s in LoopStatus}
         assert expected.issubset(actual)
 

@@ -3,11 +3,8 @@
 Test script for search optimizer — validates all decision paths.
 """
 
-import sys
-import os
-
 import yaml
-from app.engines.field_classifier import auto_classify_domain, extract_field_meta
+from app.engines.field_classifier import auto_classify_domain
 from app.engines.search_optimizer import EntitySignals, SearchMode
 
 

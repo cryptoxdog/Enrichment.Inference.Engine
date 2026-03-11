@@ -152,6 +152,8 @@ def _envelope(
 
 # ── Router ────────────────────────────────────────────────────
 
+SCORING_PROFILE_NOT_FOUND = "Scoring profile not found"
+
 router = APIRouter(prefix="/score", tags=["score"])
 
 
@@ -168,7 +170,7 @@ async def score_entity(
     start = time.monotonic()
     profile = profile_store.get_profile(req.scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     record = engine.score_entity(
         entity_id=req.entity_id,
@@ -220,7 +222,7 @@ async def score_batch(
     """Score a batch of entities."""
     profile = profile_store.get_profile(req.scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     result = engine.score_batch(req, profile)
 
@@ -259,7 +261,7 @@ async def rescore_entity(
     """Re-score an entity after enrichment, preserving provenance."""
     profile = profile_store.get_profile(scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     record = engine.rescore_entity(entity_id, profile)
 
@@ -293,7 +295,7 @@ async def explain_score(
 
     profile = profile_store.get_profile(req.scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     explanation = explainer.explain(record, profile)
 
@@ -320,7 +322,7 @@ async def compare_scores(
 
     profile = profile_store.get_profile(req.scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     comparison = explainer.compare_scores(before, after, profile)
 
@@ -348,7 +350,7 @@ async def preview_decay(
 
     profile = profile_store.get_profile(req.scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     previews = decay_engine.preview_decay(record, profile, req.future_days)
 
@@ -382,7 +384,7 @@ async def apply_decay_batch(
     """Apply decay to all stale scores in a domain."""
     profile = profile_store.get_profile(req.scoring_profile_id)
     if profile is None:
-        raise HTTPException(status_code=404, detail="Scoring profile not found")
+        raise HTTPException(status_code=404, detail=SCORING_PROFILE_NOT_FOUND)
 
     reports = decay_engine.apply_decay_batch(
         domain=req.domain,

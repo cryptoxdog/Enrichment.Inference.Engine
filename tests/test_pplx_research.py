@@ -9,10 +9,9 @@ Source: ~180 lines | Target coverage: 75%
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.services.perplexity_client import (
-    query_perplexity,
     SonarResponse as PerplexityResponse,
 )
 
@@ -29,11 +28,7 @@ class TestPerplexityClient:
         return {
             "id": "test-id",
             "choices": [
-                {
-                    "message": {
-                        "content": '{"polymer_type": "HDPE", "mfi_range": "0.5-3.0"}'
-                    }
-                }
+                {"message": {"content": '{"polymer_type": "HDPE", "mfi_range": "0.5-3.0"}'}}
             ],
             "citations": ["https://example.com/hdpe"],
             "usage": {"total_tokens": 1200},
@@ -71,7 +66,10 @@ class TestPerplexityClient:
     @pytest.mark.asyncio
     async def test_empty_response_handling(self, client):
         with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = {"choices": [{"message": {"content": ""}}], "usage": {"total_tokens": 0}}
+            mock_post.return_value = {
+                "choices": [{"message": {"content": ""}}],
+                "usage": {"total_tokens": 0},
+            }
             response = await client.search("nothing here")
             assert response.content == "" or response.content is not None
 

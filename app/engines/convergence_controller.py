@@ -104,7 +104,6 @@ async def run_convergence_loop(
     for pass_num in range(1, MAX_PASSES + 1):
         logger.info(
             "pass_started",
-            pass_number=pass_num,
             known_fields=len(state.known_fields),
             inferred_fields=len(state.inferred_fields),
         )
@@ -116,7 +115,6 @@ async def run_convergence_loop(
             inferred_fields=state.inferred_fields,
             domain_hints=domain_hints or {},
             inference_rule_catalog=bridge.get_rule_catalog(),
-            pass_number=pass_num,
             unlock_map=state.unlock_map,
         )
 
@@ -135,7 +133,6 @@ async def run_convergence_loop(
 
         # --- COLLECT ENRICHED FIELDS ---
         pass_result = PassResult(
-            pass_number=pass_num,
             enriched_fields=pass_response.fields or {},
             confidence=pass_response.confidence,
             tokens_used=pass_response.tokens_used,
@@ -180,7 +177,7 @@ async def run_convergence_loop(
                     f"delta={delta:.3f} < {MIN_DELTA}, "
                     f"new_fields={new_fields} <= prev={prev_fields}"
                 )
-                logger.info("converged", reason=state.convergence_reason, pass_number=pass_num)
+                logger.info("converged", reason=state.convergence_reason)
                 break
 
         if search_plan.mode == "verification":
@@ -231,7 +228,6 @@ def _build_pass_request(
     original: EnrichRequest,
     plan: SearchPlan,
     state: ConvergenceState,
-    pass_number: int,
 ) -> EnrichRequest:
     """Build a pass-specific EnrichRequest from the search plan."""
     enriched_entity = {**original.entity, **state.known_fields, **state.inferred_fields}

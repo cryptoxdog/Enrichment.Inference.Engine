@@ -1,3 +1,5 @@
+import pytest
+
 """
 Tests for CRM Field Scanner — validates scan, seed YAML, and discovery report.
 Run: pytest tests/test_crm_field_scanner.py -v
@@ -157,7 +159,7 @@ class TestScanCrmFields:
         result = scan_crm_fields([], PLASTICS_DOMAIN_SPEC)
         assert result.matched_count == 0
         assert result.missing_count == 14
-        assert result.coverage_ratio == 0.0
+        assert result.coverage_ratio == pytest.approx(0.0)
 
 
 # ── Seed YAML Tests ──────────────────────────────────────────

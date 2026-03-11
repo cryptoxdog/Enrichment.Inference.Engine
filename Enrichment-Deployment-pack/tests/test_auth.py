@@ -1,5 +1,6 @@
 """Auth tests — ensure enrich rejects bad/missing keys."""
 
+
 def test_enrich_rejects_no_key(client):
     resp = client.post("/api/v1/enrich", json={"entity": {"name": "test"}})
     assert resp.status_code in (401, 403)

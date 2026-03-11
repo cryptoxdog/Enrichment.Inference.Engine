@@ -11,6 +11,7 @@ Usage:
     # Review specific files
     python scripts/ai_review.py --mode files --paths app/main.py app/pipeline.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,6 +57,7 @@ If no issues, return: {"issues": [], "summary": "No issues found.", "block": fal
 
 def get_api_key() -> str:
     import os
+
     key = os.environ.get("PERPLEXITY_API_KEY", "")
     if not key:
         print("ERROR: PERPLEXITY_API_KEY not set", file=sys.stderr)
@@ -97,7 +99,8 @@ def call_review(code: str, api_key: str, model: str = "sonar-pro") -> dict:
 def get_staged_diff() -> str:
     result = subprocess.run(
         ["git", "diff", "--cached", "--diff-filter=ACMR"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return result.stdout
 

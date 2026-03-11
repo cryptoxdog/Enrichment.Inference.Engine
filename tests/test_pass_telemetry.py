@@ -11,7 +11,6 @@ import pytest
 
 from app.engines.convergence.pass_telemetry import PassTelemetryCollector
 from app.models.loop_schemas import PassResult, ConvergenceMode
-from app.models.field_confidence import FieldConfidenceMap
 
 
 class TestPassTelemetry:
@@ -87,8 +86,22 @@ class TestPassTelemetry:
         assert three_passes.diminishing_returns_check() is True
 
     def test_diminishing_returns_check_false(self, collector):
-        p1 = PassResult(pass_number=1, fields_enriched=["a", "b"], uncertainty_before=8.0, uncertainty_after=6.0, tokens_used=1000, duration_ms=1000)
-        p2 = PassResult(pass_number=2, fields_enriched=["c", "d", "e", "f"], uncertainty_before=6.0, uncertainty_after=3.0, tokens_used=1000, duration_ms=1000)
+        p1 = PassResult(
+            pass_number=1,
+            fields_enriched=["a", "b"],
+            uncertainty_before=8.0,
+            uncertainty_after=6.0,
+            tokens_used=1000,
+            duration_ms=1000,
+        )
+        p2 = PassResult(
+            pass_number=2,
+            fields_enriched=["c", "d", "e", "f"],
+            uncertainty_before=6.0,
+            uncertainty_after=3.0,
+            tokens_used=1000,
+            duration_ms=1000,
+        )
         collector.record_pass(p1)
         collector.record_pass(p2)
         # Pass 2 gained more than pass 1 → not diminishing

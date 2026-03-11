@@ -22,6 +22,7 @@ from app.services.enrichment_profile import (
 # EnrichmentProfile model
 # ---------------------------------------------------------------------------
 
+
 class TestEnrichmentProfile:
     """Tests for budget allocation profiles."""
 
@@ -71,14 +72,19 @@ class TestEnrichmentProfile:
 # ProfileRegistry
 # ---------------------------------------------------------------------------
 
+
 class TestProfileRegistry:
     """Tests for profile lookup."""
 
     @pytest.fixture
     def registry(self):
         reg = ProfileRegistry()
-        reg.register(EnrichmentProfile(profile_name="seed", max_variations=2, max_budget_tokens=10000))
-        reg.register(EnrichmentProfile(profile_name="enrich", max_variations=3, max_budget_tokens=25000))
+        reg.register(
+            EnrichmentProfile(profile_name="seed", max_variations=2, max_budget_tokens=10000)
+        )
+        reg.register(
+            EnrichmentProfile(profile_name="enrich", max_variations=3, max_budget_tokens=25000)
+        )
         return reg
 
     def test_get_profile_by_name(self, registry):
@@ -92,7 +98,9 @@ class TestProfileRegistry:
         assert profile is None or hasattr(profile, "profile_name")
 
     def test_register_adds_profile(self, registry):
-        new_profile = EnrichmentProfile(profile_name="custom", max_variations=4, max_budget_tokens=30000)
+        new_profile = EnrichmentProfile(
+            profile_name="custom", max_variations=4, max_budget_tokens=30000
+        )
         registry.register(new_profile)
         assert registry.get("custom") is not None
 
@@ -100,6 +108,7 @@ class TestProfileRegistry:
 # ---------------------------------------------------------------------------
 # Budget Allocation
 # ---------------------------------------------------------------------------
+
 
 class TestBudgetAllocation:
     """Tests for allocate_budget()."""
@@ -130,14 +139,12 @@ class TestBudgetAllocation:
 # Entity Selection
 # ---------------------------------------------------------------------------
 
+
 class TestEntitySelection:
     """Tests for select_entities()."""
 
     def test_select_returns_list(self):
-        entities = [
-            {"Name": f"Entity{i}", "confidence": 0.5 + (i * 0.05)}
-            for i in range(20)
-        ]
+        entities = [{"Name": f"Entity{i}", "confidence": 0.5 + (i * 0.05)} for i in range(20)]
         selected = select_entities(entities, max_count=10)
         assert isinstance(selected, list)
         assert len(selected) <= 10

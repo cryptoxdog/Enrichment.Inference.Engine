@@ -24,6 +24,7 @@ New v2 capabilities exposed:
   result.unlock_map       → dict[str, float]  (search targeting signal)
   result.blocked_fields   → dict[str, str]    (why each field didn't fire)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -31,7 +32,6 @@ from typing import Any
 
 from .inference_bridge_v2 import (
     DerivationGraph,
-    FieldInferenceResult,
     InferenceResult as V2InferenceResult,
     InferenceStatus,
     build_derivation_graph,
@@ -104,12 +104,14 @@ class InferenceBridge:
             if fir.status == InferenceStatus.DERIVED:
                 derived_fields[name] = fir.value
                 conf_map[name] = fir.confidence
-                trace.append({
-                    "rule": fir.rule_used or "derived",
-                    "status": "fired",
-                    "produced": [name],
-                    "confidence": fir.confidence,
-                })
+                trace.append(
+                    {
+                        "rule": fir.rule_used or "derived",
+                        "status": "fired",
+                        "produced": [name],
+                        "confidence": fir.confidence,
+                    }
+                )
             elif fir.status == InferenceStatus.ALREADY_SET:
                 # Already set fields pass through (v1 didn't track these)
                 derived_fields[name] = fir.value
@@ -117,17 +119,17 @@ class InferenceBridge:
 
         for name, fir in v2_result.blocked.items():
             blocked[name] = fir.status.value
-            trace.append({
-                "rule": fir.rule_used or "blocked",
-                "status": fir.status.value,
-                "field": name,
-                "missing": fir.missing_inputs,
-            })
+            trace.append(
+                {
+                    "rule": fir.rule_used or "blocked",
+                    "status": fir.status.value,
+                    "field": name,
+                    "missing": fir.missing_inputs,
+                }
+            )
 
         rules_fired = v2_result.stats.get("derived", 0)
-        rules_skipped = sum(
-            v for k, v in v2_result.stats.items() if k != "derived"
-        )
+        rules_skipped = sum(v for k, v in v2_result.stats.items() if k != "derived")
 
         self._last_unlock_map = v2_result.unlock_map
 

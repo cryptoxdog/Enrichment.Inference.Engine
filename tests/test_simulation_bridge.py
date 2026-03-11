@@ -1,3 +1,5 @@
+import pytest
+
 """
 Tests for Simulation Bridge — validates gate/scoring/inference/community/leverage/brief.
 Run: pytest tests/test_simulation_bridge.py -v
@@ -116,7 +118,7 @@ class TestScoring:
         entity = {"certifications": ["ISO 9001"]}
         results, _ = run_scoring(entity, DOMAIN_SPEC["scoring_dimensions"])
         missing = [r for r in results if r.raw_value is None]
-        assert all(r.normalized_score == 0.0 for r in missing)
+        assert all(r.normalized_score == pytest.approx(0.0) for r in missing)
 
 
 class TestInference:
