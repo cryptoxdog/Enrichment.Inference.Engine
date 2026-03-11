@@ -70,6 +70,30 @@ class DerivationGraph:
     _edge_map: dict[str, DerivationEdge] = field(default_factory=dict, repr=False)
 
 
+def _collect_edges_from_node(node_def: dict) -> list[DerivationEdge]:
+    """Extract all DerivationEdge instances from a single node definition."""
+    edges: list[DerivationEdge] = []
+    props = node_def.get("properties", {})
+    if not isinstance(props, dict):
+        return edges
+    for prop_name, prop_def in props.items():
+        if not isinstance(prop_def, dict):
+            continue
+        derived_from = prop_def.get("derived_from")
+        if not derived_from or not isinstance(derived_from, list):
+            continue
+        edges.append(
+            DerivationEdge(
+                target=prop_name,
+                inputs=tuple(derived_from),
+                inference_rule=prop_def.get("inference_rule"),
+                confidence_floor=float(prop_def.get("confidence_floor", 0.6)),
+                managed_by=prop_def.get("managed_by", "computed"),
+            )
+        )
+    return edges
+
+
 def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
     """Parse YAML ontology → DerivationGraph.
 
@@ -86,30 +110,13 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
     edges: list[DerivationEdge] = []
     edge_map: dict[str, DerivationEdge] = {}
 
-    # Collect all derived_from declarations
     node_iter = nodes.items() if isinstance(nodes, dict) else enumerate(nodes)
     for _, node_def in node_iter:
         if not isinstance(node_def, dict):
             continue
-        props = node_def.get("properties", {})
-        if not isinstance(props, dict):
-            continue
-        for prop_name, prop_def in props.items():
-            if not isinstance(prop_def, dict):
-                continue
-            derived_from = prop_def.get("derived_from")
-            if not derived_from or not isinstance(derived_from, list):
-                continue
-
-            edge = DerivationEdge(
-                target=prop_name,
-                inputs=tuple(derived_from),
-                inference_rule=prop_def.get("inference_rule"),
-                confidence_floor=float(prop_def.get("confidence_floor", 0.6)),
-                managed_by=prop_def.get("managed_by", "computed"),
-            )
+        for edge in _collect_edges_from_node(node_def):
             edges.append(edge)
-            edge_map[prop_name] = edge
+            edge_map[edge.target] = edge
 
     # Build children_of: which targets does each input unlock?
     children_of: dict[str, list[str]] = {}
@@ -273,6 +280,102 @@ class InferenceResult:
         return patches
 
 
+# ── inference helpers ─────────────────────────────────────────────────────────
+
+
+def _check_edge_inputs(
+    edge: DerivationEdge,
+    working_entity: dict[str, Any],
+    working_confidence: dict[str, float],
+) -> tuple[list[str], list[str], dict[str, Any], dict[str, float]]:
+    """Check all inputs for a derivation edge.
+
+    Returns (missing, below_floor, input_values, input_confs).
+    """
+    missing: list[str] = []
+    below_floor: list[str] = []
+    input_values: dict[str, Any] = {}
+    input_confs: dict[str, float] = {}
+
+    for inp in edge.inputs:
+        val = working_entity.get(inp)
+        conf = working_confidence.get(inp, 0.0)
+        if val is None:
+            missing.append(inp)
+        elif conf < edge.confidence_floor:
+            below_floor.append(inp)
+        else:
+            input_values[inp] = val
+            input_confs[inp] = conf
+
+    return missing, below_floor, input_values, input_confs
+
+
+def _execute_inference_rule(
+    rule_name: str | None,
+    rule_fn: InferenceRuleFn | None,
+    input_values: dict[str, Any],
+    input_confs: dict[str, float],
+    edge: DerivationEdge,
+    target_field: str,
+) -> FieldInferenceResult:
+    """Execute the rule function and return a FieldInferenceResult."""
+    fn = rule_fn or _default_rule
+    try:
+        value, rule_confidence = fn(input_values, edge)
+    except Exception as e:
+        logger.error(
+            "inference_rule.error",
+            target=target_field,
+            rule=rule_name,
+            error=str(e),
+        )
+        return FieldInferenceResult(
+            field=target_field,
+            status=InferenceStatus.NO_RULE,
+            inputs_used=input_values,
+            rule_used=rule_name,
+        )
+
+    input_min_conf = min(input_confs.values()) if input_confs else 0.0
+    if rule_fn is not None:
+        # Real rule: confidence is bounded by weakest input
+        final_confidence = min(input_min_conf, rule_confidence)
+    else:
+        # Default rule: inputs ready but no computation — don't produce a fake value
+        final_confidence = 0.0
+        value = None
+
+    return FieldInferenceResult(
+        field=target_field,
+        status=InferenceStatus.DERIVED if value is not None else InferenceStatus.NO_RULE,
+        value=value,
+        confidence=final_confidence,
+        inputs_used=input_values,
+        inputs_confidence=input_confs,
+        rule_used=rule_name or "_default",
+    )
+
+
+def _resolve_rule_fn(
+    rule_name: str | None,
+    target_field: str,
+    input_values: dict[str, Any],
+    input_confs: dict[str, float],
+) -> tuple[InferenceRuleFn | None, FieldInferenceResult | None]:
+    """Look up rule function; return (fn, None) on success or (None, blocked_result) if missing."""
+    rule_fn = _RULE_REGISTRY.get(rule_name) if rule_name else None
+    if rule_fn is None and rule_name is not None:
+        return None, FieldInferenceResult(
+            field=target_field,
+            status=InferenceStatus.NO_RULE,
+            inputs_used=input_values,
+            inputs_confidence=input_confs,
+            rule_used=rule_name,
+        )
+    return rule_fn, None
+
+
 def run_inference(
     graph: DerivationGraph,
     entity: dict[str, Any],
@@ -322,22 +425,9 @@ def run_inference(
             continue
 
         # Check ALL inputs present and above floor
-        missing = []
-        below_floor = []
-        input_values: dict[str, Any] = {}
-        input_confs: dict[str, float] = {}
-
-        for inp in edge.inputs:
-            val = working_entity.get(inp)
-            conf = working_confidence.get(inp, 0.0)
-
-            if val is None:
-                missing.append(inp)
-            elif conf < edge.confidence_floor:
-                below_floor.append(inp)
-            else:
-                input_values[inp] = val
-                input_confs[inp] = conf
+        missing, below_floor, input_values, input_confs = _check_edge_inputs(
+            edge, working_entity, working_confidence
+        )
 
         if missing:
             blocked[target_field] = FieldInferenceResult(
@@ -357,68 +447,23 @@ def run_inference(
             )
             continue
 
-        # All inputs satisfied — find and execute rule
-        rule_name = edge.inference_rule
-        rule_fn = _RULE_REGISTRY.get(rule_name) if rule_name else None
-
-        if rule_fn is None and rule_name is not None:
-            # Named rule specified but not registered
-            blocked[target_field] = FieldInferenceResult(
-                field=target_field,
-                status=InferenceStatus.NO_RULE,
-                inputs_used=input_values,
-                inputs_confidence=input_confs,
-                rule_used=rule_name,
-            )
+        # Resolve rule function (named rule must be registered)
+        rule_fn, no_rule_result = _resolve_rule_fn(
+            edge.inference_rule, target_field, input_values, input_confs
+        )
+        if no_rule_result is not None:
+            blocked[target_field] = no_rule_result
             continue
 
         # Execute rule (or default)
-        fn = rule_fn or _default_rule
-        try:
-            value, rule_confidence = fn(input_values, edge)
-        except Exception as e:
-            logger.error(
-                "inference_rule.error",
-                target=target_field,
-                rule=rule_name,
-                error=str(e),
-            )
-            blocked[target_field] = FieldInferenceResult(
-                field=target_field,
-                status=InferenceStatus.NO_RULE,
-                inputs_used=input_values,
-                rule_used=rule_name,
-            )
-            continue
-
-        # Confidence = min(all input confidences) * rule_confidence
-        # If default rule (rule_confidence=0.0), we mark it but don't
-        # propagate garbage confidence downstream
-        input_min_conf = min(input_confs.values()) if input_confs else 0.0
-
-        if rule_fn is not None:
-            # Real rule: confidence is bounded by weakest input
-            final_confidence = min(input_min_conf, rule_confidence)
-        else:
-            # Default rule: inputs are ready but no computation exists
-            # Mark as derivable but don't produce a fake value
-            final_confidence = 0.0
-            value = None
-
-        result = FieldInferenceResult(
-            field=target_field,
-            status=InferenceStatus.DERIVED if value is not None else InferenceStatus.NO_RULE,
-            value=value,
-            confidence=final_confidence,
-            inputs_used=input_values,
-            inputs_confidence=input_confs,
-            rule_used=rule_name or "_default",
+        result = _execute_inference_rule(
+            edge.inference_rule, rule_fn, input_values, input_confs, edge, target_field
         )
 
-        if value is not None and final_confidence > 0.0:
+        if result.value is not None and result.confidence > 0.0:
             # Propagate into working copies for multi-hop chaining
-            working_entity[target_field] = value
-            working_confidence[target_field] = final_confidence
+            working_entity[target_field] = result.value
+            working_confidence[target_field] = result.confidence
             derived[target_field] = result
         else:
             blocked[target_field] = result
