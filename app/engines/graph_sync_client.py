@@ -17,6 +17,7 @@ PacketEnvelope carries:
   - lineage: parentids from the enrichment response packet
   - governance: intent, compliance_tags
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -118,11 +119,14 @@ class GraphSyncClient:
         packet_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        hash_input = json.dumps({
-            "action": action,
-            "payload": payload,
-            "tenant": tenant,
-        }, sort_keys=True)
+        hash_input = json.dumps(
+            {
+                "action": action,
+                "payload": payload,
+                "tenant": tenant,
+            },
+            sort_keys=True,
+        )
         content_hash = hashlib.sha256(hash_input.encode()).hexdigest()
 
         envelope: dict[str, Any] = {

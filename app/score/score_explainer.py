@@ -14,22 +14,20 @@ from datetime import datetime, timezone
 from typing import Any
 
 from score_models import (
-    DimensionScore,
     FieldContribution,
     MissingField,
-    RecommendationType,
-    ScoreDimension,
     ScoreRecord,
-    ScoreTier,
     ScoringProfile,
 )
 
 
 # ── Explanation Models ────────────────────────────────────────
 
+
 @dataclass
 class FieldExplanation:
     """Human-readable explanation of a single field contribution."""
+
     field_name: str
     dimension: str
     raw_value: Any
@@ -50,6 +48,7 @@ class FieldExplanation:
 @dataclass
 class MissingFieldExplanation:
     """Human-readable explanation of a missing field impact."""
+
     field_name: str
     dimension: str
     estimated_impact: float
@@ -69,6 +68,7 @@ class MissingFieldExplanation:
 @dataclass
 class DimensionExplanation:
     """Full explanation for a single dimension."""
+
     dimension: str
     score: float
     weight: float
@@ -93,6 +93,7 @@ class DimensionExplanation:
 @dataclass
 class ScoreExplanation:
     """Complete score explanation for an entity."""
+
     entity_id: str
     domain: str
     composite_score: float
@@ -244,11 +245,11 @@ def _generate_overall_narrative(explanation: ScoreExplanation) -> str:
 # ── Recommendation Engine ─────────────────────────────────────
 
 _RECOMMENDATION_TEMPLATES: dict[str, str] = {
-    "enrich_field": "Enrich \'{field}\' to improve {dimension} score by ~{impact:.0%}",
-    "verify_field": "Verify \'{field}\' -- low confidence ({confidence:.0%}) in {dimension}",
+    "enrich_field": "Enrich '{field}' to improve {dimension} score by ~{impact:.0%}",
+    "verify_field": "Verify '{field}' -- low confidence ({confidence:.0%}) in {dimension}",
     "capture_signal": "Connect signal sources to populate {dimension} scoring",
     "re_score": "Re-score after enrichment to update {dimension}",
-    "manual_review": "Manual review recommended for \'{field}\' in {dimension}",
+    "manual_review": "Manual review recommended for '{field}' in {dimension}",
 }
 
 
@@ -267,7 +268,7 @@ def _generate_recommendations(
     )
     for m in gate_missing[:2]:
         recs.append(
-            f"[CRITICAL] Enrich \'{m.field_name}\' -- gate-critical for {m.dimension}, "
+            f"[CRITICAL] Enrich '{m.field_name}' -- gate-critical for {m.dimension}, "
             f"estimated +{m.estimated_impact:.0%} score improvement"
         )
 
@@ -277,17 +278,23 @@ def _generate_recommendations(
         reverse=True,
     )
     for m in high_impact_missing[:2]:
-        template = _RECOMMENDATION_TEMPLATES.get(m.recommendation, "Address \'{field}\' in {dimension}")
-        recs.append(template.format(
-            field=m.field_name, dimension=m.dimension,
-            impact=m.estimated_impact, confidence=0.0,
-        ))
+        template = _RECOMMENDATION_TEMPLATES.get(
+            m.recommendation, "Address '{field}' in {dimension}"
+        )
+        recs.append(
+            template.format(
+                field=m.field_name,
+                dimension=m.dimension,
+                impact=m.estimated_impact,
+                confidence=0.0,
+            )
+        )
 
     low_conf = sorted(low_confidence_fields, key=lambda f: f.confidence)
     for lf in low_conf[:1]:
         if lf.confidence < 0.50:
             recs.append(
-                f"Verify \'{lf.field_name}\' -- currently at {lf.confidence:.0%} confidence, "
+                f"Verify '{lf.field_name}' -- currently at {lf.confidence:.0%} confidence, "
                 f"re-enrichment could improve {lf.dimension} reliability"
             )
 
@@ -299,6 +306,7 @@ def _generate_recommendations(
 
 
 # ── Core Explainer ────────────────────────────────────────────
+
 
 class ScoreExplainer:
     """
@@ -351,14 +359,14 @@ class ScoreExplainer:
         all_field_explanations.sort(key=lambda f: f.contribution_pct, reverse=True)
         for rank, fe in enumerate(all_field_explanations, 1):
             fe.impact_rank = rank
-        top_contributors = all_field_explanations[:self._max_top_fields]
+        top_contributors = all_field_explanations[: self._max_top_fields]
 
         all_missing_explanations.sort(
             key=lambda m: (m.is_gate_critical, m.estimated_impact), reverse=True
         )
         for rank, me in enumerate(all_missing_explanations, 1):
             me.priority_rank = rank
-        top_missing = all_missing_explanations[:self._max_top_fields]
+        top_missing = all_missing_explanations[: self._max_top_fields]
 
         gate_penalty = any(m.is_gate_critical for m in record.missing_fields)
         recommendations = _generate_recommendations(

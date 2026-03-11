@@ -1,0 +1,29 @@
+# ============================================================
+# QW-4: Add OTel Collector to your Docker Compose stack
+# Merge into docker-compose.yml or docker-compose.monitoring.yml
+# ============================================================
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./monitoring/otel/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"      # OTLP gRPC receiver
+      - "4318:4318"      # OTLP HTTP receiver
+      - "8889:8889"      # Prometheus metrics from spans
+      - "13133:13133"    # Health check
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O-", "http://localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Update your app service to point to the collector:
+  # api:
+  #   environment:
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  #     OTEL_SERVICE_NAME: graph-engine

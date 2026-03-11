@@ -13,7 +13,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-
     def __init__(self, app, requests_per_minute: int = 120):
         super().__init__(app)
         self.rpm = requests_per_minute

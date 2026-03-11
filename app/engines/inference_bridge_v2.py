@@ -27,6 +27,7 @@ Integration:
   InferenceResult → search_optimizer_v2 (dynamic reclassification)
   InferenceResult → convergence_controller (coverage check)
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,14 +43,16 @@ logger = logging.getLogger(__name__)
 # Derivation graph — built from YAML, immutable
 # ──────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class DerivationEdge:
     """A single derivation: target field derived from input fields."""
+
     target: str
-    inputs: tuple[str, ...]         # ALL must be present + above threshold
-    inference_rule: str | None       # named rule from YAML (or None = default)
-    confidence_floor: float          # minimum confidence on ALL inputs (default 0.6)
-    managed_by: str                  # "computed" | "inference" | "derived"
+    inputs: tuple[str, ...]  # ALL must be present + above threshold
+    inference_rule: str | None  # named rule from YAML (or None = default)
+    confidence_floor: float  # minimum confidence on ALL inputs (default 0.6)
+    managed_by: str  # "computed" | "inference" | "derived"
 
     @property
     def input_set(self) -> set[str]:
@@ -59,9 +62,10 @@ class DerivationEdge:
 @dataclass
 class DerivationGraph:
     """DAG of all derivation edges, topologically sorted."""
+
     domain: str
     edges: list[DerivationEdge]
-    topo_order: list[str]            # target fields in safe execution order
+    topo_order: list[str]  # target fields in safe execution order
     children_of: dict[str, list[str]]  # input_field → [target fields it enables]
     _edge_map: dict[str, DerivationEdge] = field(default_factory=dict, repr=False)
 
@@ -72,9 +76,8 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
     Only fields with explicit `derived_from` lists become derivation edges.
     No implicit inference. No heuristic guessing.
     """
-    domain_name = (
-        domain_spec.get("domain")
-        or domain_spec.get("metadata", {}).get("domain", "unknown")
+    domain_name = domain_spec.get("domain") or domain_spec.get("metadata", {}).get(
+        "domain", "unknown"
     )
 
     ontology = domain_spec.get("ontology", domain_spec)
@@ -102,9 +105,7 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
                 target=prop_name,
                 inputs=tuple(derived_from),
                 inference_rule=prop_def.get("inference_rule"),
-                confidence_floor=float(
-                    prop_def.get("confidence_floor", 0.6)
-                ),
+                confidence_floor=float(prop_def.get("confidence_floor", 0.6)),
                 managed_by=prop_def.get("managed_by", "computed"),
             )
             edges.append(edge)
@@ -124,9 +125,7 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
         domain=domain_name,
         edges=len(edges),
         topo_depth=len(topo_order),
-        multi_hop=[e.target for e in edges if any(
-            i in edge_map for i in e.inputs
-        )],
+        multi_hop=[e.target for e in edges if any(i in edge_map for i in e.inputs)],
     )
 
     return DerivationGraph(
@@ -220,13 +219,14 @@ def _default_rule(
 # Inference execution
 # ──────────────────────────────────────────────
 
+
 class InferenceStatus(str, Enum):
-    DERIVED = "derived"          # all inputs present, rule fired, value produced
+    DERIVED = "derived"  # all inputs present, rule fired, value produced
     INPUTS_MISSING = "inputs_missing"  # one or more inputs not available
     BELOW_THRESHOLD = "below_threshold"  # inputs present but confidence too low
-    NO_RULE = "no_rule"          # inputs satisfied but no rule registered
+    NO_RULE = "no_rule"  # inputs satisfied but no rule registered
     ALREADY_SET = "already_set"  # field already has a value above threshold
-    CYCLE = "cycle"              # field is in a dependency cycle
+    CYCLE = "cycle"  # field is in a dependency cycle
 
 
 @dataclass
@@ -244,9 +244,10 @@ class FieldInferenceResult:
 @dataclass
 class InferenceResult:
     """Complete inference pass result."""
+
     derived: dict[str, FieldInferenceResult]  # successfully derived
     blocked: dict[str, FieldInferenceResult]  # could not derive (and why)
-    unlock_map: dict[str, float]              # field → unlock_value for optimizer
+    unlock_map: dict[str, float]  # field → unlock_value for optimizer
     stats: dict[str, int]
 
     @property
@@ -264,6 +265,7 @@ class InferenceResult:
         Fields with all-but-one input → difficulty downgrade suggestion
         """
         from field_classifier import FieldDifficulty  # deferred import
+
         patches: dict[str, str] = {}
         for name, r in self.derived.items():
             if r.confidence >= 0.7:
@@ -449,6 +451,7 @@ def run_inference(
 # Unlock analysis — which field to search next?
 # ──────────────────────────────────────────────
 
+
 def _compute_unlock_values(
     graph: DerivationGraph,
     entity: dict[str, Any],
@@ -488,6 +491,7 @@ def _compute_unlock_values(
 # Target selection: use unlock values to prioritize
 # ──────────────────────────────────────────────
 
+
 def prioritize_search_targets(
     missing_fields: list[str],
     unlock_map: dict[str, float],
@@ -498,6 +502,7 @@ def prioritize_search_targets(
     Fields that unblock the most downstream derivations get searched first.
     This is the bridge between inference and search_optimizer_v2.resolve().
     """
+
     def sort_key(f: str) -> float:
         return unlock_map.get(f, 0.0)
 

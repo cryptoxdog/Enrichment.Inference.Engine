@@ -8,29 +8,20 @@ Constellation node: revopsos-health-monitor.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from .health_models import (
     AssessmentConfig,
     AssessmentScope,
-    CRMHealth,
-    EntityHealth,
-    EnrichmentTrigger,
     FieldHealth,
     HealthWeights,
 )
 from .health_assessor import HealthAssessor, EntityDataStore, DomainSchema
-from .health_field_analyzer import FieldDiagnostic, run_field_diagnostic
+from .health_field_analyzer import run_field_diagnostic
 from .health_triggers import (
     TriggerEngine,
-    TriggerConfig,
-    IngestResult,
-    DispatchResult,
-    QueueStatus,
 )
 
 
@@ -70,6 +61,7 @@ def _get_trigger_engine() -> TriggerEngine:
 
 
 # ─── Request / Response Bodies ────────────────────────────────
+
 
 class AssessEntityRequest(BaseModel):
     entity_id: str
@@ -114,6 +106,7 @@ class TriggerStatusResponse(BaseModel):
 
 
 # ─── Endpoint Handlers ───────────────────────────────────────
+
 
 def assess_entity(request: AssessEntityRequest) -> dict[str, Any]:
     """GET /v1/health/entity/{entity_id}
@@ -219,7 +212,9 @@ def get_field_diagnostic(request: FieldDiagnosticRequest) -> dict[str, Any]:
 
     fh = FieldHealth(
         field_name=request.field_name,
-        fill_rate=sum(1 for _, v in field_values if v is not None) / len(field_values) if field_values else 0.0,
+        fill_rate=sum(1 for _, v in field_values if v is not None) / len(field_values)
+        if field_values
+        else 0.0,
         avg_confidence=0.0,
         staleness_p50_days=0.0,
         is_gate_critical=request.field_name in schema.gate_fields,
@@ -286,8 +281,13 @@ def get_ai_readiness(domain: str) -> dict[str, Any]:
             for f in scoring_fields
         ],
         "weakest_fields": [
-            {"name": f.field_name, "fill_rate": f.fill_rate, "confidence": f.avg_confidence,
-             "staleness_days": f.staleness_p50_days, "health": round(f.health_score, 4)}
+            {
+                "name": f.field_name,
+                "fill_rate": f.fill_rate,
+                "confidence": f.avg_confidence,
+                "staleness_days": f.staleness_p50_days,
+                "health": round(f.health_score, 4),
+            }
             for f in weak_fields
         ],
         "total_entities": crm.total_entities,

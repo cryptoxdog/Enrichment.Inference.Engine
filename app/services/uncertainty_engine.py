@@ -45,10 +45,7 @@ def compute_uncertainty(
 
     # ── Entity richness ──────────────────────────────
     # Count ALL non-empty fields on the entity
-    filled = sum(
-        1 for v in entity.values()
-        if v is not None and v != "" and v != [] and v != {}
-    )
+    filled = sum(1 for v in entity.values() if v is not None and v != "" and v != [] and v != {})
     # Normalize: 10+ fields = fully rich
     richness = min(1.0, filled / 10.0)
 
@@ -56,11 +53,7 @@ def compute_uncertainty(
     conf_factor = 1.0 - last_confidence
 
     # ── Combined uncertainty (0 = easy, 1 = hard) ────
-    score = (
-        (1 - completeness) * 0.4
-        + conf_factor * 0.3
-        + (1 - richness) * 0.3
-    )
+    score = (1 - completeness) * 0.4 + conf_factor * 0.3 + (1 - richness) * 0.3
 
     # Map to variation count: floor=2, ceiling=max_variations
     variations = max(2, min(max_variations, round(score * max_variations) + 2))

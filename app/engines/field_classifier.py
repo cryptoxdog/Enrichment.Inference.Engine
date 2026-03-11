@@ -17,10 +17,11 @@ Integration:
   domain_spec.yaml → auto_classify_domain() → DomainClassification
   DomainClassification → search_optimizer_v2.resolve() → SonarConfig
 """
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -52,36 +53,88 @@ INFERRABLE_SIGNALS: set[str] = {
 # Universal name-pattern banks (cross-industry heuristics)
 # These are structural patterns, not domain-specific vocabulary
 INFERRABLE_NAME_PATTERNS: set[str] = {
-    "grade", "tier", "class", "score", "rating", "rank",
-    "classification", "category", "level", "bucket", "segment",
-    "index", "percentile", "quartile",
+    "grade",
+    "tier",
+    "class",
+    "score",
+    "rating",
+    "rank",
+    "classification",
+    "category",
+    "level",
+    "bucket",
+    "segment",
+    "index",
+    "percentile",
+    "quartile",
 }
 TRIVIAL_NAME_PATTERNS: set[str] = {
-    "name", "legal_name", "dba", "address", "street", "city",
-    "state", "zip", "postal", "country", "phone", "fax", "email",
-    "contact_name", "contact_email", "contact_phone", "website",
-    "url", "domain",
+    "name",
+    "legal_name",
+    "dba",
+    "address",
+    "street",
+    "city",
+    "state",
+    "zip",
+    "postal",
+    "country",
+    "phone",
+    "fax",
+    "email",
+    "contact_name",
+    "contact_email",
+    "contact_phone",
+    "website",
+    "url",
+    "domain",
 }
 PUBLIC_NAME_PATTERNS: set[str] = {
-    "revenue", "employee", "headcount", "staff_count",
-    "founded", "year_founded", "incorporation",
-    "naics", "sic", "ein", "tax_id", "duns",
-    "ownership", "parent_company", "subsidiary",
-    "stock_ticker", "market_cap",
-    "geographic_reach", "headquarters",
+    "revenue",
+    "employee",
+    "headcount",
+    "staff_count",
+    "founded",
+    "year_founded",
+    "incorporation",
+    "naics",
+    "sic",
+    "ein",
+    "tax_id",
+    "duns",
+    "ownership",
+    "parent_company",
+    "subsidiary",
+    "stock_ticker",
+    "market_cap",
+    "geographic_reach",
+    "headquarters",
 }
 OBSCURE_NAME_PATTERNS: set[str] = {
-    "capacity", "throughput", "tonnage", "volume_annual",
-    "sqft", "square_feet", "facility_size", "lot_size",
-    "equipment", "machinery", "line_count",
-    "permit", "license_number", "waste_gen_id",
-    "energy_consumption", "water_usage", "emission",
+    "capacity",
+    "throughput",
+    "tonnage",
+    "volume_annual",
+    "sqft",
+    "square_feet",
+    "facility_size",
+    "lot_size",
+    "equipment",
+    "machinery",
+    "line_count",
+    "permit",
+    "license_number",
+    "waste_gen_id",
+    "energy_consumption",
+    "water_usage",
+    "emission",
 }
 
 
 @dataclass
 class FieldMeta:
     """Extracted metadata about a single field from the domain YAML."""
+
     name: str
     field_type: str = "string"
     managed_by: str | None = None
@@ -99,6 +152,7 @@ class FieldMeta:
 # ──────────────────────────────────────────────
 # YAML extraction
 # ──────────────────────────────────────────────
+
 
 def _read_set(spec: dict[str, Any], key: str) -> set[str]:
     """Safely read a list from the YAML and return as set."""
@@ -130,9 +184,15 @@ def extract_field_meta(domain_spec: dict[str, Any]) -> list[FieldMeta]:
             if not isinstance(props, dict):
                 continue
             for prop_name, prop_def in props.items():
-                fields.append(_parse_prop(
-                    prop_name, prop_def, gates, scoring, time_sensitive,
-                ))
+                fields.append(
+                    _parse_prop(
+                        prop_name,
+                        prop_def,
+                        gates,
+                        scoring,
+                        time_sensitive,
+                    )
+                )
 
     elif isinstance(nodes, list):
         for node_def in nodes:
@@ -141,9 +201,15 @@ def extract_field_meta(domain_spec: dict[str, Any]) -> list[FieldMeta]:
             props = node_def.get("properties", {})
             if isinstance(props, dict):
                 for prop_name, prop_def in props.items():
-                    fields.append(_parse_prop(
-                        prop_name, prop_def, gates, scoring, time_sensitive,
-                    ))
+                    fields.append(
+                        _parse_prop(
+                            prop_name,
+                            prop_def,
+                            gates,
+                            scoring,
+                            time_sensitive,
+                        )
+                    )
 
     return fields
 
@@ -176,6 +242,7 @@ def _parse_prop(
 # ──────────────────────────────────────────────
 # Core classifier — deterministic, zero cost
 # ──────────────────────────────────────────────
+
 
 def _normalise(name: str) -> str:
     return name.strip().lower().replace("-", "_").replace(" ", "_")
@@ -269,6 +336,7 @@ def classify(domain_spec: dict[str, Any]) -> dict[str, FieldDifficulty]:
 # Optional: LLM-assisted refinement (one-time)
 # ──────────────────────────────────────────────
 
+
 def build_calibration_prompt(
     domain_name: str,
     fields: list[FieldMeta],
@@ -344,8 +412,12 @@ def apply_calibration(
 
 # Universal fallback sources (applies to any domain)
 _DEFAULT_PUBLIC_SOURCES: list[str] = [
-    "dnb.com", "zoominfo.com", "linkedin.com", "sec.gov",
-    "sam.gov", "opencorporates.com",
+    "dnb.com",
+    "zoominfo.com",
+    "linkedin.com",
+    "sec.gov",
+    "sam.gov",
+    "opencorporates.com",
 ]
 
 
@@ -385,9 +457,11 @@ def resolve_domain_filters(
 # Full auto-pipeline: YAML → classified + optimized
 # ──────────────────────────────────────────────
 
+
 @dataclass
 class DomainClassification:
     """Complete classification result for a domain."""
+
     domain: str
     field_map: dict[str, FieldDifficulty]
     domain_filters: dict[str, list[str]]
@@ -407,9 +481,8 @@ def auto_classify_domain(
     Zero LLM cost. Everything read from the YAML. No external arguments.
     Feed result directly into search_optimizer_v2.
     """
-    domain_name = (
-        domain_spec.get("domain")
-        or domain_spec.get("metadata", {}).get("domain", "unknown")
+    domain_name = domain_spec.get("domain") or domain_spec.get("metadata", {}).get(
+        "domain", "unknown"
     )
 
     field_map = classify(domain_spec)

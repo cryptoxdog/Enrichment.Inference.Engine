@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ...models.field_confidence import FieldConfidenceMap
 from ...models.loop_schemas import PassResult
 
 logger = logging.getLogger(__name__)
@@ -105,7 +103,8 @@ class PassTelemetryCollector:
                     pass_a=prev.pass_number,
                     pass_b=p.pass_number,
                     confidence_delta=round(
-                        p.field_confidences.avg_confidence - prev.field_confidences.avg_confidence, 4
+                        p.field_confidences.avg_confidence - prev.field_confidences.avg_confidence,
+                        4,
                     ),
                     uncertainty_delta=round(p.uncertainty_after - prev.uncertainty_after, 4),
                     new_fields=n_fields,

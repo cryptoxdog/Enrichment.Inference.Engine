@@ -1,0 +1,25 @@
+# Add to prometheus.yml (or create new scrape config)
+# P2-4: Scrape Graph Engine metrics
+
+scrape_configs:
+  - job_name: 'graph-engine'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['api:8000']
+        labels:
+          service: 'graph-engine-api'
+          environment: 'production'
+
+    # Optional: Relabel metrics
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'http_.*'
+        action: keep
+      - source_labels: [__name__]
+        regex: 'neo4j_.*'
+        action: keep
+      - source_labels: [__name__]
+        regex: 'redis_.*'
+        action: keep

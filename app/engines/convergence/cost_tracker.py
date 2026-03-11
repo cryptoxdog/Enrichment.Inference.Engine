@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -51,7 +50,10 @@ class CostTracker:
         self._tokens_per_pass[pass_number - 1] = tokens_used
         logger.debug(
             "cost_tracker.record: pass=%d tokens=%d total=%d/%d",
-            pass_number, tokens_used, self._tokens_used, self._max_tokens,
+            pass_number,
+            tokens_used,
+            self._tokens_used,
+            self._max_tokens,
         )
 
     @property
@@ -74,7 +76,9 @@ class CostTracker:
         return round(self.total_cost_usd / total_fields_discovered, 6)
 
     def to_summary(self, total_fields_discovered: int = 0) -> CostSummary:
-        utilization = (self._tokens_used / self._max_tokens * 100.0) if self._max_tokens > 0 else 0.0
+        utilization = (
+            (self._tokens_used / self._max_tokens * 100.0) if self._max_tokens > 0 else 0.0
+        )
         return CostSummary(
             total_tokens=self._tokens_used,
             total_cost_usd=self.total_cost_usd,

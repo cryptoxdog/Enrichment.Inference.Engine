@@ -124,16 +124,18 @@ def propose(
         distribution = _compute_distribution(acc.values, field_type)
         source = next(iter(acc.sources)) if acc.sources else "enrichment"
 
-        proposed_fields.append(FieldProposal(
-            field_name=field_name,
-            field_type=field_type,
-            source=source,
-            fill_rate=round(fill_rate, 4),
-            avg_confidence=round(avg_conf, 4),
-            sample_values=acc.values[:MAX_SAMPLE_VALUES],
-            value_distribution=distribution,
-            entity_count=acc.non_null,
-        ))
+        proposed_fields.append(
+            FieldProposal(
+                field_name=field_name,
+                field_type=field_type,
+                source=source,
+                fill_rate=round(fill_rate, 4),
+                avg_confidence=round(avg_conf, 4),
+                sample_values=acc.values[:MAX_SAMPLE_VALUES],
+                value_distribution=distribution,
+                entity_count=acc.non_null,
+            )
+        )
 
     proposed_fields.sort(key=lambda p: (-p.fill_rate, -p.avg_confidence))
 
@@ -180,21 +182,25 @@ def apply(
     if isinstance(gates, list):
         for gp in proposal_set.proposed_gates:
             if gp.field_name in approved_fields:
-                gates.append({
-                    "field": gp.field_name,
-                    "type": gp.gate_type,
-                    "auto_proposed": True,
-                })
+                gates.append(
+                    {
+                        "field": gp.field_name,
+                        "type": gp.gate_type,
+                        "auto_proposed": True,
+                    }
+                )
 
     scoring = updated.setdefault("scoring", [])
     if isinstance(scoring, list):
         for sp in proposal_set.proposed_scoring_dimensions:
             if sp.field_name in approved_fields:
-                scoring.append({
-                    "field": sp.field_name,
-                    "type": sp.dimension_type,
-                    "auto_proposed": True,
-                })
+                scoring.append(
+                    {
+                        "field": sp.field_name,
+                        "type": sp.dimension_type,
+                        "auto_proposed": True,
+                    }
+                )
 
     updated["version"] = proposal_set.version_bump
 
@@ -260,6 +266,7 @@ def _compute_distribution(values: list[Any], field_type: str) -> dict[str, Any]:
         }
     if field_type == "string":
         from collections import Counter
+
         str_vals = [str(v) for v in values]
         top = Counter(str_vals).most_common(5)
         return {"top_values": [{"value": v, "count": c} for v, c in top]}
@@ -276,19 +283,23 @@ def _propose_gates(fields: list[FieldProposal]) -> list[GateProposal]:
             top = fp.value_distribution.get("top_values", [])
             distinct = len(top)
             if 2 <= distinct <= 20:
-                gates.append(GateProposal(
-                    field_name=fp.field_name,
-                    gate_type="categorical",
-                    rationale=f"Categorical with {distinct} distinct values, {fp.fill_rate:.0%} fill rate",
-                    distinct_values=distinct,
-                ))
+                gates.append(
+                    GateProposal(
+                        field_name=fp.field_name,
+                        gate_type="categorical",
+                        rationale=f"Categorical with {distinct} distinct values, {fp.fill_rate:.0%} fill rate",
+                        distinct_values=distinct,
+                    )
+                )
         elif fp.field_type == "boolean":
-            gates.append(GateProposal(
-                field_name=fp.field_name,
-                gate_type="boolean",
-                rationale=f"Boolean gate with {fp.fill_rate:.0%} fill rate",
-                distinct_values=2,
-            ))
+            gates.append(
+                GateProposal(
+                    field_name=fp.field_name,
+                    gate_type="boolean",
+                    rationale=f"Boolean gate with {fp.fill_rate:.0%} fill rate",
+                    distinct_values=2,
+                )
+            )
     return gates
 
 
@@ -299,15 +310,17 @@ def _propose_scoring_dimensions(fields: list[FieldProposal]) -> list[ScoringDime
             dist = fp.value_distribution
             stddev = dist.get("stddev", 0.0)
             if stddev > 0:
-                dims.append(ScoringDimensionProposal(
-                    field_name=fp.field_name,
-                    dimension_type="numeric_distance",
-                    min_value=dist.get("min", 0.0),
-                    max_value=dist.get("max", 0.0),
-                    mean_value=dist.get("mean", 0.0),
-                    stddev=stddev,
-                    rationale=f"Numeric with meaningful variance (σ={stddev:.4f}), {fp.fill_rate:.0%} fill",
-                ))
+                dims.append(
+                    ScoringDimensionProposal(
+                        field_name=fp.field_name,
+                        dimension_type="numeric_distance",
+                        min_value=dist.get("min", 0.0),
+                        max_value=dist.get("max", 0.0),
+                        mean_value=dist.get("mean", 0.0),
+                        stddev=stddev,
+                        rationale=f"Numeric with meaningful variance (σ={stddev:.4f}), {fp.fill_rate:.0%} fill",
+                    )
+                )
     return dims
 
 
@@ -333,7 +346,9 @@ def _generate_yaml_diff(
             lines.append(f"  {fp.field_name}:")
             lines.append(f"    type: {fp.field_type}")
             lines.append(f"    source: {fp.source}")
-            lines.append(f"    # fill_rate: {fp.fill_rate:.0%}, confidence: {fp.avg_confidence:.2f}")
+            lines.append(
+                f"    # fill_rate: {fp.fill_rate:.0%}, confidence: {fp.avg_confidence:.2f}"
+            )
             lines.append("")
     if gates:
         lines.append("## Proposed Gates")

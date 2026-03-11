@@ -10,6 +10,7 @@ Extracts:
 The graph engine ignores enrichment_hints (not in its Pydantic model).
 This reader uses them to auto-configure enrichment behavior per node type.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ logger = structlog.get_logger("domain_yaml_reader")
 @dataclass
 class EnrichmentHints:
     """Per-node-type enrichment configuration from domain YAML."""
+
     objective_template: str = ""
     priority_fields: list[str] = field(default_factory=list)
     kb_context: str | None = None
@@ -37,6 +39,7 @@ class EnrichmentHints:
 @dataclass
 class NodeSchema:
     """Schema for a single node type extracted from domain YAML."""
+
     label: str
     properties: dict[str, str]  # field_name → type_string
     required_fields: list[str] = field(default_factory=list)
@@ -46,6 +49,7 @@ class NodeSchema:
 @dataclass
 class DomainEnrichmentConfig:
     """Complete enrichment configuration extracted from a domain YAML."""
+
     domain_id: str
     version: str
     node_schemas: dict[str, NodeSchema]  # label → NodeSchema

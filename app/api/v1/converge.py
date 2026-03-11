@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ...core.auth import verify_api_key
-from ...core.config import Settings, get_settings
 from ...engines.convergence.cost_tracker import CostTracker
 from ...engines.convergence.loop_state import (
     LoopState,
@@ -29,25 +28,20 @@ from ...engines.convergence.loop_state import (
 from ...engines.convergence.pass_telemetry import PassTelemetryCollector
 from ...engines.convergence.schema_proposer import (
     ApprovalDecision,
-    SchemaProposalSet,
     apply as apply_proposals,
     propose as propose_schema,
 )
 from ...models.field_confidence import FieldConfidenceMap
-from ...models.loop_schemas import ConvergeRequest, ConvergeResponse, PassResult
+from ...models.loop_schemas import PassResult
 from ...services.crm_field_scanner import (
     CRMField,
     DiscoveryReport,
-    ScanResult,
     generate_discovery_report,
-    generate_seed_yaml,
     scan_crm_fields,
 )
 from ...engines.convergence.enrichment_profile import (
     EnrichmentProfile,
     ProfileRegistry,
-    allocate_budget,
-    select_entities,
 )
 
 logger = logging.getLogger(__name__)
@@ -186,7 +180,13 @@ async def converge_single(body: ConvergeRequestBody) -> ConvergeSingleResponse:
             convergence_reason = "diminishing_returns"
             break
 
-    state.status = LoopStatus.CONVERGED if convergence_reason == "threshold_met" else LoopStatus(convergence_reason) if convergence_reason in {s.value for s in LoopStatus} else LoopStatus.MAX_PASSES
+    state.status = (
+        LoopStatus.CONVERGED
+        if convergence_reason == "threshold_met"
+        else LoopStatus(convergence_reason)
+        if convergence_reason in {s.value for s in LoopStatus}
+        else LoopStatus.MAX_PASSES
+    )
     await store.save(state)
 
     elapsed = int((time.monotonic() - start) * 1000)
@@ -194,8 +194,12 @@ async def converge_single(body: ConvergeRequestBody) -> ConvergeSingleResponse:
 
     logger.info(
         "converge.single: run=%s passes=%d tokens=%d cost=$%.4f reason=%s elapsed=%dms",
-        state.run_id, state.current_pass, summary.total_tokens, summary.total_cost_usd,
-        convergence_reason, elapsed,
+        state.run_id,
+        state.current_pass,
+        summary.total_tokens,
+        summary.total_cost_usd,
+        convergence_reason,
+        elapsed,
     )
 
     return ConvergeSingleResponse(
@@ -262,7 +266,9 @@ async def approve_proposals(run_id: str, body: ApproveRequestBody) -> dict[str, 
     if state is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     if state.status != LoopStatus.HUMAN_HOLD:
-        raise HTTPException(status_code=409, detail=f"Run is {state.status.value}, not awaiting approval")
+        raise HTTPException(
+            status_code=409, detail=f"Run is {state.status.value}, not awaiting approval"
+        )
 
     domain = state.domain
     domain_spec = _domain_specs.get(domain, {})
@@ -271,10 +277,12 @@ async def approve_proposals(run_id: str, body: ApproveRequestBody) -> dict[str, 
 
     # Build proposal set from accumulated state
     proposal_set = propose_schema(
-        batch_results=[{
-            "final_fields": state.accumulated_fields,
-            "final_field_confidences": state.accumulated_confidences,
-        }],
+        batch_results=[
+            {
+                "final_fields": state.accumulated_fields,
+                "final_field_confidences": state.accumulated_confidences,
+            }
+        ],
         current_yaml=domain_spec,
         domain=domain,
     )
@@ -306,18 +314,22 @@ async def get_pending_proposals(domain: str) -> dict[str, Any]:
 
     for run in held_runs:
         ps = propose_schema(
-            batch_results=[{
-                "final_fields": run.accumulated_fields,
-                "final_field_confidences": run.accumulated_confidences,
-            }],
+            batch_results=[
+                {
+                    "final_fields": run.accumulated_fields,
+                    "final_field_confidences": run.accumulated_confidences,
+                }
+            ],
             current_yaml=domain_spec,
             domain=domain,
         )
-        proposals.append({
-            "run_id": run.run_id,
-            "entity_id": run.entity_id,
-            "proposal": ps.model_dump(),
-        })
+        proposals.append(
+            {
+                "run_id": run.run_id,
+                "entity_id": run.entity_id,
+                "proposal": ps.model_dump(),
+            }
+        )
 
     return {
         "domain": domain,

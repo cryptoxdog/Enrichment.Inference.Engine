@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -63,11 +62,15 @@ class LoopStateStore(abc.ABC):
         if state is None:
             return None
         if state.status != LoopStatus.RUNNING:
-            logger.info("loop_state.resume: run %s is %s, not resumable", run_id, state.status.value)
+            logger.info(
+                "loop_state.resume: run %s is %s, not resumable", run_id, state.status.value
+            )
             return None
         logger.info(
             "loop_state.resume: run=%s pass=%d fields=%d",
-            run_id, state.current_pass, len(state.accumulated_fields),
+            run_id,
+            state.current_pass,
+            len(state.accumulated_fields),
         )
         return state
 

@@ -5,14 +5,10 @@ Run: pytest tests/test_crm_field_scanner.py -v
 
 from __future__ import annotations
 
-import pytest
 
 from app.services.crm_field_scanner import (
     CRMField,
-    DiscoveryReport,
-    FieldMatchStatus,
     ImpactTier,
-    ScanResult,
     discovery_report_to_dict,
     generate_discovery_report,
     generate_seed_yaml,
@@ -35,16 +31,37 @@ PLASTICS_DOMAIN_SPEC = {
                     "city": {"type": "string", "description": "City"},
                     "phone": {"type": "string", "description": "Phone number"},
                     "materials_handled": {"type": "list", "description": "Polymers processed"},
-                    "contamination_tolerance_pct": {"type": "float", "description": "Max contamination %"},
+                    "contamination_tolerance_pct": {
+                        "type": "float",
+                        "description": "Max contamination %",
+                    },
                     "process_types": {"type": "list", "description": "Processing capabilities"},
                     "min_mfi": {"type": "float", "description": "Minimum melt flow index"},
                     "max_mfi": {"type": "float", "description": "Maximum melt flow index"},
                     "certifications": {"type": "list", "description": "ISO/other certs"},
-                    "facility_size_sqft": {"type": "integer", "description": "Facility square footage"},
-                    "annual_capacity_lbs": {"type": "integer", "description": "Annual processing capacity"},
-                    "material_grade": {"type": "string", "managed_by": "inference", "description": "Inferred grade"},
-                    "facility_tier": {"type": "string", "managed_by": "inference", "description": "Inferred tier"},
-                    "buyer_class": {"type": "string", "managed_by": "inference", "description": "Inferred buyer class"},
+                    "facility_size_sqft": {
+                        "type": "integer",
+                        "description": "Facility square footage",
+                    },
+                    "annual_capacity_lbs": {
+                        "type": "integer",
+                        "description": "Annual processing capacity",
+                    },
+                    "material_grade": {
+                        "type": "string",
+                        "managed_by": "inference",
+                        "description": "Inferred grade",
+                    },
+                    "facility_tier": {
+                        "type": "string",
+                        "managed_by": "inference",
+                        "description": "Inferred tier",
+                    },
+                    "buyer_class": {
+                        "type": "string",
+                        "managed_by": "inference",
+                        "description": "Inferred buyer class",
+                    },
                 },
             }
         ],
@@ -63,7 +80,10 @@ PLASTICS_DOMAIN_SPEC = {
     ],
     "inference_rules": [
         {
-            "conditions": [{"field": "materials_handled"}, {"field": "contamination_tolerance_pct"}],
+            "conditions": [
+                {"field": "materials_handled"},
+                {"field": "contamination_tolerance_pct"},
+            ],
             "outputs": [{"field": "material_grade"}],
         },
         {
@@ -110,9 +130,13 @@ class TestScanCrmFields:
     def test_missing_sorted_by_impact(self):
         result = scan_crm_fields(RECYCLER_CRM_FIELDS, PLASTICS_DOMAIN_SPEC)
         tiers = [m.impact_tier for m in result.missing]
-        tier_order = [ImpactTier.GATE_CRITICAL, ImpactTier.SCORING_CRITICAL,
-                      ImpactTier.INFERENCE_INPUT, ImpactTier.ENRICHABLE,
-                      ImpactTier.NICE_TO_HAVE]
+        tier_order = [
+            ImpactTier.GATE_CRITICAL,
+            ImpactTier.SCORING_CRITICAL,
+            ImpactTier.INFERENCE_INPUT,
+            ImpactTier.ENRICHABLE,
+            ImpactTier.NICE_TO_HAVE,
+        ]
         last_idx = -1
         for t in tiers:
             idx = tier_order.index(t) if t in tier_order else 99
@@ -173,7 +197,9 @@ class TestDiscoveryReport:
     def test_inference_fields_tagged_correctly(self):
         result = scan_crm_fields(RECYCLER_CRM_FIELDS, PLASTICS_DOMAIN_SPEC)
         report = generate_discovery_report(result, PLASTICS_DOMAIN_SPEC)
-        inference_entries = [e for e in report.missing_entries if e.acquisition_method == "inference"]
+        inference_entries = [
+            e for e in report.missing_entries if e.acquisition_method == "inference"
+        ]
         assert len(inference_entries) >= 2  # material_grade, facility_tier, buyer_class
 
     def test_serialization(self):

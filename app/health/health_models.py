@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 
 # ─── Enums ────────────────────────────────────────────────────
 
+
 class HealthAction(str, Enum):
     RE_ENRICH = "re_enrich"
     VERIFY_FIELD = "verify_field"
@@ -46,6 +47,7 @@ class AssessmentScope(str, Enum):
 
 
 # ─── Field-Level Health ──────────────────────────────────────
+
 
 class FieldHealth(BaseModel):
     """Aggregate health metrics for a single field across all entities."""
@@ -80,6 +82,7 @@ class FieldHealth(BaseModel):
 
 
 # ─── Entity-Level Health ─────────────────────────────────────
+
 
 class RecommendedAction(BaseModel):
     action: HealthAction
@@ -123,6 +126,7 @@ class EntityHealth(BaseModel):
 
 # ─── CRM-Wide Health ─────────────────────────────────────────
 
+
 class CRMHealth(BaseModel):
     """Aggregate health across the entire CRM entity base."""
 
@@ -147,6 +151,7 @@ class CRMHealth(BaseModel):
 
 # ─── Re-Enrichment Trigger ──────────────────────────────────
 
+
 class EnrichmentTrigger(BaseModel):
     """Signal from HEALTH → ENRICH to queue an entity for re-enrichment."""
 
@@ -158,12 +163,15 @@ class EnrichmentTrigger(BaseModel):
     target_fields: list[str] = Field(
         default_factory=list, description="Specific fields to re-enrich; empty = full re-enrich"
     )
-    current_health: float = Field(ge=0.0, le=1.0, description="Entity composite_health at trigger time")
+    current_health: float = Field(
+        ge=0.0, le=1.0, description="Entity composite_health at trigger time"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # ─── Assessment Request/Response ─────────────────────────────
+
 
 class AssessmentConfig(BaseModel):
     """Configuration for a health assessment run."""
@@ -230,6 +238,7 @@ class EntityHealthSummary(BaseModel):
 
 # ─── Freshness Decay Utility ─────────────────────────────────
 
+
 def compute_freshness(
     last_enriched_at: datetime | None,
     half_life_days: float = 30.0,
@@ -253,6 +262,7 @@ def compute_freshness(
 
 # ─── Composite Health Utility ─────────────────────────────────
 
+
 def compute_composite_health(
     completeness: float,
     freshness: float,
@@ -272,6 +282,7 @@ def compute_composite_health(
 
 
 # ─── AI Readiness Score ──────────────────────────────────────
+
 
 def compute_ai_readiness(
     avg_completeness: float,

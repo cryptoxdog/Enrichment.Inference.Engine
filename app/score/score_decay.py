@@ -14,8 +14,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol, runtime_checkable
 
 from score_models import (
-    DecayConfig,
-    DimensionScore,
     ScoreDimension,
     ScoreRecord,
     ScoreTier,
@@ -28,9 +26,11 @@ from score_models import (
 
 # ── Protocols ─────────────────────────────────────────────────
 
+
 @runtime_checkable
 class DecayScoreStore(Protocol):
     """Score store with batch retrieval for decay processing."""
+
     def get_score(self, entity_id: str, domain: str) -> ScoreRecord | None: ...
     def save_score(self, record: ScoreRecord) -> None: ...
     def list_scores_needing_decay(
@@ -41,6 +41,7 @@ class DecayScoreStore(Protocol):
 @runtime_checkable
 class DecayTimestampProvider(Protocol):
     """Provides per-dimension timestamps for decay calculation."""
+
     def get_last_enriched_at(self, entity_id: str) -> datetime | None: ...
     def get_last_signal_at(self, entity_id: str) -> datetime | None: ...
     def get_last_graph_sync_at(self, entity_id: str) -> datetime | None: ...
@@ -48,11 +49,18 @@ class DecayTimestampProvider(Protocol):
 
 # ── Decay Results ─────────────────────────────────────────────
 
+
 class DimensionDecayResult:
     """Decay calculation result for a single dimension."""
+
     __slots__ = (
-        "dimension", "original_score", "decayed_score", "decay_factor",
-        "days_elapsed", "half_life_days", "reference_timestamp",
+        "dimension",
+        "original_score",
+        "decayed_score",
+        "decay_factor",
+        "days_elapsed",
+        "half_life_days",
+        "reference_timestamp",
     )
 
     def __init__(
@@ -86,10 +94,16 @@ class DimensionDecayResult:
 
 class DecayReport:
     """Full decay analysis for an entity."""
+
     __slots__ = (
-        "entity_id", "domain", "dimension_results",
-        "original_composite", "decayed_composite",
-        "original_tier", "decayed_tier", "tier_changed",
+        "entity_id",
+        "domain",
+        "dimension_results",
+        "original_composite",
+        "decayed_composite",
+        "original_tier",
+        "decayed_tier",
+        "tier_changed",
         "applied_at",
     )
 
@@ -124,7 +138,9 @@ class DecayReport:
     def composite_decay_pct(self) -> float:
         if self.original_composite == 0:
             return 0.0
-        return ((self.original_composite - self.decayed_composite) / self.original_composite) * 100.0
+        return (
+            (self.original_composite - self.decayed_composite) / self.original_composite
+        ) * 100.0
 
     @property
     def needs_re_enrichment(self) -> bool:
@@ -132,6 +148,7 @@ class DecayReport:
 
 
 # ── Dimension Timestamp Resolution ────────────────────────────
+
 
 def _resolve_dimension_timestamp(
     dimension: ScoreDimension,
@@ -157,6 +174,7 @@ def _resolve_dimension_timestamp(
 
 
 # ── Decay Engine ──────────────────────────────────────────────
+
 
 class DecayEngine:
     """
@@ -204,15 +222,17 @@ class DecayEngine:
             ds.decayed_score = round(decayed, 6)
             ds.decay_factor = round(factor, 6)
 
-            dimension_results.append(DimensionDecayResult(
-                dimension=dim,
-                original_score=ds.score,
-                decayed_score=decayed,
-                decay_factor=factor,
-                days_elapsed=round(days_elapsed, 2),
-                half_life_days=decay_config.half_life_days,
-                reference_timestamp=ref_ts,
-            ))
+            dimension_results.append(
+                DimensionDecayResult(
+                    dimension=dim,
+                    original_score=ds.score,
+                    decayed_score=decayed,
+                    decay_factor=factor,
+                    days_elapsed=round(days_elapsed, 2),
+                    half_life_days=decay_config.half_life_days,
+                    reference_timestamp=ref_ts,
+                )
+            )
 
         decayed_composite, _ = compute_composite(record.dimension_scores, profile, use_decayed=True)
         decayed_composite = apply_gate_penalty(
@@ -283,15 +303,17 @@ class DecayEngine:
                 decayed = ds.score * factor
                 ds.decayed_score = round(decayed, 6)
                 ds.decay_factor = round(factor, 6)
-                dimension_results.append(DimensionDecayResult(
-                    dimension=dim,
-                    original_score=ds.score,
-                    decayed_score=decayed,
-                    decay_factor=factor,
-                    days_elapsed=days_elapsed,
-                    half_life_days=decay_config.half_life_days,
-                    reference_timestamp=record.scored_at,
-                ))
+                dimension_results.append(
+                    DimensionDecayResult(
+                        dimension=dim,
+                        original_score=ds.score,
+                        decayed_score=decayed,
+                        decay_factor=factor,
+                        days_elapsed=days_elapsed,
+                        half_life_days=decay_config.half_life_days,
+                        reference_timestamp=record.scored_at,
+                    )
+                )
 
             decayed_composite, _ = compute_composite(
                 snapshot.dimension_scores, profile, use_decayed=True

@@ -1,0 +1,44 @@
+{
+  "dashboard": {
+    "title": "Service Level Objectives",
+    "tags": ["slo", "reliability"],
+    "panels": [
+      {
+        "id": 1, "title": "API Availability (SLO: 99.5%)", "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+        "targets": [{"expr": "sum(rate(http_requests_total{status!~'5..'}[30d])) / sum(rate(http_requests_total[30d])) * 100"}],
+        "fieldConfig": {"defaults": {"thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 99.5, "color": "green"}]}, "unit": "percent"}}
+      },
+      {
+        "id": 2, "title": "Error Budget Remaining", "type": "gauge",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+        "targets": [{"expr": "((0.005 - (1 - sum(rate(http_requests_total{status!~'5..'}[30d])) / sum(rate(http_requests_total[30d])))) / 0.005) * 100"}],
+        "fieldConfig": {"defaults": {"thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 20, "color": "yellow"}, {"value": 50, "color": "green"}]}, "unit": "percent", "min": 0, "max": 100}}
+      },
+      {
+        "id": 3, "title": "p95 Latency (SLO: <500ms)", "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [{"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) * 1000", "legendFormat": "p95 (ms)"}],
+        "thresholds": [{"value": 500, "colorMode": "critical", "line": true}]
+      },
+      {
+        "id": 4, "title": "Neo4j Success Rate (SLO: 99.9%)", "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 6},
+        "targets": [{"expr": "sum(rate(neo4j_queries_total{status='success'}[7d])) / sum(rate(neo4j_queries_total[7d])) * 100"}],
+        "fieldConfig": {"defaults": {"thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 99.9, "color": "green"}]}, "unit": "percent"}}
+      },
+      {
+        "id": 5, "title": "Cache Hit Rate (SLO: >80%)", "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 6},
+        "targets": [{"expr": "sum(rate(redis_cache_hits_total[24h])) / (sum(rate(redis_cache_hits_total[24h])) + sum(rate(redis_cache_misses_total[24h]))) * 100"}],
+        "fieldConfig": {"defaults": {"thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 80, "color": "green"}]}, "unit": "percent"}}
+      },
+      {
+        "id": 6, "title": "Error Rate (SLO: <1%)", "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+        "targets": [{"expr": "sum(rate(http_requests_total{status=~'[45]..'}[10m])) / sum(rate(http_requests_total[10m])) * 100", "legendFormat": "Error %"}],
+        "thresholds": [{"value": 1, "colorMode": "critical", "line": true}]
+      }
+    ]
+  }
+}

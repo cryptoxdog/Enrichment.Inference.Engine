@@ -12,6 +12,7 @@ Integration:
   SonarConfig → prompt_builder.build_prompt() → payload
   payload → perplexity_client.query_perplexity()
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 # Sonar parameter enums — mirrors the API spec
 # ──────────────────────────────────────────────
+
 
 class SonarModel(str, Enum):
     SONAR = "sonar"
@@ -72,9 +74,11 @@ class FieldDifficulty(str, Enum):
 # Resolved configuration
 # ──────────────────────────────────────────────
 
+
 @dataclass
 class SonarConfig:
     """Fully resolved Sonar API parameter set for a single call."""
+
     model: SonarModel = SonarModel.SONAR
     search_context_size: SearchContextSize = SearchContextSize.MEDIUM
     search_mode: SearchMode = SearchMode.WEB
@@ -150,12 +154,14 @@ def estimate_call_cost(
 # Entity signals — domain-agnostic
 # ──────────────────────────────────────────────
 
+
 @dataclass
 class EntitySignals:
     """Signals extracted from entity state that drive parameter selection.
 
     Fully agnostic — no field-name awareness. Counts and scores only.
     """
+
     null_count: int = 0
     known_count: int = 0
     avg_confidence: float = 0.0
@@ -178,10 +184,7 @@ class EntitySignals:
         non_null = {k: v for k, v in entity.items() if v is not None}
         total_fields = len(field_map)
         conf_map = confidence_map or {}
-        avg_conf = (
-            sum(conf_map.values()) / max(len(conf_map), 1)
-            if conf_map else 0.0
-        )
+        avg_conf = sum(conf_map.values()) / max(len(conf_map), 1) if conf_map else 0.0
         gate_missing = 0
         if gate_fields:
             gate_missing = len(gate_fields - set(non_null.keys()))
@@ -307,6 +310,7 @@ def _select_max_tokens(mode: str, target_field_count: int) -> int:
 # Public API
 # ──────────────────────────────────────────────
 
+
 def resolve(
     search_plan_mode: str,
     target_fields: list[str],
@@ -340,9 +344,9 @@ def resolve(
 
     # 1. Filter inferrable fields
     searchable = [
-        f for f in target_fields
-        if field_map.get(f, FieldDifficulty.FINDABLE)
-        != FieldDifficulty.INFERRABLE
+        f
+        for f in target_fields
+        if field_map.get(f, FieldDifficulty.FINDABLE) != FieldDifficulty.INFERRABLE
     ]
 
     if not searchable:
@@ -372,8 +376,7 @@ def resolve(
     else:
         model = (
             SonarModel.SONAR_PRO
-            if search_plan_mode == "targeted"
-            and signals.gate_fields_missing > 0
+            if search_plan_mode == "targeted" and signals.gate_fields_missing > 0
             else SonarModel.SONAR
         )
 
@@ -391,7 +394,10 @@ def resolve(
 
     # 5. Domain filters — from classification, not hardcoded
     domain_filter = _select_domain_filters(
-        searchable, field_map, d_filters, difficulty,
+        searchable,
+        field_map,
+        d_filters,
+        difficulty,
     )
 
     # 6. Recency — from YAML time_sensitive_fields
@@ -399,7 +405,10 @@ def resolve(
 
     # 7. Variations
     variations = _compute_variations(
-        search_plan_mode, difficulty, signals, budget,
+        search_plan_mode,
+        difficulty,
+        signals,
+        budget,
     )
 
     # 8. Message strategy
@@ -410,15 +419,15 @@ def resolve(
 
     # 10. Temperature
     temperature = {
-        "discovery": 0.4, "targeted": 0.2, "verification": 0.1,
+        "discovery": 0.4,
+        "targeted": 0.2,
+        "verification": 0.1,
     }.get(search_plan_mode, 0.3)
 
     # 11. Reasoning effort
     reasoning_effort = None
     if model in (SonarModel.SONAR_REASONING, SonarModel.SONAR_REASONING_PRO):
-        reasoning_effort = (
-            "high" if signals.failed_matches >= 3 else "medium"
-        )
+        reasoning_effort = "high" if signals.failed_matches >= 3 else "medium"
 
     # 12. Cost estimate
     cost = estimate_call_cost(model, ctx, max_tokens, variations)
@@ -458,6 +467,7 @@ def resolve(
 # Convenience: resolve directly from DomainClassification
 # ──────────────────────────────────────────────
 
+
 def resolve_from_classification(
     search_plan_mode: str,
     target_fields: list[str],
@@ -483,6 +493,7 @@ def resolve_from_classification(
 # ──────────────────────────────────────────────
 # Batch cost estimator
 # ──────────────────────────────────────────────
+
 
 @dataclass
 class BatchCostEstimate:
@@ -510,28 +521,28 @@ def estimate_batch_cost(
                 pass_number=pass_num,
             )
             mode = (
-                "discovery" if pass_num == 1
-                else "verification" if pass_num == passes
+                "discovery"
+                if pass_num == 1
+                else "verification"
+                if pass_num == passes
                 else "targeted"
             )
             if mode == "discovery":
-                targets = [
-                    f for f, d in fm.items()
-                    if d != FieldDifficulty.INFERRABLE
-                ]
+                targets = [f for f, d in fm.items() if d != FieldDifficulty.INFERRABLE]
             elif mode == "verification":
-                targets = [
-                    f for f, d in fm.items()
-                    if d == FieldDifficulty.OBSCURE
-                ][:3]
+                targets = [f for f, d in fm.items() if d == FieldDifficulty.OBSCURE][:3]
             else:
                 targets = [
-                    f for f, d in fm.items()
+                    f
+                    for f, d in fm.items()
                     if d in (FieldDifficulty.OBSCURE, FieldDifficulty.FINDABLE)
                 ]
 
             config = resolve_from_classification(
-                mode, targets, signals, classification,
+                mode,
+                targets,
+                signals,
+                classification,
             )
             result.total_calls += 1
             result.total_variations += config.variations

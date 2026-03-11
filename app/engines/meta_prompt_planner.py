@@ -13,6 +13,7 @@ Three modes:
   - targeted: Pass 2+, surgical field targeting based on inference-gap analysis
   - verification: Final pass, confirm single remaining unknowns
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -22,6 +23,7 @@ from typing import Any
 @dataclass
 class SearchPlan:
     """What the prompt builder should construct."""
+
     mode: str  # "discovery" | "targeted" | "verification"
     target_fields: list[str] = field(default_factory=list)
     objective: str | None = None
@@ -51,8 +53,7 @@ class MetaPromptPlanner:
             return self._plan_discovery(entity, domain_hints)
 
         missing = self._find_high_value_gaps(
-            entity, known_fields, inferred_fields,
-            domain_hints, inference_rule_catalog
+            entity, known_fields, inferred_fields, domain_hints, inference_rule_catalog
         )
 
         if len(missing) <= 2:
@@ -60,14 +61,12 @@ class MetaPromptPlanner:
 
         return self._plan_targeted(missing, entity, known_fields, domain_hints)
 
-    def _plan_discovery(
-        self, entity: dict[str, Any], hints: dict[str, Any]
-    ) -> SearchPlan:
+    def _plan_discovery(self, entity: dict[str, Any], hints: dict[str, Any]) -> SearchPlan:
         priority = hints.get("priority_fields", [])
         objective_template = hints.get(
             "objective_template",
             "Research this entity's capabilities, certifications, "
-            "equipment, material handling, and operational characteristics."
+            "equipment, material handling, and operational characteristics.",
         )
         entity_name = entity.get("name", entity.get("Name", "unknown"))
         objective = objective_template.replace("{name}", str(entity_name))
@@ -138,8 +137,7 @@ class MetaPromptPlanner:
             ),
             strategy="confirm",
             reasoning=(
-                f"Verification pass: only {len(missing)} field(s) remaining. "
-                f"Minimal token budget."
+                f"Verification pass: only {len(missing)} field(s) remaining. Minimal token budget."
             ),
             kb_context=hints.get("kb_context"),
             variation_budget=2,
@@ -171,32 +169,38 @@ class MetaPromptPlanner:
             if missing_inputs and not produces.issubset(all_known):
                 unlock_value = len(produces - all_known)
                 for f in missing_inputs:
-                    gaps.append({
-                        "field": f,
-                        "gain": 0.4 + (0.15 * unlock_value),
-                        "reason": (
-                            f"unlocks rule '{rule.get('name', '?')}' "
-                            f"→ {', '.join(produces - all_known)}"
-                        ),
-                    })
+                    gaps.append(
+                        {
+                            "field": f,
+                            "gain": 0.4 + (0.15 * unlock_value),
+                            "reason": (
+                                f"unlocks rule '{rule.get('name', '?')}' "
+                                f"→ {', '.join(produces - all_known)}"
+                            ),
+                        }
+                    )
 
         # Priority fields from domain hints not yet known
         for f in priority:
             if f not in all_known:
-                gaps.append({
-                    "field": f,
-                    "gain": 0.6,
-                    "reason": "domain priority field",
-                })
+                gaps.append(
+                    {
+                        "field": f,
+                        "gain": 0.6,
+                        "reason": "domain priority field",
+                    }
+                )
 
         # Low-confidence fields worth re-researching
         for f, conf in known_fields.items():
             if conf < 0.5:
-                gaps.append({
-                    "field": f,
-                    "gain": 0.3 + (0.5 - conf),
-                    "reason": f"low confidence ({conf:.2f})",
-                })
+                gaps.append(
+                    {
+                        "field": f,
+                        "gain": 0.3 + (0.5 - conf),
+                        "reason": f"low confidence ({conf:.2f})",
+                    }
+                )
 
         # Deduplicate by field, keep highest gain
         seen: dict[str, dict] = {}

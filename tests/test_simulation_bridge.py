@@ -2,33 +2,48 @@
 Tests for Simulation Bridge — validates gate/scoring/inference/community/leverage/brief.
 Run: pytest tests/test_simulation_bridge.py -v
 """
+
 from __future__ import annotations
-import pytest
 from app.services.simulation_bridge import (
-    CommunityMember, GateResult, GateVerdict, LeveragePoint, LeverageType,
-    SimulatedEntity, SimulationMode, SimulationStatistics,
-    analyze_leverage, brief_to_dict, detect_communities,
-    generate_executive_brief, generate_synthetic_entities, run_gates,
-    run_inference, run_scoring, simulate, stats_to_dict,
+    GateVerdict,
+    LeverageType,
+    SimulationMode,
+    analyze_leverage,
+    brief_to_dict,
+    generate_executive_brief,
+    generate_synthetic_entities,
+    run_gates,
+    run_inference,
+    run_scoring,
+    simulate,
 )
 
 DOMAIN_SPEC = {
     "domain": {"id": "plastics-recycling", "version": "8.0.0"},
-    "ontology": {"nodes": [{"label": "Partner", "properties": {
-        "name": {"type": "string"}, "city": {"type": "string"},
-        "phone": {"type": "string"},
-        "materials_handled": {"type": "list"},
-        "contamination_tolerance_pct": {"type": "float"},
-        "process_types": {"type": "list"},
-        "min_mfi": {"type": "float"}, "max_mfi": {"type": "float"},
-        "certifications": {"type": "list"},
-        "facility_size_sqft": {"type": "integer"},
-        "annual_capacity_lbs": {"type": "integer"},
-        "industries_served": {"type": "list"},
-        "equipment_types": {"type": "list"},
-        "material_forms_output": {"type": "list"},
-        "polymers_handled": {"type": "list"},
-    }}]},
+    "ontology": {
+        "nodes": [
+            {
+                "label": "Partner",
+                "properties": {
+                    "name": {"type": "string"},
+                    "city": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "materials_handled": {"type": "list"},
+                    "contamination_tolerance_pct": {"type": "float"},
+                    "process_types": {"type": "list"},
+                    "min_mfi": {"type": "float"},
+                    "max_mfi": {"type": "float"},
+                    "certifications": {"type": "list"},
+                    "facility_size_sqft": {"type": "integer"},
+                    "annual_capacity_lbs": {"type": "integer"},
+                    "industries_served": {"type": "list"},
+                    "equipment_types": {"type": "list"},
+                    "material_forms_output": {"type": "list"},
+                    "polymers_handled": {"type": "list"},
+                },
+            }
+        ]
+    },
     "gates": [
         {"candidate_property": "materials_handled"},
         {"candidate_property": "contamination_tolerance_pct", "type": "range", "max": 5.0},
@@ -78,13 +93,21 @@ class TestGates:
 
     def test_range_gate_fail(self):
         entity = {"contamination_tolerance_pct": 12.0}
-        results = run_gates(entity, {}, [{"candidate_property": "contamination_tolerance_pct", "type": "range", "max": 5.0}])
+        results = run_gates(
+            entity,
+            {},
+            [{"candidate_property": "contamination_tolerance_pct", "type": "range", "max": 5.0}],
+        )
         assert results[0].verdict == GateVerdict.FAIL
 
 
 class TestScoring:
     def test_scoring_returns_composite(self):
-        entity = {"certifications": ["ISO 9001", "R2"], "facility_size_sqft": 100000, "annual_capacity_lbs": 200000000}
+        entity = {
+            "certifications": ["ISO 9001", "R2"],
+            "facility_size_sqft": 100000,
+            "annual_capacity_lbs": 200000000,
+        }
         results, composite = run_scoring(entity, DOMAIN_SPEC["scoring_dimensions"])
         assert 0.0 < composite <= 1.0
         assert len(results) == 3
@@ -98,7 +121,11 @@ class TestScoring:
 
 class TestInference:
     def test_material_grade_inference(self):
-        fields = {"polymers_handled": ["HDPE"], "contamination_tolerance_pct": 1.5, "certifications": ["ISO 9001"]}
+        fields = {
+            "polymers_handled": ["HDPE"],
+            "contamination_tolerance_pct": 1.5,
+            "certifications": ["ISO 9001"],
+        }
         inferred = run_inference(fields)
         assert "material_grade" in inferred
         assert inferred["material_grade"] == "prime"
@@ -126,7 +153,9 @@ class TestFullSimulation:
 
 class TestLeverage:
     def test_leverage_points_generated(self):
-        seed_stats, enriched_stats, _, _ = simulate(CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, entity_count=20)
+        seed_stats, enriched_stats, _, _ = simulate(
+            CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, entity_count=20
+        )
         points = analyze_leverage(seed_stats, enriched_stats)
         assert len(points) >= 1
         types = {p.leverage_type for p in points}
@@ -135,18 +164,26 @@ class TestLeverage:
 
 class TestExecutiveBrief:
     def test_brief_generation(self):
-        seed_stats, enriched_stats, _, _ = simulate(CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, entity_count=20)
+        seed_stats, enriched_stats, _, _ = simulate(
+            CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, entity_count=20
+        )
         leverage = analyze_leverage(seed_stats, enriched_stats)
-        brief = generate_executive_brief("Acme Recycling", "plastics-recycling", seed_stats, enriched_stats, leverage)
+        brief = generate_executive_brief(
+            "Acme Recycling", "plastics-recycling", seed_stats, enriched_stats, leverage
+        )
         assert brief.customer_name == "Acme Recycling"
         assert brief.estimated_roi_multiple > 0
         assert "revops_impact" in brief_to_dict(brief)
         assert len(brief.revops_impact) == 5
 
     def test_brief_serialization(self):
-        seed_stats, enriched_stats, _, _ = simulate(CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, entity_count=10)
+        seed_stats, enriched_stats, _, _ = simulate(
+            CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, entity_count=10
+        )
         leverage = analyze_leverage(seed_stats, enriched_stats)
-        brief = generate_executive_brief("Test Co", "plastics", seed_stats, enriched_stats, leverage)
+        brief = generate_executive_brief(
+            "Test Co", "plastics", seed_stats, enriched_stats, leverage
+        )
         d = brief_to_dict(brief)
         assert "headline" in d
         assert "leverage_points" in d
