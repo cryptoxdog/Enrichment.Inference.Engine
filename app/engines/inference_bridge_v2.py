@@ -39,6 +39,11 @@ from typing import Any, Callable
 logger = logging.getLogger(__name__)
 
 
+# ──────────────────────────────────────────────
+# Derivation graph — built from YAML, immutable
+# ──────────────────────────────────────────────
+
+
 @dataclass(frozen=True)
 class DerivationEdge:
     """A single derivation: target field derived from input fields."""
@@ -80,6 +85,8 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
 
     edges: list[DerivationEdge] = []
     edge_map: dict[str, DerivationEdge] = {}
+
+    # Collect all derived_from declarations
     node_iter = nodes.items() if isinstance(nodes, dict) else enumerate(nodes)
     for _, node_def in node_iter:
         if not isinstance(node_def, dict):
@@ -103,11 +110,15 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
             )
             edges.append(edge)
             edge_map[prop_name] = edge
+
+    # Build children_of: which targets does each input unlock?
     children_of: dict[str, list[str]] = {}
     for edge in edges:
         for inp in edge.inputs:
             children_of.setdefault(inp, []).append(edge.target)
-    topo_order = _topo_sort(edges)
+
+    # Topological sort (Kahn's algorithm)
+    topo_order = _topo_sort(edges, edge_map)
 
     logger.info(
         "derivation_graph.built",
@@ -127,7 +138,8 @@ def build_derivation_graph(domain_spec: dict[str, Any]) -> DerivationGraph:
 
 
 def _topo_sort(
-    edges: list[DerivationEdge], DerivationEdge],
+    edges: list[DerivationEdge],
+    edge_map: dict[str, DerivationEdge],
 ) -> list[str]:
     """Topological sort of derivation targets.
 
@@ -145,8 +157,11 @@ def _topo_sort(
     for edge in edges:
         for inp in edge.inputs:
             if inp in targets:
+                # inp is itself a derived field → edge from inp to target
                 graph.setdefault(inp, []).append(edge.target)
                 in_degree[edge.target] = in_degree.get(edge.target, 0) + 1
+
+    # Kahn's
     queue = deque(t for t in targets if in_degree.get(t, 0) == 0)
     order: list[str] = []
     while queue:
@@ -163,10 +178,22 @@ def _topo_sort(
             "derivation_graph.cycle_detected",
             fields=sorted(cycle_fields),
         )
+        # Append remaining in arbitrary order (they won't fire due to
+        # missing inputs, but we don't crash)
         order.extend(sorted(cycle_fields))
 
     return order
+
+
+# ──────────────────────────────────────────────
+# Inference rules registry
+# ──────────────────────────────────────────────
+
+# Rule functions: (input_values: dict, edge: DerivationEdge) → (value, confidence)
 InferenceRuleFn = Callable[[dict[str, Any], DerivationEdge], tuple[Any, float]]
+
+# Default rule: pass-through (value = dict of inputs, confidence = min of inputs)
+# Domain-specific rules are registered at startup from YAML or Python plugins.
 _RULE_REGISTRY: dict[str, InferenceRuleFn] = {}
 
 
@@ -186,6 +213,11 @@ def _default_rule(
     that actually compute the derived value (e.g., lookup tables, formulas).
     """
     return input_values, 0.0  # 0.0 = "I have the inputs but no rule to compute"
+
+
+# ──────────────────────────────────────────────
+# Inference execution
+# ──────────────────────────────────────────────
 
 
 class InferenceStatus(str, Enum):
@@ -265,6 +297,7 @@ def run_inference(
         confidence_map: {field_name: confidence} for each known field
         existing_threshold: skip fields already at this confidence
     """
+    # Working copies (inference results feed into later derivations)
     working_entity = dict(entity)
     working_confidence = dict(confidence_map)
 
@@ -275,6 +308,8 @@ def run_inference(
         edge = graph._edge_map.get(target_field)
         if edge is None:
             continue
+
+        # Skip if already set at sufficient confidence
         existing_val = working_entity.get(target_field)
         existing_conf = working_confidence.get(target_field, 0.0)
         if existing_val is not None and existing_conf >= existing_threshold:
@@ -285,6 +320,8 @@ def run_inference(
                 confidence=existing_conf,
             )
             continue
+
+        # Check ALL inputs present and above floor
         missing = []
         below_floor = []
         input_values: dict[str, Any] = {}
@@ -319,10 +356,13 @@ def run_inference(
                 inputs_confidence=input_confs,
             )
             continue
+
+        # All inputs satisfied — find and execute rule
         rule_name = edge.inference_rule
         rule_fn = _RULE_REGISTRY.get(rule_name) if rule_name else None
 
         if rule_fn is None and rule_name is not None:
+            # Named rule specified but not registered
             blocked[target_field] = FieldInferenceResult(
                 field=target_field,
                 status=InferenceStatus.NO_RULE,
@@ -331,6 +371,8 @@ def run_inference(
                 rule_used=rule_name,
             )
             continue
+
+        # Execute rule (or default)
         fn = rule_fn or _default_rule
         try:
             value, rule_confidence = fn(input_values, edge)
@@ -348,11 +390,18 @@ def run_inference(
                 rule_used=rule_name,
             )
             continue
+
+        # Confidence = min(all input confidences) * rule_confidence
+        # If default rule (rule_confidence=0.0), we mark it but don't
+        # propagate garbage confidence downstream
         input_min_conf = min(input_confs.values()) if input_confs else 0.0
 
         if rule_fn is not None:
+            # Real rule: confidence is bounded by weakest input
             final_confidence = min(input_min_conf, rule_confidence)
         else:
+            # Default rule: inputs are ready but no computation exists
+            # Mark as derivable but don't produce a fake value
             final_confidence = 0.0
             value = None
 
@@ -367,12 +416,17 @@ def run_inference(
         )
 
         if value is not None and final_confidence > 0.0:
+            # Propagate into working copies for multi-hop chaining
             working_entity[target_field] = value
             working_confidence[target_field] = final_confidence
             derived[target_field] = result
         else:
             blocked[target_field] = result
+
+    # Build unlock map for search optimizer
     unlock_map = _compute_unlock_values(graph, working_entity, working_confidence)
+
+    # Stats
     status_counts: dict[str, int] = {}
     for r in list(derived.values()) + list(blocked.values()):
         status_counts[r.status.value] = status_counts.get(r.status.value, 0) + 1
@@ -391,6 +445,11 @@ def run_inference(
         unlock_map=unlock_map,
         stats=status_counts,
     )
+
+
+# ──────────────────────────────────────────────
+# Unlock analysis — which field to search next?
+# ──────────────────────────────────────────────
 
 
 def _compute_unlock_values(
@@ -417,18 +476,26 @@ def _compute_unlock_values(
                 missing_for_edge.append(inp)
 
         if len(missing_for_edge) == 1:
+            # This one field is the sole blocker — high unlock value
             blocker = missing_for_edge[0]
             unlock[blocker] = unlock.get(blocker, 0.0) + 1.0
         elif len(missing_for_edge) == 2:
+            # Two fields missing — each gets partial credit
             for f in missing_for_edge:
                 unlock[f] = unlock.get(f, 0.0) + 0.5
 
     return unlock
 
 
+# ──────────────────────────────────────────────
+# Target selection: use unlock values to prioritize
+# ──────────────────────────────────────────────
+
+
 def prioritize_search_targets(
     missing_fields: list[str],
-    unlock_map: dict[str, float], Any] | None = None,
+    unlock_map: dict[str, float],
+    field_map: dict[str, Any] | None = None,
 ) -> list[str]:
     """Sort missing fields by inference unlock value (descending).
 
@@ -440,3 +507,50 @@ def prioritize_search_targets(
         return unlock_map.get(f, 0.0)
 
     return sorted(missing_fields, key=sort_key, reverse=True)
+
+
+# ──────────────────────────────────────────────
+# YAML Contract (additions to domain_spec.yaml)
+# ──────────────────────────────────────────────
+#
+# ontology:
+#   nodes:
+#     Facility:
+#       properties:
+#         # Searchable field (input to derivations)
+#         polymers_handled:
+#           type: list
+#           examples: [HDPE, PP, PET]
+#
+#         certifications:
+#           type: list
+#           examples: [ISO 9001, R2]
+#
+#         # Derived field — inference fires ONLY when ALL inputs present
+#         material_grade:
+#           type: string
+#           managed_by: computed
+#           derived_from: [polymers_handled, certifications]
+#           inference_rule: material_grade_lookup    # registered rule name
+#           confidence_floor: 0.6                    # min confidence on inputs
+#
+#         # Multi-hop: facility_tier derives from fields that are themselves derived
+#         facility_tier:
+#           type: string
+#           managed_by: inference
+#           derived_from: [certifications, equipment_types, material_grade]
+#           inference_rule: facility_tier_compute
+#           confidence_floor: 0.7
+#
+# The rule functions (material_grade_lookup, facility_tier_compute) are
+# registered at startup via register_rule(). They contain the actual
+# domain logic (lookup tables, formulas, etc.). The YAML declares the
+# graph structure; Python plugins supply the computation.
+#
+# CRITICAL INVARIANTS:
+# - No inference fires with partial inputs. Ever.
+# - No cross-entity inference. Each entity is independent.
+# - Confidence is bounded by the weakest input. Cannot exceed it.
+# - derived_from is the ONLY source of truth for what qualifies as an input.
+# - Fields NOT in derived_from have ZERO influence on the derivation,
+#   regardless of correlation, co-occurrence, or similarity.

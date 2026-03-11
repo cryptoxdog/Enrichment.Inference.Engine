@@ -37,7 +37,7 @@ MIN_DELTA = 0.05
 class PassResult:
     """Result of a single enrichment+inference pass."""
 
-    pass_number: int
+    _pass_number: int
     enriched_fields: dict[str, Any] = field(default_factory=dict)
     inferred_fields: dict[str, Any] = field(default_factory=dict)
     confidence: float = 0.0
@@ -212,7 +212,7 @@ async def run_convergence_loop(
         state="completed",
         inferences=[
             {
-                "pass": pr.pass_number,
+                "pass": pr._pass_number,
                 "mode": pr.search_plan.mode if pr.search_plan else "unknown",
                 "enriched": list(pr.enriched_fields.keys()),
                 "inferred": list(pr.inferred_fields.keys()),

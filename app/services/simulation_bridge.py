@@ -29,8 +29,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-ISO_9001 = "ISO 9001"
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +36,9 @@ logger = logging.getLogger(__name__)
 # DATA MODELS
 # ══════════════════════════════════════════════════════════
 
+
+
+ISO_9001 = "ISO 9001"
 
 class SimulationMode(str, Enum):
     SEED_ONLY = "seed_only"           # Customer's current fields only
@@ -291,7 +292,8 @@ _INFERENCE_FUNCTIONS = {
 
 
 def generate_synthetic_entities(
-    crm_field_names: list[str], Any],
+    crm_field_names: list[str],
+    _domain_spec: dict[str, Any],
     count: int = 20,
     seed: int = 42,
 ) -> list[dict[str, Any]]:
@@ -596,7 +598,8 @@ def detect_communities(
 
 
 def simulate(
-    crm_field_names: list[str], Any],
+    crm_field_names: list[str],
+    _domain_spec: dict[str, Any],
     query_profile: dict[str, Any] | None = None,
     entity_count: int = 20,
     seed: int = 42,
@@ -614,21 +617,21 @@ def simulate(
     domain_props = _extract_all_domain_properties(domain_spec)
 
     # Generate synthetic entities with ONLY customer's CRM fields
-    raw_entities = generate_synthetic_entities(crm_field_names, entity_count, seed)
+    raw_entities = generate_synthetic_entities(crm_field_names, domain_spec, entity_count, seed)
 
     # ── SEED simulation (customer's current fields only) ──
-    seed_entities = _simulate_entities(raw_entities, gate_specs, scoring_specs, query, mode="seed")
-    seed_stats = _compute_statistics(seed_entities, SimulationMode.SEED_ONLY)
+    seed_entities = _simulate_entities(raw_entities, domain_props, gate_specs, scoring_specs, query, mode="seed")
+    seed_stats = _compute_statistics(seed_entities, SimulationMode.SEED_ONLY, domain_props)
 
     # ── ENRICHED simulation (all domain fields populated) ──
     all_field_names = list(set(crm_field_names) | set(domain_props))
-    full_entities = generate_synthetic_entities(all_field_names, entity_count, seed)
-    enriched_entities = _simulate_entities(full_entities, gate_specs, scoring_specs, query, mode="enriched")
+    full_entities = generate_synthetic_entities(all_field_names, domain_spec, entity_count, seed)
+    enriched_entities = _simulate_entities(full_entities, domain_props, gate_specs, scoring_specs, query, mode="enriched")
 
     # Run community detection on enriched entities
     detect_communities(enriched_entities)
 
-    enriched_stats = _compute_statistics(enriched_entities, SimulationMode.FULL_GRAPH)
+    enriched_stats = _compute_statistics(enriched_entities, SimulationMode.FULL_GRAPH, domain_props)
 
     return seed_stats, enriched_stats, seed_entities, enriched_entities
 
@@ -645,9 +648,9 @@ def _default_query_profile() -> dict[str, Any]:
     }
 
 
-def _extract_all_domain_properties( Any]) -> list[str]:
+def _extract_all_domain_properties(domain_spec: dict[str, Any]) -> list[str]:
     props = []
-    ontology = domain_spec.get("ontology")
+    ontology = domain_spec.get("ontology", domain_spec)
     nodes = ontology.get("nodes", ontology.get("entities", []))
     node_iter = list(nodes.values()) if isinstance(nodes, dict) else (nodes if isinstance(nodes, list) else [])
     for node_def in node_iter:
@@ -659,6 +662,7 @@ def _extract_all_domain_properties( Any]) -> list[str]:
 
 def _simulate_entities(
     raw_entities: list[dict[str, Any]],
+    _domain_props: list[str],
     gate_specs: list[dict],
     scoring_specs: list[dict],
     query: dict[str, Any],
@@ -713,6 +717,7 @@ def _simulate_entities(
 def _compute_statistics(
     entities: list[SimulatedEntity],
     mode: SimulationMode,
+    _domain_props: list[str],
 ) -> SimulationStatistics:
     n = len(entities)
     if n == 0:
@@ -841,8 +846,8 @@ def analyze_leverage(
             current_state=f"Avg score {seed_stats.avg_composite_score:.2f} with {seed_stats.scoring_dimensions_degraded} degraded dimensions",
             enriched_state=f"Avg score {enriched_stats.avg_composite_score:.2f} with {enriched_stats.scoring_dimensions_degraded} degraded dimensions",
             delta=f"+{score_delta:.4f} avg composite score",
-            business_impact="Ranking quality improves — best-fit partners surface first, reducing manual review",
-            revenue_implication="Sales reps save 2-4 hours/week on manual qualification. At $75/hr = $7,800-$15,600/yr per rep",
+            business_impact=f"Ranking quality improves — best-fit partners surface first, reducing manual review",
+            revenue_implication=f"Sales reps save 2-4 hours/week on manual qualification. At $75/hr = $7,800-$15,600/yr per rep",
             confidence=0.88,
         ))
 
@@ -922,35 +927,35 @@ def generate_executive_brief(
     combined = (
         f"The simulation ran {enriched_stats.total_entities} entities through the full "
         f"ENRICH → GRAPH pipeline against the {domain_id} domain specification. "
-        "Every number below is empirical — computed from deterministic gate evaluation, "
-        "weighted scoring, Louvain community detection, and rule-based inference. "
+        f"Every number below is empirical — computed from deterministic gate evaluation, "
+        f"weighted scoring, Louvain community detection, and rule-based inference. "
         f"No projections, no AI-generated estimates.\n\n"
         + "\n\n".join(narrative_parts)
         + f"\n\n**Combined effect**: These leverage points compound. Better matching "
         f"({enriched_stats.gate_pass_rate}% pass rate) feeds better scoring "
         f"({enriched_stats.avg_composite_score:.2f} avg), which feeds better community "
         f"detection ({enriched_stats.communities_found} clusters), which enables cluster-based "
-        "GTM motions that individual-account prospecting cannot match. "
-        "The enrichment-inference loop is the multiplier — each pass discovers fields "
-        "that make the next pass more targeted and cheaper."
+        f"GTM motions that individual-account prospecting cannot match. "
+        f"The enrichment-inference loop is the multiplier — each pass discovers fields "
+        f"that make the next pass more targeted and cheaper."
     )
 
     revops_impact = {
         "lead_qualification": (
             f"Gate pass rate moves from {seed_stats.gate_pass_rate}% → {enriched_stats.gate_pass_rate}%. "
-            "Unqualified leads drop out automatically — no human review needed for gate failures."
+            f"Unqualified leads drop out automatically — no human review needed for gate failures."
         ),
         "pipeline_prioritization": (
             f"Composite scoring active on {enriched_stats.scoring_dimensions_active}/{enriched_stats.scoring_dimensions_active + enriched_stats.scoring_dimensions_degraded} dimensions. "
-            "Best-fit partners rank first. Sales works the list top-down."
+            f"Best-fit partners rank first. Sales works the list top-down."
         ),
         "territory_planning": (
             f"{enriched_stats.communities_found} communities detected via shared polymers/capabilities/markets. "
-            "Assign territories by cluster, not geography."
+            f"Assign territories by cluster, not geography."
         ),
         "forecast_accuracy": (
             f"Field coverage at {enriched_stats.field_coverage}% enables deterministic scoring. "
-            "No more guessing deal quality — the graph tells you."
+            f"No more guessing deal quality — the graph tells you."
         ),
         "cost_efficiency": (
             f"Total enrichment cost: ${enriched_stats.total_enrichment_cost_usd:.2f} for {enriched_stats.total_entities} entities "
