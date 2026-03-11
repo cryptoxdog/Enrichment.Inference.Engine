@@ -1,9 +1,8 @@
 """Shared pytest fixtures for all test modules."""
 
 import pytest
-from unittest.mock import MagicMock
 from app.models.field_confidence import FieldConfidenceMap, FieldConfidence, FieldSource
-from app.models.loop_schemas import ConvergeRequest, ConvergeResponse, PassResult
+from app.models.loop_schemas import ConvergeRequest
 
 
 @pytest.fixture
@@ -35,22 +34,26 @@ def sample_schema():
 def sample_field_confidence_map():
     """Pre-built FieldConfidenceMap for testing."""
     fcm = FieldConfidenceMap()
-    fcm.set(FieldConfidence(
-        field_name="polymer_type",
-        value="HDPE",
-        confidence=0.92,
-        source=FieldSource.ENRICHMENT,
-        variation_agreement=0.80,
-        pass_discovered=1,
-    ))
-    fcm.set(FieldConfidence(
-        field_name="contamination_pct",
-        value=3.5,
-        confidence=0.68,
-        source=FieldSource.ENRICHMENT,
-        variation_agreement=0.60,
-        pass_discovered=1,
-    ))
+    fcm.set(
+        FieldConfidence(
+            field_name="polymer_type",
+            value="HDPE",
+            confidence=0.92,
+            source=FieldSource.ENRICHMENT,
+            variation_agreement=0.80,
+            pass_discovered=1,
+        )
+    )
+    fcm.set(
+        FieldConfidence(
+            field_name="contamination_pct",
+            value=3.5,
+            confidence=0.68,
+            source=FieldSource.ENRICHMENT,
+            variation_agreement=0.60,
+            pass_discovered=1,
+        )
+    )
     return fcm
 
 

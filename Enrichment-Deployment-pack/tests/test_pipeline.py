@@ -1,4 +1,5 @@
 """Pipeline unit tests with mocked Perplexity."""
+
 from __future__ import annotations
 
 import pytest

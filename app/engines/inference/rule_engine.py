@@ -33,6 +33,30 @@ class InferenceResult(BaseModel):
     cascade_depth: int = 0
 
 
+# ── condition helpers ─────────────────────────────────────────────────────────
+
+
+def _eval_contains(value: Any, target: Any) -> bool:
+    """Check if target is contained within value (list or string)."""
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return _normalise(target) in {_normalise(v) for v in value}
+    return _normalise(target) in _normalise(value)
+
+
+def _eval_in(value: Any, target: Any) -> bool:
+    """Check if value is a member of the target collection."""
+    if isinstance(target, (list, tuple, set, frozenset)):
+        return _normalise(value) in {_normalise(t) for t in target}
+    return _normalise(value) == _normalise(target)
+
+
+def _eval_not_in(value: Any, target: Any) -> bool:
+    """Check if value is absent from the target collection."""
+    if isinstance(target, (list, tuple, set, frozenset)):
+        return _normalise(value) not in {_normalise(t) for t in target}
+    return _normalise(value) != _normalise(target)
+
+
 def _evaluate_condition(condition: RuleCondition, value: Any) -> bool:
     op = condition.operator
     target = condition.value
@@ -56,17 +80,11 @@ def _evaluate_condition(condition: RuleCondition, value: Any) -> bool:
     if op is Operator.LTE:
         return float(value) <= float(target)
     if op is Operator.CONTAINS:
-        if isinstance(value, (list, tuple, set, frozenset)):
-            return _normalise(target) in {_normalise(v) for v in value}
-        return _normalise(target) in _normalise(value)
+        return _eval_contains(value, target)
     if op is Operator.IN:
-        if isinstance(target, (list, tuple, set, frozenset)):
-            return _normalise(value) in {_normalise(t) for t in target}
-        return _normalise(value) == _normalise(target)
+        return _eval_in(value, target)
     if op is Operator.NOT_IN:
-        if isinstance(target, (list, tuple, set, frozenset)):
-            return _normalise(value) not in {_normalise(t) for t in target}
-        return _normalise(value) != _normalise(target)
+        return _eval_not_in(value, target)
     return False
 
 
@@ -91,6 +109,75 @@ def _try_fire(rule: RuleDefinition, entity: dict[str, Any]) -> dict[str, Any] | 
     return {"conditions_met": conditions_met, "outputs": outputs}
 
 
+# ── cascade helpers ───────────────────────────────────────────────────────────
+
+
+def _fire_cascade_candidate(
+    rule: RuleDefinition,
+    working: dict[str, Any],
+    cascade: int,
+    best_output: dict[str, tuple[Any, int, float, str]],
+    derivation_chains: dict[str, list[str]],
+    new_fields: dict[str, Any],
+) -> RuleFired | None:
+    """Fire one rule candidate; update output tracking. Returns RuleFired or None."""
+    result = _try_fire(rule, working)
+    if result is None:
+        return None
+
+    fired_record = RuleFired(
+        rule_id=rule.rule_id,
+        conditions_met=result["conditions_met"],
+        outputs_produced=result["outputs"],
+        confidence=rule.confidence,
+        priority=rule.priority,
+        cascade_level=cascade,
+    )
+
+    for field_name, field_value in result["outputs"].items():
+        existing = best_output.get(field_name)
+        if existing is not None:
+            _, ex_pri, ex_conf, _ = existing
+            if (rule.priority, rule.confidence) <= (ex_pri, ex_conf):
+                continue
+        best_output[field_name] = (field_value, rule.priority, rule.confidence, rule.rule_id)
+        derivation_chains.setdefault(field_name, []).append(rule.rule_id)
+        if field_name not in working:
+            new_fields[field_name] = field_value
+
+    return fired_record
+
+
+def _run_cascade_pass(
+    cascade: int,
+    working: dict[str, Any],
+    registry: RuleRegistry,
+    best_output: dict[str, tuple[Any, int, float, str]],
+    derivation_chains: dict[str, list[str]],
+) -> tuple[list[RuleFired], int, int]:
+    """Run one cascade pass; return (fired_records, evaluated, skipped)."""
+    available = set(working.keys())
+    candidates = registry.candidates_for(available)
+    new_fields: dict[str, Any] = {}
+    fired: list[RuleFired] = []
+    evaluated = 0
+    skipped = 0
+
+    for rule in candidates:
+        if not rule.trigger_fields.issubset(available):
+            skipped += 1
+            continue
+        evaluated += 1
+        record = _fire_cascade_candidate(
+            rule, working, cascade, best_output, derivation_chains, new_fields
+        )
+        if record is not None:
+            fired.append(record)
+
+    working.update(new_fields)
+    return fired, evaluated, skipped
+
+
 def infer(entity_fields: dict[str, Any], registry: RuleRegistry) -> InferenceResult:
     working = dict(entity_fields)
     all_fired: list[RuleFired] = []
@@ -100,50 +187,14 @@ def infer(entity_fields: dict[str, Any], registry: RuleRegistry) -> InferenceRes
     total_skipped = 0
 
     for cascade in range(MAX_CASCADE_DEPTH + 1):
-        available = set(working.keys())
-        candidates = registry.candidates_for(available)
-        new_fields_this_cascade: dict[str, Any] = {}
-        fired_this_cascade = 0
+        fired, evaluated, skipped = _run_cascade_pass(
+            cascade, working, registry, best_output, derivation_chains
+        )
+        all_fired.extend(fired)
+        total_evaluated += evaluated
+        total_skipped += skipped
 
-        for rule in candidates:
-            if not rule.trigger_fields.issubset(available):
-                total_skipped += 1
-                continue
-            total_evaluated += 1
-            result = _try_fire(rule, working)
-            if result is None:
-                continue
-
-            fired_this_cascade += 1
-            fired_record = RuleFired(
-                rule_id=rule.rule_id,
-                conditions_met=result["conditions_met"],
-                outputs_produced=result["outputs"],
-                confidence=rule.confidence,
-                priority=rule.priority,
-                cascade_level=cascade,
-            )
-            all_fired.append(fired_record)
-
-            for field_name, field_value in result["outputs"].items():
-                existing = best_output.get(field_name)
-                if existing is not None:
-                    _, ex_pri, ex_conf, _ = existing
-                    if (rule.priority, rule.confidence) <= (ex_pri, ex_conf):
-                        continue
-                best_output[field_name] = (
-                    field_value,
-                    rule.priority,
-                    rule.confidence,
-                    rule.rule_id,
-                )
-                derivation_chains.setdefault(field_name, []).append(rule.rule_id)
-                if field_name not in working:
-                    new_fields_this_cascade[field_name] = field_value
-
-        working.update(new_fields_this_cascade)
-
-        if fired_this_cascade == 0 or cascade == MAX_CASCADE_DEPTH:
+        if not fired or cascade == MAX_CASCADE_DEPTH:
             break
 
     derived: dict[str, Any] = {k: v[0] for k, v in best_output.items()}

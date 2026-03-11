@@ -146,26 +146,15 @@ class MetaPromptPlanner:
             variation_budget=2,
         )
 
-    def _find_high_value_gaps(
-        self,
-        entity: dict[str, Any],
-        known_fields: dict[str, float],
-        inferred_fields: dict[str, Any],
-        hints: dict[str, Any],
-        rule_catalog: list[dict],
-        unlock_map: dict[str, float] | None = None,
-    ) -> list[dict]:
-        """
-        Score every missing field by information gain:
-        - Fields that unlock inference rules score highest
-        - Priority fields from domain hints score high
-        - Fields with low confidence score medium
-        """
-        all_known = set(entity.keys())
-        priority = set(hints.get("priority_fields", []))
-        gaps: list[dict] = []
+    # ── gap-scoring helpers ───────────────────────────────────────────────────
 
-        # Fields that would unlock inference rules
+    def _gaps_from_rule_catalog(
+        self,
+        all_known: set[str],
+        rule_catalog: list[dict],
+    ) -> list[dict]:
+        """Score fields that would unlock inference rules."""
+        gaps: list[dict] = []
         for rule in rule_catalog:
             required = set(rule.get("requires", []))
             produces = set(rule.get("produces", []))
@@ -183,41 +172,80 @@ class MetaPromptPlanner:
                             ),
                         }
                     )
+        return gaps
 
-        # v2 unlock_map: strategic targeting from derivation graph analysis
-        if unlock_map:
-            for field_name, unlock_value in unlock_map.items():
-                if field_name not in all_known:
-                    gaps.append({
+    def _gaps_from_unlock_map(
+        self,
+        all_known: set[str],
+        unlock_map: dict[str, float],
+    ) -> list[dict]:
+        """Score fields from v2 derivation-graph unlock analysis."""
+        gaps: list[dict] = []
+        for field_name, unlock_value in unlock_map.items():
+            if field_name not in all_known:
+                gaps.append(
+                    {
                         "field": field_name,
                         "gain": min(0.95, 0.5 + (0.1 * unlock_value)),
                         "reason": (
                             f"v2 unlock_map: finding this field unblocks "
                             f"{unlock_value:.0f} downstream derivation(s)"
                         ),
-                    })
-
-        # Priority fields from domain hints not yet known
-        for f in priority:
-            if f not in all_known:
-                gaps.append(
-                    {
-                        "field": f,
-                        "gain": 0.6,
-                        "reason": "domain priority field",
                     }
                 )
+        return gaps
 
-        # Low-confidence fields worth re-researching
-        for f, conf in known_fields.items():
-            if conf < 0.5:
-                gaps.append(
-                    {
-                        "field": f,
-                        "gain": 0.3 + (0.5 - conf),
-                        "reason": f"low confidence ({conf:.2f})",
-                    }
-                )
+    def _gaps_from_priority_fields(
+        self,
+        all_known: set[str],
+        priority: set[str],
+    ) -> list[dict]:
+        """Score domain priority fields not yet known."""
+        return [
+            {"field": f, "gain": 0.6, "reason": "domain priority field"}
+            for f in priority
+            if f not in all_known
+        ]
+
+    def _gaps_from_low_confidence(
+        self,
+        known_fields: dict[str, float],
+    ) -> list[dict]:
+        """Score known fields with confidence below 0.5 (worth re-researching)."""
+        return [
+            {
+                "field": f,
+                "gain": 0.3 + (0.5 - conf),
+                "reason": f"low confidence ({conf:.2f})",
+            }
+            for f, conf in known_fields.items()
+            if conf < 0.5
+        ]
+
+    def _find_high_value_gaps(
+        self,
+        entity: dict[str, Any],
+        known_fields: dict[str, float],
+        inferred_fields: dict[str, Any],
+        hints: dict[str, Any],
+        rule_catalog: list[dict],
+        unlock_map: dict[str, float] | None = None,
+    ) -> list[dict]:
+        """
+        Score every missing field by information gain:
+        - Fields that unlock inference rules score highest
+        - Priority fields from domain hints score high
+        - Fields with low confidence score medium
+        """
+        all_known = set(entity.keys())
+        priority = set(hints.get("priority_fields", []))
+
+        gaps: list[dict] = []
+        gaps.extend(self._gaps_from_rule_catalog(all_known, rule_catalog))
+        if unlock_map:
+            gaps.extend(self._gaps_from_unlock_map(all_known, unlock_map))
+        gaps.extend(self._gaps_from_priority_fields(all_known, priority))
+        gaps.extend(self._gaps_from_low_confidence(known_fields))
 
         # Deduplicate by field, keep highest gain
         seen: dict[str, dict] = {}

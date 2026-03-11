@@ -8,8 +8,6 @@ Source: ~190 lines | Target coverage: 80%
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 from app.services.kb_resolver import KBResolver
 

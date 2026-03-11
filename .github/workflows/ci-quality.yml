@@ -6,7 +6,6 @@
 #
 # Required GitHub Secrets:
 #   SONAR_TOKEN          — SonarCloud token
-#   GITGUARDIAN_API_KEY  — GitGuardian API key
 #   CODECOV_TOKEN        — Codecov upload token
 #
 # Required GitHub Variables (Settings → Variables):
@@ -130,7 +129,7 @@ jobs:
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >

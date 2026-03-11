@@ -53,6 +53,8 @@ class SchemaDiscoveryEngine:
     Analyzes convergence results to propose schema evolution.
     """
 
+    GATE_THRESHOLD = 0.75
+
     def __init__(self, current_schema: dict[str, str] | None = None, version: str = "0.1.0-seed"):
         self._current = current_schema or {}
         self._version = version
@@ -69,54 +71,9 @@ class SchemaDiscoveryEngine:
         Propose new fields that don't exist in the current schema.
         """
         fill_rates = batch_stats or {}
-        new_props: list[PropertySpec] = []
-
-        # Enrichment-discovered fields
-        for fname, value in enriched_fields.items():
-            if fname not in self._current:
-                new_props.append(
-                    PropertySpec(
-                        name=fname,
-                        field_type=self._infer_type(value),
-                        discovered_by="enrichment",
-                        discovery_confidence=confidence_map.get(fname, 0.5),
-                        managed_by="enrichment",
-                        sample_values=[value] if value is not None else [],
-                        fill_rate=fill_rates.get(fname, 0.0),
-                    )
-                )
-
-        # Inference-derived fields
-        for fname, value in inferred_fields.items():
-            if fname not in self._current:
-                new_props.append(
-                    PropertySpec(
-                        name=fname,
-                        field_type=self._infer_type(value),
-                        discovered_by="inference",
-                        discovery_confidence=confidence_map.get(fname, 0.7),
-                        managed_by="computed",
-                        derived_from=self._find_dependencies(fname),
-                        sample_values=[value] if value is not None else [],
-                        fill_rate=fill_rates.get(fname, 0.0),
-                    )
-                )
-
-        # Propose gates for high-fill-rate fields
-        proposed_gates = []
-        for prop in new_props:
-            if prop.fill_rate >= self.GATE_THRESHOLD and prop.field_type in (
-                "float",
-                "integer",
-                "boolean",
-            ):
-                proposed_gates.append(
-                    {
-                        "field": prop.name,
-                        "gate_type": "boolean" if prop.field_type == "boolean" else "range",
-                        "confidence": prop.discovery_confidence,
-                    }
-                )
+        new_props = self._build_enriched_props(enriched_fields, confidence_map, fill_rates)
+        new_props += self._build_inferred_props(inferred_fields, confidence_map, fill_rates)
+        proposed_gates = self._build_proposed_gates(new_props)
 
         stage = (
             "inferred" if any(p.discovered_by == "inference" for p in new_props) else "discovered"
@@ -133,7 +90,70 @@ class SchemaDiscoveryEngine:
             fill_rate_threshold=self.GATE_THRESHOLD,
         )
 
-    GATE_THRESHOLD = 0.75
+    def _build_enriched_props(
+        self,
+        enriched_fields: dict[str, Any],
+        confidence_map: dict[str, float],
+        fill_rates: dict[str, float],
+    ) -> list[PropertySpec]:
+        """Build PropertySpec list for enrichment-discovered fields not in current schema."""
+        props: list[PropertySpec] = []
+        for fname, value in enriched_fields.items():
+            if fname not in self._current:
+                props.append(
+                    PropertySpec(
+                        name=fname,
+                        field_type=self._infer_type(value),
+                        discovered_by="enrichment",
+                        discovery_confidence=confidence_map.get(fname, 0.5),
+                        managed_by="enrichment",
+                        sample_values=[value] if value is not None else [],
+                        fill_rate=fill_rates.get(fname, 0.0),
+                    )
+                )
+        return props
+
+    def _build_inferred_props(
+        self,
+        inferred_fields: dict[str, Any],
+        confidence_map: dict[str, float],
+        fill_rates: dict[str, float],
+    ) -> list[PropertySpec]:
+        """Build PropertySpec list for inference-derived fields not in current schema."""
+        props: list[PropertySpec] = []
+        for fname, value in inferred_fields.items():
+            if fname not in self._current:
+                props.append(
+                    PropertySpec(
+                        name=fname,
+                        field_type=self._infer_type(value),
+                        discovered_by="inference",
+                        discovery_confidence=confidence_map.get(fname, 0.7),
+                        managed_by="computed",
+                        derived_from=self._find_dependencies(fname),
+                        sample_values=[value] if value is not None else [],
+                        fill_rate=fill_rates.get(fname, 0.0),
+                    )
+                )
+        return props
+
+    def _build_proposed_gates(self, new_props: list[PropertySpec]) -> list[dict]:
+        """Propose gates for high-fill-rate numeric/boolean fields."""
+        gates: list[dict] = []
+        for prop in new_props:
+            if prop.fill_rate >= self.GATE_THRESHOLD and prop.field_type in (
+                "float",
+                "integer",
+                "boolean",
+            ):
+                gates.append(
+                    {
+                        "field": prop.name,
+                        "gate_type": "boolean" if prop.field_type == "boolean" else "range",
+                        "confidence": prop.discovery_confidence,
+                    }
+                )
+        return gates
 
     def _infer_type(self, value: Any) -> str:
         if isinstance(value, bool):
@@ -146,7 +166,7 @@ class SchemaDiscoveryEngine:
             return "list"
         return "string"
 
-    def _find_dependencies(self, field_name: str) -> list[str]:
+    def _find_dependencies(self, _field_name: str = "") -> list[str]:
         """Placeholder — in production, traced from InferenceBridge rule_trace."""
         return []
 

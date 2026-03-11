@@ -130,28 +130,37 @@ def classify(
     return None
 
 
+def _build_grade_definition(entry: dict[str, Any], idx: int) -> GradeDefinition | None:
+    """Normalise and validate a single raw grade entry; return None on missing conditions or parse failure."""
+    conditions_raw = entry.get("conditions", [])
+    if not conditions_raw and "properties" in entry:
+        conditions_raw = _properties_to_conditions(entry["properties"])
+    if not conditions_raw:
+        return None
+    entry_norm = {
+        "grade_id": entry.get("grade_id", entry.get("id", f"grade-{idx}")),
+        "grade_label": entry.get("grade_label", entry.get("grade_name", "")),
+        "conditions": conditions_raw,
+        "tier": entry.get("tier", ""),
+        "application_class": entry.get("application_class", ""),
+        "quality_tier": entry.get("quality_tier", ""),
+        "description": entry.get("description", ""),
+    }
+    try:
+        return GradeDefinition.model_validate(entry_norm)
+    except Exception as exc:
+        logger.warning("Skipping grade #%d: %s", idx, exc)
+        return None
+
+
 def load_grade_definitions(kb_data: dict[str, Any]) -> list[GradeDefinition]:
+    """Load and validate all grade definitions from kb_data."""
     raw_grades = kb_data.get("material_grades", kb_data.get("grades", []))
     defs: list[GradeDefinition] = []
     for idx, entry in enumerate(raw_grades):
-        conditions_raw = entry.get("conditions", [])
-        if not conditions_raw and "properties" in entry:
-            conditions_raw = _properties_to_conditions(entry["properties"])
-        if not conditions_raw:
-            continue
-        entry_norm = {
-            "grade_id": entry.get("grade_id", entry.get("id", f"grade-{idx}")),
-            "grade_label": entry.get("grade_label", entry.get("grade_name", "")),
-            "conditions": conditions_raw,
-            "tier": entry.get("tier", ""),
-            "application_class": entry.get("application_class", ""),
-            "quality_tier": entry.get("quality_tier", ""),
-            "description": entry.get("description", ""),
-        }
-        try:
-            defs.append(GradeDefinition.model_validate(entry_norm))
-        except Exception as exc:
-            logger.warning("Skipping grade #%d: %s", idx, exc)
+        gd = _build_grade_definition(entry, idx)
+        if gd is not None:
+            defs.append(gd)
     return defs
 
 

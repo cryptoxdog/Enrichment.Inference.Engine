@@ -65,11 +65,13 @@ def setup_telemetry(app, service_name: Optional[str] = None) -> None:
     environment = os.getenv("ENVIRONMENT", "development")
 
     # Create resource with service metadata
-    resource = Resource.create({
-        "service.name": service_name,
-        "service.version": os.getenv("VERSION", "unknown"),
-        "deployment.environment": environment,
-    })
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.version": os.getenv("VERSION", "unknown"),
+            "deployment.environment": environment,
+        }
+    )
 
     # Setup tracing
     _setup_tracing(resource)

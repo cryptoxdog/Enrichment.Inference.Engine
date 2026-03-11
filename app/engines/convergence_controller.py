@@ -37,7 +37,7 @@ MIN_DELTA = 0.05
 class PassResult:
     """Result of a single enrichment+inference pass."""
 
-    pass_number: int
+    _pass_number: int
     enriched_fields: dict[str, Any] = field(default_factory=dict)
     inferred_fields: dict[str, Any] = field(default_factory=dict)
     confidence: float = 0.0
@@ -104,7 +104,6 @@ async def run_convergence_loop(
     for pass_num in range(1, MAX_PASSES + 1):
         logger.info(
             "pass_started",
-            pass_number=pass_num,
             known_fields=len(state.known_fields),
             inferred_fields=len(state.inferred_fields),
         )
@@ -116,7 +115,6 @@ async def run_convergence_loop(
             inferred_fields=state.inferred_fields,
             domain_hints=domain_hints or {},
             inference_rule_catalog=bridge.get_rule_catalog(),
-            pass_number=pass_num,
             unlock_map=state.unlock_map,
         )
 
@@ -135,7 +133,6 @@ async def run_convergence_loop(
 
         # --- COLLECT ENRICHED FIELDS ---
         pass_result = PassResult(
-            pass_number=pass_num,
             enriched_fields=pass_response.fields or {},
             confidence=pass_response.confidence,
             tokens_used=pass_response.tokens_used,
@@ -169,18 +166,11 @@ async def run_convergence_loop(
 
         # --- CONVERGENCE CHECK ---
         if pass_num >= 2:
-            prev = state.pass_results[-2]
-            delta = abs(pass_result.confidence - prev.confidence)
-            new_fields = len(pass_result.enriched_fields) + len(pass_result.inferred_fields)
-            prev_fields = len(prev.enriched_fields) + len(prev.inferred_fields)
-
-            if delta < MIN_DELTA and new_fields <= prev_fields:
+            converged, reason = _check_pass_convergence(pass_result, state.pass_results[-2])
+            if converged:
                 state.converged = True
-                state.convergence_reason = (
-                    f"delta={delta:.3f} < {MIN_DELTA}, "
-                    f"new_fields={new_fields} <= prev={prev_fields}"
-                )
-                logger.info("converged", reason=state.convergence_reason, pass_number=pass_num)
+                state.convergence_reason = reason
+                logger.info("converged", reason=reason)
                 break
 
         if search_plan.mode == "verification":
@@ -189,21 +179,42 @@ async def run_convergence_loop(
             break
 
     elapsed = int((time.monotonic() - start) * 1000)
+    return _assemble_convergence_response(state, request, elapsed)
 
-    # --- ASSEMBLE FINAL RESPONSE ---
-    all_fields = {**state.known_fields}
-    # Remove original entity fields that weren't enriched/inferred
-    original_keys = set(request.entity.keys())
-    enriched_or_inferred = set()
+
+def _check_pass_convergence(
+    current: PassResult,
+    prev: PassResult,
+) -> tuple[bool, str]:
+    """Return (converged, reason) by comparing consecutive pass results."""
+    delta = abs(current.confidence - prev.confidence)
+    new_fields = len(current.enriched_fields) + len(current.inferred_fields)
+    prev_fields = len(prev.enriched_fields) + len(prev.inferred_fields)
+    if delta < MIN_DELTA and new_fields <= prev_fields:
+        reason = (
+            f"delta={delta:.3f} < {MIN_DELTA}, "
+            f"new_fields={new_fields} <= prev={prev_fields}"
+        )
+        return True, reason
+    return False, ""
+
+
+def _assemble_convergence_response(
+    state: ConvergenceState,
+    request: "EnrichRequest",
+    elapsed: int,
+) -> "EnrichResponse":
+    """Build the final EnrichResponse from accumulated convergence state."""
+    enriched_or_inferred: set[str] = set()
     for pr in state.pass_results:
         enriched_or_inferred.update(pr.enriched_fields.keys())
         enriched_or_inferred.update(pr.inferred_fields.keys())
-    final_fields = {k: v for k, v in all_fields.items() if k in enriched_or_inferred}
-
+    final_fields = {
+        k: v for k, v in state.known_fields.items() if k in enriched_or_inferred
+    }
     avg_confidence = sum(state.confidence_map.get(k, 0) for k in final_fields) / max(
         len(final_fields), 1
     )
-
     return EnrichResponse(
         fields=final_fields,
         confidence=round(avg_confidence, 4),
@@ -215,7 +226,7 @@ async def run_convergence_loop(
         state="completed",
         inferences=[
             {
-                "pass": pr.pass_number,
+                "pass": pr._pass_number,
                 "mode": pr.search_plan.mode if pr.search_plan else "unknown",
                 "enriched": list(pr.enriched_fields.keys()),
                 "inferred": list(pr.inferred_fields.keys()),
@@ -231,7 +242,6 @@ def _build_pass_request(
     original: EnrichRequest,
     plan: SearchPlan,
     state: ConvergenceState,
-    pass_number: int,
 ) -> EnrichRequest:
     """Build a pass-specific EnrichRequest from the search plan."""
     enriched_entity = {**original.entity, **state.known_fields, **state.inferred_fields}

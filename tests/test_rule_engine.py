@@ -11,11 +11,7 @@ import pytest
 
 from app.engines.inference.rule_engine import (
     infer as evaluate_rules,
-    InferenceResult as RuleResult,
-    RuleFired,
 )
-from app.engines.inference.rule_loader import RuleRegistry
-from app.models.field_confidence import FieldSource
 
 
 class TestRuleEngine:
@@ -33,14 +29,20 @@ class TestRuleEngine:
             },
             {
                 "name": "standard_hdpe_grade",
-                "conditions": {"polymer_type": "HDPE", "contamination_pct": {"gte": 2.0, "lt": 5.0}},
+                "conditions": {
+                    "polymer_type": "HDPE",
+                    "contamination_pct": {"gte": 2.0, "lt": 5.0},
+                },
                 "action": {"set_field": "material_grade", "value": "Standard HDPE"},
                 "confidence": 0.90,
                 "priority": 2,
             },
             {
                 "name": "recycled_hdpe_grade",
-                "conditions": {"polymer_type": "HDPE", "contamination_pct": {"gte": 5.0, "lt": 10.0}},
+                "conditions": {
+                    "polymer_type": "HDPE",
+                    "contamination_pct": {"gte": 5.0, "lt": 10.0},
+                },
                 "action": {"set_field": "material_grade", "value": "Recycled HDPE"},
                 "confidence": 0.85,
                 "priority": 3,

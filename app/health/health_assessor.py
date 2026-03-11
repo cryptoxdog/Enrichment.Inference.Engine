@@ -101,9 +101,9 @@ class HealthAssessor:
     def assess_entity(self, record: EntityRecord) -> EntityHealth:
         """Compute full health assessment for a single entity."""
         expected = set(self._schema.expected_fields)
-        filled = {k for k, v in record.fields.items() if v is not None and k in expected}
+        _filled = {k for k, v in record.fields.items() if v is not None and k in expected}
         total_expected = len(expected)
-        completeness = len(filled) / total_expected if total_expected > 0 else 0.0
+        completeness = len(_filled) / total_expected if total_expected > 0 else 0.0
 
         freshness = compute_freshness(
             record.last_enriched_at,
@@ -140,7 +140,6 @@ class HealthAssessor:
 
         actions = self._recommend_actions(
             record,
-            filled,
             expected,
             gate_missing,
             scoring_missing,
@@ -159,7 +158,7 @@ class HealthAssessor:
             composite_health=round(composite, 4),
             last_enriched_at=record.last_enriched_at,
             field_count_total=total_expected,
-            field_count_filled=len(filled),
+            field_count_filled=len(_filled),
             field_count_stale=stale_count,
             field_count_low_confidence=low_conf_count,
             gate_fields_missing=gate_missing,
@@ -243,7 +242,6 @@ class HealthAssessor:
     def _recommend_actions(
         self,
         record: EntityRecord,
-        filled: set[str],
         expected: set[str],
         gate_missing: list[str],
         scoring_missing: list[str],

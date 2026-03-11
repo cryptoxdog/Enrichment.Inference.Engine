@@ -8,7 +8,6 @@ Source: ~220 lines | Target coverage: 85%
 
 from __future__ import annotations
 
-import pytest
 
 from app.services.consensus_engine import synthesize
 
@@ -31,9 +30,7 @@ class TestConsensusEngine:
         assert result.fields["mfi_range"] == "0.5-3.0"
 
     def test_no_agreement_low_confidence(self, mock_consensus_payloads_disagreement):
-        result = synthesize_consensus(
-            mock_consensus_payloads_disagreement, threshold=0.0
-        )
+        result = synthesize_consensus(mock_consensus_payloads_disagreement, threshold=0.0)
         # 5 different polymer_types → low confidence
         assert result.confidence < 0.50
 
@@ -84,6 +81,7 @@ class TestConsensusEngine:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestConsensusEdgeCases:
     """Edge case handling in consensus synthesis."""

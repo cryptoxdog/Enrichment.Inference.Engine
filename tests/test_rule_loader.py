@@ -7,13 +7,10 @@ Source: 175 lines | Target coverage: 85%
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import patch, MagicMock
 
 from app.engines.inference.rule_loader import (
     load_rules,
     RuleDefinition,
-    RuleRegistry,
 )
 
 
@@ -45,10 +42,7 @@ class TestRuleLoader:
     def test_rule_filtering_by_domain(self, mock_kb_data):
         rules = load_rules(mock_kb_data)
         # All rules from plastics_recycling KB should be present
-        names = [
-            r["name"] if isinstance(r, dict) else r.name
-            for r in rules
-        ]
+        names = [r["name"] if isinstance(r, dict) else r.name for r in rules]
         assert "premium_hdpe_grade" in names
 
     def test_rule_priority_ordering(self, mock_kb_data):
@@ -61,11 +55,20 @@ class TestRuleLoader:
     def test_malformed_rule_skipped(self):
         kb = {
             "rules": [
-                {"name": "valid", "conditions": {"x": "y"}, "action": {"set_field": "z", "value": "w"}, "confidence": 0.9},
+                {
+                    "name": "valid",
+                    "conditions": {"x": "y"},
+                    "action": {"set_field": "z", "value": "w"},
+                    "confidence": 0.9,
+                },
                 {"broken": True},  # missing required fields
             ]
         }
         rules = load_rules(kb)
         # Should load at least the valid rule and skip or warn about broken
-        valid_rules = [r for r in rules if (r.get("name") if isinstance(r, dict) else getattr(r, "name", None)) == "valid"]
+        valid_rules = [
+            r
+            for r in rules
+            if (r.get("name") if isinstance(r, dict) else getattr(r, "name", None)) == "valid"
+        ]
         assert len(valid_rules) >= 1

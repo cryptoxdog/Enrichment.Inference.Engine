@@ -127,50 +127,55 @@ class InferenceBridge:
             for r in self._rules
         ]
 
-    def _evaluate_rule(self, rule: dict, entity: dict[str, Any]) -> dict[str, Any]:
-        """Evaluate a single rule's conditions and compute outputs."""
-        conditions = rule.get("conditions", [])
-        produces = rule.get("produces", {})
+    def _check_single_condition(self, condition: dict, entity: dict[str, Any]) -> bool:
+        """Return False if this condition fails, True if it passes."""
+        field_name = condition.get("field")
+        operator = condition.get("operator", "exists")
+        value = condition.get("value")
+        entity_val = entity.get(field_name)
 
-        for condition in conditions:
-            field_name = condition.get("field")
-            operator = condition.get("operator", "exists")
-            value = condition.get("value")
+        if entity_val is None:
+            return False
+        if operator == "exists":
+            return True
+        if operator == "eq":
+            return entity_val == value
+        if operator == "in":
+            return entity_val in (value or [])
+        if operator == "gte":
+            try:
+                return float(entity_val) >= float(value)
+            except (ValueError, TypeError):
+                return False
+        if operator == "lte":
+            try:
+                return float(entity_val) <= float(value)
+            except (ValueError, TypeError):
+                return False
+        if operator == "contains":
+            return value in str(entity_val)
+        return True
 
-            entity_val = entity.get(field_name)
-            if entity_val is None:
-                return {}
-
-            if operator == "exists":
-                continue
-            elif operator == "eq" and entity_val != value:
-                return {}
-            elif operator == "in" and entity_val not in (value or []):
-                return {}
-            elif operator == "gte":
-                try:
-                    if float(entity_val) < float(value):
-                        return {}
-                except (ValueError, TypeError):
-                    return {}
-            elif operator == "lte":
-                try:
-                    if float(entity_val) > float(value):
-                        return {}
-                except (ValueError, TypeError):
-                    return {}
-            elif operator == "contains" and value not in str(entity_val):
-                return {}
-
-        # All conditions passed — compute outputs
+    def _build_derived_outputs(self, produces: dict, entity: dict[str, Any]) -> dict[str, Any]:
+        """Compute all output fields declared in 'produces'."""
         derived: dict[str, Any] = {}
         for field_name, computation in produces.items():
             if isinstance(computation, dict):
                 derived[field_name] = self._compute_field(computation, entity)
             else:
                 derived[field_name] = computation
-
         return derived
+
+    def _evaluate_rule(self, rule: dict, entity: dict[str, Any]) -> dict[str, Any]:
+        """Evaluate a single rule's conditions and compute outputs."""
+        conditions = rule.get("conditions", [])
+        produces = rule.get("produces", {})
+
+        for condition in conditions:
+            if not self._check_single_condition(condition, entity):
+                return {}
+
+        return self._build_derived_outputs(produces, entity)
 
     def _compute_field(self, computation: dict, entity: dict[str, Any]) -> Any:
         """Execute a field computation."""

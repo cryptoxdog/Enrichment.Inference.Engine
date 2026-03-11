@@ -7,6 +7,7 @@ Validates:
   3. Fallback behavior when no domain_spec provided
   4. get_rule_catalog() parity between graph-based and flat-rules
 """
+
 import pytest
 from app.engines.inference_bridge_adapter import InferenceBridge, InferenceResult
 
@@ -105,59 +106,43 @@ class TestV1ContractPreservation:
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         assert bridge.graph is not None
 
-    def test_run_returns_inference_result(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_run_returns_inference_result(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(partial_entity, {"polymer_type": 0.9, "contamination_pct": 0.8})
         assert isinstance(result, InferenceResult)
 
-    def test_result_has_derived_fields_dict(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_result_has_derived_fields_dict(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(partial_entity, {"polymer_type": 0.9, "contamination_pct": 0.8})
         assert isinstance(result.derived_fields, dict)
 
-    def test_result_has_confidence_map_dict(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_result_has_confidence_map_dict(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(partial_entity, {"polymer_type": 0.9, "contamination_pct": 0.8})
         assert isinstance(result.confidence_map, dict)
 
-    def test_result_has_rules_fired_int(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_result_has_rules_fired_int(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(partial_entity, {"polymer_type": 0.9, "contamination_pct": 0.8})
         assert isinstance(result.rules_fired, int)
 
-    def test_result_has_rules_skipped_int(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_result_has_rules_skipped_int(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(partial_entity, {"polymer_type": 0.9, "contamination_pct": 0.8})
         assert isinstance(result.rules_skipped, int)
 
-    def test_result_has_rule_trace_list(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_result_has_rule_trace_list(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(partial_entity, {"polymer_type": 0.9, "contamination_pct": 0.8})
         assert isinstance(result.rule_trace, list)
 
-    def test_get_rule_catalog_returns_list_of_dicts(
-        self, plastics_domain_spec
-    ):
+    def test_get_rule_catalog_returns_list_of_dicts(self, plastics_domain_spec):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         catalog = bridge.get_rule_catalog()
         assert isinstance(catalog, list)
         assert all(isinstance(r, dict) for r in catalog)
 
-    def test_catalog_entries_have_name_requires_produces(
-        self, plastics_domain_spec
-    ):
+    def test_catalog_entries_have_name_requires_produces(self, plastics_domain_spec):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         catalog = bridge.get_rule_catalog()
         for entry in catalog:
@@ -186,9 +171,7 @@ class TestV1ContractPreservation:
 class TestV2FeatureExposure:
     """New capabilities available through the adapter."""
 
-    def test_unlock_map_populated_on_partial_entity(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_unlock_map_populated_on_partial_entity(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(
             partial_entity,
@@ -196,9 +179,7 @@ class TestV2FeatureExposure:
         )
         assert isinstance(result.unlock_map, dict)
 
-    def test_blocked_fields_populated(
-        self, plastics_domain_spec, partial_entity
-    ):
+    def test_blocked_fields_populated(self, plastics_domain_spec, partial_entity):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         result = bridge.run(
             partial_entity,
@@ -224,22 +205,16 @@ class TestV2FeatureExposure:
 class TestCatalogParity:
     """Catalog from graph should match what planner expects."""
 
-    def test_graph_catalog_has_material_grade_rule(
-        self, plastics_domain_spec
-    ):
+    def test_graph_catalog_has_material_grade_rule(self, plastics_domain_spec):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         catalog = bridge.get_rule_catalog()
         names = [r["name"] for r in catalog]
         assert "material_grade_lookup" in names
 
-    def test_graph_catalog_requires_correct_inputs(
-        self, plastics_domain_spec
-    ):
+    def test_graph_catalog_requires_correct_inputs(self, plastics_domain_spec):
         bridge = InferenceBridge(domain_spec=plastics_domain_spec)
         catalog = bridge.get_rule_catalog()
-        grade_rule = next(
-            r for r in catalog if r["name"] == "material_grade_lookup"
-        )
+        grade_rule = next(r for r in catalog if r["name"] == "material_grade_lookup")
         assert set(grade_rule["requires"]) == {
             "polymer_type",
             "contamination_pct",

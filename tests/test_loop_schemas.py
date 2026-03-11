@@ -9,7 +9,6 @@ Source: 480 lines | Target coverage: 80%
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -17,7 +16,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.loop_schemas import (
-    ApprovalDecision,
     ApprovalMode,
     BatchConvergeRequest,
     BatchConvergeResponse,
@@ -29,15 +27,14 @@ from app.models.loop_schemas import (
     CostSummary,
     PassResult,
     SchemaProposal,
-    SchemaProposalSet,
     SchemaProposalSource,
 )
-from app.models.field_confidence import FieldConfidenceMap
 
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class TestEnums:
     """Tests for enum definitions."""
@@ -53,8 +50,12 @@ class TestEnums:
 
     def test_convergence_reason_values(self):
         expected = {
-            "threshold_met", "budget_exhausted", "max_passes",
-            "human_hold", "diminishing_returns", "failed",
+            "threshold_met",
+            "budget_exhausted",
+            "max_passes",
+            "human_hold",
+            "diminishing_returns",
+            "failed",
         }
         actual = {r.value for r in ConvergenceReason}
         assert actual == expected
@@ -67,6 +68,7 @@ class TestEnums:
 # ---------------------------------------------------------------------------
 # CostSummary
 # ---------------------------------------------------------------------------
+
 
 class TestCostSummary:
     """Tests for CostSummary model."""
@@ -95,6 +97,7 @@ class TestCostSummary:
 # ---------------------------------------------------------------------------
 # SchemaProposal
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaProposal:
     """Tests for schema discovery proposals."""
@@ -143,6 +146,7 @@ class TestSchemaProposal:
 # PassResult
 # ---------------------------------------------------------------------------
 
+
 class TestPassResult:
     """Tests for per-pass snapshot."""
 
@@ -185,40 +189,72 @@ class TestPassResult:
 # ConvergeRequest
 # ---------------------------------------------------------------------------
 
+
 class TestConvergeRequest:
     """Tests for loop initiation request."""
 
     def test_max_passes_range_1_to_20(self):
-        cr = ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_passes=1)
+        cr = ConvergeRequest(
+            entity={"Name": "X"}, object_type="Account", objective="test", max_passes=1
+        )
         assert cr.max_passes == 1
-        cr = ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_passes=20)
+        cr = ConvergeRequest(
+            entity={"Name": "X"}, object_type="Account", objective="test", max_passes=20
+        )
         assert cr.max_passes == 20
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_passes=0)
+            ConvergeRequest(
+                entity={"Name": "X"}, object_type="Account", objective="test", max_passes=0
+            )
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_passes=21)
+            ConvergeRequest(
+                entity={"Name": "X"}, object_type="Account", objective="test", max_passes=21
+            )
 
     def test_max_budget_tokens_minimum_1000(self):
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_budget_tokens=999)
+            ConvergeRequest(
+                entity={"Name": "X"}, object_type="Account", objective="test", max_budget_tokens=999
+            )
 
     def test_convergence_threshold_range(self):
-        cr = ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", convergence_threshold=0.0)
+        cr = ConvergeRequest(
+            entity={"Name": "X"}, object_type="Account", objective="test", convergence_threshold=0.0
+        )
         assert cr.convergence_threshold == 0.0
-        cr = ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", convergence_threshold=10.0)
+        cr = ConvergeRequest(
+            entity={"Name": "X"},
+            object_type="Account",
+            objective="test",
+            convergence_threshold=10.0,
+        )
         assert cr.convergence_threshold == 10.0
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", convergence_threshold=10.1)
+            ConvergeRequest(
+                entity={"Name": "X"},
+                object_type="Account",
+                objective="test",
+                convergence_threshold=10.1,
+            )
 
     def test_consensus_threshold_range(self):
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", consensus_threshold=1.1)
+            ConvergeRequest(
+                entity={"Name": "X"},
+                object_type="Account",
+                objective="test",
+                consensus_threshold=1.1,
+            )
 
     def test_max_variations_range_1_to_10(self):
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_variations=0)
+            ConvergeRequest(
+                entity={"Name": "X"}, object_type="Account", objective="test", max_variations=0
+            )
         with pytest.raises(ValidationError):
-            ConvergeRequest(entity={"Name": "X"}, object_type="Account", objective="test", max_variations=11)
+            ConvergeRequest(
+                entity={"Name": "X"}, object_type="Account", objective="test", max_variations=11
+            )
 
     def test_schema_string_parsing(self):
         cr = ConvergeRequest(
@@ -255,13 +291,12 @@ class TestConvergeRequest:
 # ConvergeResponse
 # ---------------------------------------------------------------------------
 
+
 class TestConvergeResponse:
     """Tests for full loop result."""
 
     def test_total_passes_property(self):
-        resp = ConvergeResponse(
-            passes=[PassResult(pass_number=1), PassResult(pass_number=2)]
-        )
+        resp = ConvergeResponse(passes=[PassResult(pass_number=1), PassResult(pass_number=2)])
         assert resp.total_passes == 2
 
     def test_total_fields_discovered_property(self):
@@ -297,6 +332,7 @@ class TestConvergeResponse:
 # ---------------------------------------------------------------------------
 # BatchConvergeRequest / Response
 # ---------------------------------------------------------------------------
+
 
 class TestBatchConvergeRequest:
     """Tests for batch convergence."""
@@ -343,6 +379,7 @@ class TestBatchConvergeResponse:
 # ---------------------------------------------------------------------------
 # ConvergenceReport
 # ---------------------------------------------------------------------------
+
 
 class TestConvergenceReport:
     """Tests for telemetry report model."""

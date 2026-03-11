@@ -1,4 +1,5 @@
 """Shared test fixtures."""
+
 from __future__ import annotations
 
 import pytest
@@ -13,6 +14,7 @@ def api_key() -> str:
 @pytest.fixture(scope="session")
 def api_key_hash() -> str:
     import hashlib
+
     return hashlib.sha256(b"test-client-api-key").hexdigest()
 
 
@@ -28,5 +30,6 @@ def _set_env(monkeypatch, api_key_hash):
 @pytest.fixture
 def client():
     from app.main import app
+
     with TestClient(app) as c:
         yield c

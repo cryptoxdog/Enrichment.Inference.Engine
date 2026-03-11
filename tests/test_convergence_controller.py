@@ -8,13 +8,11 @@ Source: ~400 lines | Target coverage: 70%
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from dataclasses import dataclass
+from unittest.mock import MagicMock
 
 from app.engines.convergence_controller import (
     run_convergence_loop,
     ConvergenceState,
-    PassResult as ControllerPassResult,
     MAX_PASSES,
     CONVERGENCE_THRESHOLD,
     MIN_DELTA,
@@ -94,9 +92,7 @@ class TestConvergenceController:
         assert response.uncertainty_score <= MAX_PASSES
 
     @pytest.mark.asyncio
-    async def test_max_passes_respected(
-        self, enrich_request, mock_settings, mock_kb_resolver
-    ):
+    async def test_max_passes_respected(self, enrich_request, mock_settings, mock_kb_resolver):
         call_count = 0
 
         async def always_new_enricher(request, settings, kb_resolver, idem_store):

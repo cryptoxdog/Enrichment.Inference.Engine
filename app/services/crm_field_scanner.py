@@ -144,81 +144,91 @@ class DiscoveryReport:
 # ── Domain YAML Parsing ─────────────────────────────────────
 
 
+def _collect_gate_fields(domain_spec: dict[str, Any]) -> set[str]:
+    """Extract all property names referenced in gate definitions."""
+    gate_fields: set[str] = set()
+    for gate in domain_spec.get("gates", []):
+        for key in ("candidate_property", "candidate_prop", "query_param"):
+            val = gate.get(key)
+            if val and isinstance(val, str):
+                gate_fields.add(val)
+    return gate_fields
+
+
+def _collect_scoring_fields(domain_spec: dict[str, Any]) -> set[str]:
+    """Extract all property names referenced in scoring dimension definitions."""
+    scoring_fields: set[str] = set()
+    dims = domain_spec.get("scoring_dimensions", domain_spec.get("scoring", {}).get("dimensions", []))
+    for dim in (dims if isinstance(dims, list) else []):
+        if isinstance(dim, dict):
+            for key in ("candidate_property", "candidate_prop", "source"):
+                val = dim.get(key)
+                if val and isinstance(val, str):
+                    scoring_fields.add(val)
+    return scoring_fields
+
+
+def _collect_inference_fields(domain_spec: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """Extract inference input and output field names from inference rules."""
+    inputs: set[str] = set()
+    outputs: set[str] = set()
+    for rule in domain_spec.get("inference_rules", []):
+        for cond in rule.get("conditions", []):
+            f = cond.get("field")
+            if f:
+                inputs.add(f)
+        for out in rule.get("outputs", []):
+            f = out.get("field")
+            if f:
+                outputs.add(f)
+    return inputs, outputs
+
+
+def _iter_node_defs(domain_spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Iterate over raw node/entity definition dicts in the domain ontology."""
+    ontology = domain_spec.get("ontology", domain_spec)
+    nodes = ontology.get("nodes", ontology.get("entities", []))
+    if isinstance(nodes, dict):
+        return [v for v in nodes.values() if isinstance(v, dict)]
+    if isinstance(nodes, list):
+        return [n for n in nodes if isinstance(n, dict)]
+    return []
+
+
+def _props_from_node(
+    node_def: dict[str, Any],
+    gate_fields: set[str],
+    scoring_fields: set[str],
+    inference_inputs: set[str],
+    inference_outputs: set[str],
+) -> list[DomainProperty]:
+    """Parse all DomainProperty entries from a single ontology node definition."""
+    props = node_def.get("properties", {})
+    result: list[DomainProperty] = []
+    if isinstance(props, dict):
+        for name, prop_def in props.items():
+            result.append(_parse_domain_property(name, prop_def, gate_fields, scoring_fields, inference_inputs, inference_outputs))
+    elif isinstance(props, list):
+        for prop_def in props:
+            if isinstance(prop_def, dict):
+                name = prop_def.get("name", "")
+                if name:
+                    result.append(_parse_domain_property(name, prop_def, gate_fields, scoring_fields, inference_inputs, inference_outputs))
+    return result
+
+
 def _extract_domain_properties(
     domain_spec: dict[str, Any],
 ) -> list[DomainProperty]:
+    gate_fields = _collect_gate_fields(domain_spec)
+    scoring_fields = _collect_scoring_fields(domain_spec)
+    inference_inputs, inference_outputs = _collect_inference_fields(domain_spec)
+
     properties: list[DomainProperty] = []
-
-    gate_fields: set[str] = set()
-    for gate in domain_spec.get("gates", []):
-        for prop_key in ("candidate_property", "candidate_prop", "query_param"):
-            val = gate.get(prop_key)
-            if val and isinstance(val, str):
-                gate_fields.add(val)
-
-    scoring_fields: set[str] = set()
-    dims = domain_spec.get(
-        "scoring_dimensions", domain_spec.get("scoring", {}).get("dimensions", [])
-    )
-    for dim in dims if isinstance(dims, list) else []:
-        if isinstance(dim, dict):
-            for prop_key in ("candidate_property", "candidate_prop", "source"):
-                val = dim.get(prop_key)
-                if val and isinstance(val, str):
-                    scoring_fields.add(val)
-
-    inference_inputs: set[str] = set()
-    inference_outputs: set[str] = set()
-    for rule in domain_spec.get("inference_rules", []):
-        for condition in rule.get("conditions", []):
-            f = condition.get("field")
-            if f:
-                inference_inputs.add(f)
-        for output in rule.get("outputs", []):
-            f = output.get("field")
-            if f:
-                inference_outputs.add(f)
-
-    ontology = domain_spec.get("ontology", domain_spec)
-    nodes = ontology.get("nodes", ontology.get("entities", []))
-    node_iter = (
-        list(nodes.values())
-        if isinstance(nodes, dict)
-        else (nodes if isinstance(nodes, list) else [])
-    )
-
-    for node_def in node_iter:
-        if not isinstance(node_def, dict):
-            continue
-        props = node_def.get("properties", {})
-        if isinstance(props, dict):
-            for prop_name, prop_def in props.items():
-                properties.append(
-                    _parse_domain_property(
-                        prop_name,
-                        prop_def,
-                        gate_fields,
-                        scoring_fields,
-                        inference_inputs,
-                        inference_outputs,
-                    )
-                )
-        elif isinstance(props, list):
-            for prop_def in props:
-                if isinstance(prop_def, dict):
-                    pname = prop_def.get("name", "")
-                    if pname:
-                        properties.append(
-                            _parse_domain_property(
-                                pname,
-                                prop_def,
-                                gate_fields,
-                                scoring_fields,
-                                inference_inputs,
-                                inference_outputs,
-                            )
-                        )
-
+    for node_def in _iter_node_defs(domain_spec):
+        properties.extend(
+            _props_from_node(node_def, gate_fields, scoring_fields, inference_inputs, inference_outputs)
+        )
     return properties
 
 
