@@ -162,6 +162,43 @@ def _read_set(spec: dict[str, Any], key: str) -> set[str]:
     return set()
 
 
+def _extract_props_from_dict_nodes(
+    nodes: dict,
+    gates: set[str],
+    scoring: set[str],
+    time_sensitive: set[str],
+) -> list[FieldMeta]:
+    """Extract FieldMeta list from a dict-keyed nodes structure."""
+    fields: list[FieldMeta] = []
+    for _node_type, node_def in nodes.items():
+        if not isinstance(node_def, dict):
+            continue
+        props = node_def.get("properties", {})
+        if not isinstance(props, dict):
+            continue
+        for prop_name, prop_def in props.items():
+            fields.append(_parse_prop(prop_name, prop_def, gates, scoring, time_sensitive))
+    return fields
+
+
+def _extract_props_from_list_nodes(
+    nodes: list,
+    gates: set[str],
+    scoring: set[str],
+    time_sensitive: set[str],
+) -> list[FieldMeta]:
+    """Extract FieldMeta list from a list-format nodes structure."""
+    fields: list[FieldMeta] = []
+    for node_def in nodes:
+        if not isinstance(node_def, dict):
+            continue
+        props = node_def.get("properties", {})
+        if isinstance(props, dict):
+            for prop_name, prop_def in props.items():
+                fields.append(_parse_prop(prop_name, prop_def, gates, scoring, time_sensitive))
+    return fields
+
+
 def extract_field_meta(domain_spec: dict[str, Any]) -> list[FieldMeta]:
     """Pull every property from the domain YAML ontology with its metadata.
 
@@ -172,46 +209,14 @@ def extract_field_meta(domain_spec: dict[str, Any]) -> list[FieldMeta]:
     scoring = _read_set(domain_spec, "scoring_fields")
     time_sensitive = _read_set(domain_spec, "time_sensitive_fields")
 
-    fields: list[FieldMeta] = []
     ontology = domain_spec.get("ontology", domain_spec)
     nodes = ontology.get("nodes", ontology.get("entities", {}))
 
     if isinstance(nodes, dict):
-        for _node_type, node_def in nodes.items():
-            if not isinstance(node_def, dict):
-                continue
-            props = node_def.get("properties", {})
-            if not isinstance(props, dict):
-                continue
-            for prop_name, prop_def in props.items():
-                fields.append(
-                    _parse_prop(
-                        prop_name,
-                        prop_def,
-                        gates,
-                        scoring,
-                        time_sensitive,
-                    )
-                )
-
-    elif isinstance(nodes, list):
-        for node_def in nodes:
-            if not isinstance(node_def, dict):
-                continue
-            props = node_def.get("properties", {})
-            if isinstance(props, dict):
-                for prop_name, prop_def in props.items():
-                    fields.append(
-                        _parse_prop(
-                            prop_name,
-                            prop_def,
-                            gates,
-                            scoring,
-                            time_sensitive,
-                        )
-                    )
-
-    return fields
+        return _extract_props_from_dict_nodes(nodes, gates, scoring, time_sensitive)
+    if isinstance(nodes, list):
+        return _extract_props_from_list_nodes(nodes, gates, scoring, time_sensitive)
+    return []
 
 
 def _parse_prop(
@@ -248,6 +253,33 @@ def _normalise(name: str) -> str:
     return name.strip().lower().replace("-", "_").replace(" ", "_")
 
 
+def _classify_by_metadata_signals(meta: FieldMeta) -> FieldDifficulty | None:
+    """Return INFERRABLE if metadata signals indicate derivation, else None."""
+    if meta.managed_by:
+        if f"managed_by:{meta.managed_by.lower()}" in INFERRABLE_SIGNALS:
+            return FieldDifficulty.INFERRABLE
+    if meta.source:
+        if f"source:{meta.source.lower()}" in INFERRABLE_SIGNALS:
+            return FieldDifficulty.INFERRABLE
+    if meta.derived_from:
+        return FieldDifficulty.INFERRABLE
+    return None
+
+
+def _classify_by_name_patterns(norm: str, is_gate: bool) -> FieldDifficulty | None:
+    """Match field name against universal difficulty name patterns, return match or None."""
+    if any(p in norm for p in INFERRABLE_NAME_PATTERNS):
+        if not is_gate:
+            return FieldDifficulty.INFERRABLE
+    if any(p in norm for p in TRIVIAL_NAME_PATTERNS):
+        return FieldDifficulty.TRIVIAL
+    if any(p in norm for p in PUBLIC_NAME_PATTERNS):
+        return FieldDifficulty.PUBLIC
+    if any(p in norm for p in OBSCURE_NAME_PATTERNS):
+        return FieldDifficulty.OBSCURE
+    return None
+
+
 def _classify_single(meta: FieldMeta) -> FieldDifficulty:
     """Classify one field by cascading rules. Order matters."""
 
@@ -262,33 +294,16 @@ def _classify_single(meta: FieldMeta) -> FieldDifficulty:
                 value=meta.difficulty_override,
             )
 
-    norm = _normalise(meta.name)
-
     # Rule 1: Explicit metadata signals
-    if meta.managed_by:
-        key = f"managed_by:{meta.managed_by.lower()}"
-        if key in INFERRABLE_SIGNALS:
-            return FieldDifficulty.INFERRABLE
-    if meta.source:
-        key = f"source:{meta.source.lower()}"
-        if key in INFERRABLE_SIGNALS:
-            return FieldDifficulty.INFERRABLE
-    if meta.derived_from:
-        return FieldDifficulty.INFERRABLE
+    metadata_result = _classify_by_metadata_signals(meta)
+    if metadata_result is not None:
+        return metadata_result
 
     # Rule 2: Name-pattern matching (universal cross-industry patterns)
-    if any(p in norm for p in INFERRABLE_NAME_PATTERNS):
-        if not meta.is_gate:
-            return FieldDifficulty.INFERRABLE
-
-    if any(p in norm for p in TRIVIAL_NAME_PATTERNS):
-        return FieldDifficulty.TRIVIAL
-
-    if any(p in norm for p in PUBLIC_NAME_PATTERNS):
-        return FieldDifficulty.PUBLIC
-
-    if any(p in norm for p in OBSCURE_NAME_PATTERNS):
-        return FieldDifficulty.OBSCURE
+    norm = _normalise(meta.name)
+    pattern_result = _classify_by_name_patterns(norm, meta.is_gate)
+    if pattern_result is not None:
+        return pattern_result
 
     # Rule 3: Type-based heuristics
     if meta.field_type in ("boolean", "bool"):

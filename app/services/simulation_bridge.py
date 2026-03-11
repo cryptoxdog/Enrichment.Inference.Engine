@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import math
 import random
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -846,8 +845,8 @@ def analyze_leverage(
             current_state=f"Avg score {seed_stats.avg_composite_score:.2f} with {seed_stats.scoring_dimensions_degraded} degraded dimensions",
             enriched_state=f"Avg score {enriched_stats.avg_composite_score:.2f} with {enriched_stats.scoring_dimensions_degraded} degraded dimensions",
             delta=f"+{score_delta:.4f} avg composite score",
-            business_impact=f"Ranking quality improves — best-fit partners surface first, reducing manual review",
-            revenue_implication=f"Sales reps save 2-4 hours/week on manual qualification. At $75/hr = $7,800-$15,600/yr per rep",
+            business_impact="Ranking quality improves — best-fit partners surface first, reducing manual review",
+            revenue_implication="Sales reps save 2-4 hours/week on manual qualification. At $75/hr = $7,800-$15,600/yr per rep",
             confidence=0.88,
         ))
 

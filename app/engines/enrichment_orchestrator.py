@@ -98,28 +98,9 @@ async def enrich_entity(
         tasks = [_call() for _ in range(variation_count)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        valid: list[dict[str, Any]] = []
-        raw_payloads: list[dict[str, Any]] = []
-        errors: list[str] = []
-        total_tokens = 0
-
-        for result in results:
-            if isinstance(result, Exception):
-                errors.append(f"{type(result).__name__}: {result}")
-                logger.warning("variation_failed", error=str(result))
-                continue
-            if not isinstance(result, SonarResponse):
-                continue
-
-            total_tokens += result.tokens_used
-            raw_payloads.append(result.data)
-
-            try:
-                validated = validate_response(result.data, target_schema)
-                valid.append(validated)
-            except ValidationError as e:
-                errors.append(f"validation: {e}")
-                continue
+        valid, raw_payloads, errors, total_tokens = _process_variation_results(
+            results, target_schema
+        )
 
         elapsed = int((time.monotonic() - start) * 1000)
 
@@ -202,6 +183,32 @@ async def enrich_entity(
             failure_reason=str(exc),
             processing_time_ms=elapsed,
         )
+
+
+def _process_variation_results(
+    results: list[Any],
+    target_schema: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], int]:
+    """Partition gather results into valid responses, raw payloads, errors, and token total."""
+    valid: list[dict[str, Any]] = []
+    raw_payloads: list[dict[str, Any]] = []
+    errors: list[str] = []
+    total_tokens = 0
+    for result in results:
+        if isinstance(result, Exception):
+            errors.append(f"{type(result).__name__}: {result}")
+            logger.warning("variation_failed", error=str(result))
+            continue
+        if not isinstance(result, SonarResponse):
+            continue
+        total_tokens += result.tokens_used
+        raw_payloads.append(result.data)
+        try:
+            validated = validate_response(result.data, target_schema)
+            valid.append(validated)
+        except ValidationError as e:
+            errors.append(f"validation: {e}")
+    return valid, raw_payloads, errors, total_tokens
 
 
 async def enrich_batch(
