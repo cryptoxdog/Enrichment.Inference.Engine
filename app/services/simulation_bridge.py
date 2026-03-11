@@ -370,6 +370,41 @@ def _normalize_field(name: str) -> str:
     return norm
 
 
+def _eval_overlap_gate(entity_val: Any, query_val: Any) -> tuple[GateVerdict, str]:
+    """Evaluate an overlap-type gate; returns (verdict, reason)."""
+    if query_val is None:
+        return GateVerdict.PASS, "No query constraint"
+    if isinstance(entity_val, list) and isinstance(query_val, list):
+        overlap = set(entity_val) & set(query_val)
+        return (GateVerdict.PASS, f"Overlap: {overlap}") if overlap else (GateVerdict.FAIL, "No overlap")
+    if isinstance(entity_val, list):
+        passed = query_val in entity_val
+        return (GateVerdict.PASS, "Found in list") if passed else (GateVerdict.FAIL, "Not found in list")
+    return GateVerdict.PASS, "Scalar field present"
+
+
+def _eval_range_gate(entity_val: Any, gate: dict[str, Any]) -> tuple[GateVerdict, str]:
+    """Evaluate a range-type gate; returns (verdict, reason)."""
+    min_val = gate.get("min")
+    max_val = gate.get("max")
+    try:
+        val = float(entity_val)
+    except (ValueError, TypeError):
+        return GateVerdict.FAIL, "Non-numeric value for range gate"
+    if min_val is not None and val < float(min_val):
+        return GateVerdict.FAIL, f"{val} < min {min_val}"
+    if max_val is not None and val > float(max_val):
+        return GateVerdict.FAIL, f"{val} > max {max_val}"
+    return GateVerdict.PASS, f"{val} in range [{min_val}, {max_val}]"
+
+
+def _eval_exact_gate(entity_val: Any, query_val: Any) -> tuple[GateVerdict, str]:
+    """Evaluate an exact-match gate; returns (verdict, reason)."""
+    if entity_val == query_val:
+        return GateVerdict.PASS, f"Match: {entity_val} vs {query_val}"
+    return GateVerdict.FAIL, f"Mismatch: {entity_val} vs {query_val}"
+
+
 def run_gates(
     entity_fields: dict[str, Any],
     query_profile: dict[str, Any],
@@ -396,39 +431,11 @@ def run_gates(
 
         gate_type = gate.get("type", "overlap")
         if gate_type == "overlap" or isinstance(entity_val, list):
-            if query_val is None:
-                verdict = GateVerdict.PASS
-                reason = "No query constraint"
-            elif isinstance(entity_val, list) and isinstance(query_val, list):
-                overlap = set(entity_val) & set(query_val)
-                verdict = GateVerdict.PASS if overlap else GateVerdict.FAIL
-                reason = f"Overlap: {overlap}" if overlap else "No overlap"
-            elif isinstance(entity_val, list):
-                verdict = GateVerdict.PASS if query_val in entity_val else GateVerdict.FAIL
-                reason = f"{'Found' if verdict == GateVerdict.PASS else 'Not found'} in list"
-            else:
-                verdict = GateVerdict.PASS
-                reason = "Scalar field present"
+            verdict, reason = _eval_overlap_gate(entity_val, query_val)
         elif gate_type == "range":
-            min_val = gate.get("min")
-            max_val = gate.get("max")
-            try:
-                val = float(entity_val)
-                if min_val is not None and val < float(min_val):
-                    verdict = GateVerdict.FAIL
-                    reason = f"{val} < min {min_val}"
-                elif max_val is not None and val > float(max_val):
-                    verdict = GateVerdict.FAIL
-                    reason = f"{val} > max {max_val}"
-                else:
-                    verdict = GateVerdict.PASS
-                    reason = f"{val} in range [{min_val}, {max_val}]"
-            except (ValueError, TypeError):
-                verdict = GateVerdict.FAIL
-                reason = "Non-numeric value for range gate"
+            verdict, reason = _eval_range_gate(entity_val, gate)
         else:
-            verdict = GateVerdict.PASS if entity_val == query_val else GateVerdict.FAIL
-            reason = f"{'Match' if verdict == GateVerdict.PASS else 'Mismatch'}: {entity_val} vs {query_val}"
+            verdict, reason = _eval_exact_gate(entity_val, query_val)
 
         results.append(GateResult(
             gate_name=prop, candidate_property=prop,
@@ -514,59 +521,59 @@ def run_inference(
     return inferred
 
 
-def detect_communities(
-    entities: list[SimulatedEntity],
-    shared_attribute_keys: list[str] | None = None,
-) -> list[CommunityMember]:
-    """
-    Simplified Louvain-style community detection via shared attribute overlap.
-    Groups entities that share values on specified attribute keys.
-    """
-    attr_keys = shared_attribute_keys or ["polymers_handled", "materials_handled", "facility_type", "industries_served"]
-    adjacency: dict[str, set[str]] = defaultdict(set)
+def _count_shared_attrs(e1: SimulatedEntity, e2: SimulatedEntity, attr_keys: list[str]) -> int:
+    """Count attribute keys where e1 and e2 share a value (list overlap or equality)."""
+    shared = 0
+    for key in attr_keys:
+        v1, v2 = e1.fields.get(key), e2.fields.get(key)
+        if v1 is None or v2 is None:
+            continue
+        if isinstance(v1, list) and isinstance(v2, list):
+            if set(v1) & set(v2):
+                shared += 1
+        elif v1 == v2:
+            shared += 1
+    return shared
 
+
+def _build_adjacency(
+    entities: list[SimulatedEntity], attr_keys: list[str]
+) -> dict[str, set[str]]:
+    """Build entity adjacency map: edge if two entities share ≥2 attribute values."""
+    adjacency: dict[str, set[str]] = defaultdict(set)
     for i, e1 in enumerate(entities):
         for j, e2 in enumerate(entities):
             if i >= j:
                 continue
-            shared = []
-            for key in attr_keys:
-                v1 = e1.fields.get(key)
-                v2 = e2.fields.get(key)
-                if v1 is None or v2 is None:
-                    continue
-                if isinstance(v1, list) and isinstance(v2, list):
-                    if set(v1) & set(v2):
-                        shared.append(key)
-                elif v1 == v2:
-                    shared.append(key)
-            if len(shared) >= 2:
+            if _count_shared_attrs(e1, e2, attr_keys) >= 2:
                 adjacency[e1.entity_id].add(e2.entity_id)
                 adjacency[e2.entity_id].add(e1.entity_id)
+    return adjacency
 
-    # Greedy community assignment
-    visited: set[str] = set()
-    communities: list[set[str]] = []
 
-    for entity in entities:
-        eid = entity.entity_id
-        if eid in visited:
+def _bfs_community(
+    start: str, adjacency: dict[str, set[str]], visited: set[str]
+) -> set[str]:
+    """BFS from start node; returns all reachable entity IDs not yet visited."""
+    community: set[str] = set()
+    queue = [start]
+    while queue:
+        current = queue.pop(0)
+        if current in visited:
             continue
-        community: set[str] = set()
-        queue = [eid]
-        while queue:
-            current = queue.pop(0)
-            if current in visited:
-                continue
-            visited.add(current)
-            community.add(current)
-            for neighbor in adjacency.get(current, set()):
-                if neighbor not in visited:
-                    queue.append(neighbor)
-        if community:
-            communities.append(community)
+        visited.add(current)
+        community.add(current)
+        queue.extend(n for n in adjacency.get(current, set()) if n not in visited)
+    return community
 
-    # Assign community IDs
+
+def _assign_community_members(
+    communities: list[set[str]],
+    adjacency: dict[str, set[str]],
+    entities: list[SimulatedEntity],
+    attr_keys: list[str],
+) -> list[CommunityMember]:
+    """Assign community IDs to entities and build CommunityMember list."""
     entity_lookup = {e.entity_id: e for e in entities}
     members: list[CommunityMember] = []
     for cid, community in enumerate(communities):
@@ -577,18 +584,37 @@ def detect_communities(
                 continue
             e.community_id = cid
             centrality = len(adjacency.get(eid, set())) / max(size - 1, 1)
-            shared_attrs = []
-            for key in attr_keys:
-                val = e.fields.get(key)
-                if val is not None:
-                    shared_attrs.append(key)
+            shared_attrs = [k for k in attr_keys if e.fields.get(k) is not None]
             members.append(CommunityMember(
                 entity_id=eid, entity_name=e.name,
                 community_id=cid, centrality_score=round(centrality, 4),
                 shared_attributes=shared_attrs,
             ))
-
     return members
+
+
+def detect_communities(
+    entities: list[SimulatedEntity],
+    shared_attribute_keys: list[str] | None = None,
+) -> list[CommunityMember]:
+    """
+    Simplified Louvain-style community detection via shared attribute overlap.
+    Groups entities that share values on specified attribute keys.
+    """
+    attr_keys = shared_attribute_keys or [
+        "polymers_handled", "materials_handled", "facility_type", "industries_served"
+    ]
+    adjacency = _build_adjacency(entities, attr_keys)
+
+    visited: set[str] = set()
+    communities: list[set[str]] = []
+    for entity in entities:
+        if entity.entity_id not in visited:
+            community = _bfs_community(entity.entity_id, adjacency, visited)
+            if community:
+                communities.append(community)
+
+    return _assign_community_members(communities, adjacency, entities, attr_keys)
 
 
 # ══════════════════════════════════════════════════════════
@@ -713,6 +739,72 @@ def _simulate_entities(
     return entities
 
 
+def _stats_gate_summary(
+    entities: list[SimulatedEntity], n: int
+) -> tuple[int, dict, list[str]]:
+    """Aggregate gate pass/fail counts; return (pass_all_count, gate_agg, blocking_gates)."""
+    pass_all = sum(1 for e in entities if e.passes_all_gates)
+    gate_agg: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"pass": 0, "fail": 0, "insufficient_data": 0}
+    )
+    for e in entities:
+        for g in e.gate_results:
+            gate_agg[g.gate_name][g.verdict.value] += 1
+    blocking = [
+        name for name, counts in gate_agg.items()
+        if (counts.get("fail", 0) + counts.get("insufficient_data", 0)) > n * 0.3
+    ]
+    return pass_all, gate_agg, blocking
+
+
+def _stats_score_distribution(scores: list[float]) -> tuple[float, dict[str, int]]:
+    """Compute average score and bucket distribution; return (avg, dist)."""
+    avg = sum(scores) / len(scores) if scores else 0.0
+    dist: dict[str, int] = {"0-20": 0, "20-40": 0, "40-60": 0, "60-80": 0, "80-100": 0}
+    for s in scores:
+        pct = s * 100
+        if pct < 20:
+            dist["0-20"] += 1
+        elif pct < 40:
+            dist["20-40"] += 1
+        elif pct < 60:
+            dist["40-60"] += 1
+        elif pct < 80:
+            dist["60-80"] += 1
+        else:
+            dist["80-100"] += 1
+    return avg, dist
+
+
+def _stats_community_summary(entities: list[SimulatedEntity]) -> tuple[int, float, int, float]:
+    """Summarise community membership; return (num_communities, avg_size, largest, modularity)."""
+    community_ids = [e.community_id for e in entities if e.community_id is not None]
+    counts = Counter(community_ids)
+    num = len(counts)
+    avg = sum(counts.values()) / max(num, 1)
+    largest = max(counts.values()) if counts else 0
+    modularity = 1.0 - (1.0 / max(num, 1)) if num > 1 else 0.0
+    return num, avg, largest, modularity
+
+
+def _stats_coverage(
+    entities: list[SimulatedEntity], domain_props: list[str], n: int
+) -> tuple[float, int, float, dict[str, int]]:
+    """Compute field coverage stats; return (coverage, inferred_count, inference_rate, source_counts)."""
+    source_counts: dict[str, int] = {"crm": 0, "enriched": 0, "inferred": 0}
+    total_populated = 0
+    total_possible = n * len(domain_props) if domain_props else 1
+    for e in entities:
+        for src in e.field_sources.values():
+            source_counts[src] = source_counts.get(src, 0) + 1
+            total_populated += 1
+    coverage = total_populated / total_possible if total_possible > 0 else 0.0
+    inferred = source_counts.get("inferred", 0)
+    inferrable_total = len(_INFERENCE_RULES) * n
+    rate = inferred / inferrable_total if inferrable_total > 0 else 0.0
+    return coverage, inferred, rate, source_counts
+
+
 def _compute_statistics(
     entities: list[SimulatedEntity],
     mode: SimulationMode,
@@ -721,7 +813,7 @@ def _compute_statistics(
     n = len(entities)
     if n == 0:
         return SimulationStatistics(
-            mode=mode, total_entities=0, total_fields_per_entity=len(domain_props),
+            mode=mode, total_entities=0, total_fields_per_entity=len(_domain_props),
             gate_pass_rate=0, gate_results_by_gate={}, entities_blocked=0,
             blocking_gates=[], avg_composite_score=0, score_distribution={},
             scoring_dimensions_active=0, scoring_dimensions_degraded=0,
@@ -731,64 +823,21 @@ def _compute_statistics(
             cost_per_entity_usd=0,
         )
 
-    # Gate stats
-    pass_all = sum(1 for e in entities if e.passes_all_gates)
-    gate_agg: dict[str, dict[str, int]] = defaultdict(lambda: {"pass": 0, "fail": 0, "insufficient_data": 0})
-    for e in entities:
-        for g in e.gate_results:
-            gate_agg[g.gate_name][g.verdict.value] += 1
+    pass_all, gate_agg, blocking = _stats_gate_summary(entities, n)
+    avg_score, dist = _stats_score_distribution([e.composite_score for e in entities])
 
-    blocking = [name for name, counts in gate_agg.items()
-                if (counts.get("fail", 0) + counts.get("insufficient_data", 0)) > n * 0.3]
+    dim_active = sum(1 for sr in (entities[0].scoring_results or []) if sr.raw_value is not None)
+    dim_degraded = sum(1 for sr in (entities[0].scoring_results or []) if sr.raw_value is None)
 
-    # Score stats
-    scores = [e.composite_score for e in entities]
-    avg_score = sum(scores) / n
-    dist: dict[str, int] = {"0-20": 0, "20-40": 0, "40-60": 0, "60-80": 0, "80-100": 0}
-    for s in scores:
-        pct = s * 100
-        if pct < 20: dist["0-20"] += 1
-        elif pct < 40: dist["20-40"] += 1
-        elif pct < 60: dist["40-60"] += 1
-        elif pct < 80: dist["60-80"] += 1
-        else: dist["80-100"] += 1
-
-    dim_active = 0
-    dim_degraded = 0
-    if entities[0].scoring_results:
-        for sr in entities[0].scoring_results:
-            if sr.raw_value is not None:
-                dim_active += 1
-            else:
-                dim_degraded += 1
-
-    # Community stats
-    community_ids = [e.community_id for e in entities if e.community_id is not None]
-    community_counts = Counter(community_ids)
-    num_communities = len(community_counts)
-    avg_comm = sum(community_counts.values()) / max(num_communities, 1)
-    largest = max(community_counts.values()) if community_counts else 0
-    modularity = 1.0 - (1.0 / max(num_communities, 1)) if num_communities > 1 else 0.0
-
-    # Coverage stats
-    source_counts: dict[str, int] = {"crm": 0, "enriched": 0, "inferred": 0}
-    total_fields_populated = 0
-    total_possible = n * len(domain_props) if domain_props else 1
-    for e in entities:
-        for fn, src in e.field_sources.items():
-            source_counts[src] = source_counts.get(src, 0) + 1
-            total_fields_populated += 1
-
-    coverage = total_fields_populated / total_possible if total_possible > 0 else 0.0
-    inferred_count = source_counts.get("inferred", 0)
-    inferrable_total = len(_INFERENCE_RULES) * n
-    inference_rate = inferred_count / inferrable_total if inferrable_total > 0 else 0.0
-
+    num_communities, avg_comm, largest, modularity = _stats_community_summary(entities)
+    coverage, inferred_count, inference_rate, source_counts = _stats_coverage(
+        entities, _domain_props, n
+    )
     total_cost = sum(e.enrichment_cost_usd for e in entities)
 
     return SimulationStatistics(
         mode=mode, total_entities=n,
-        total_fields_per_entity=len(domain_props),
+        total_fields_per_entity=len(_domain_props),
         gate_pass_rate=round(pass_all / n * 100, 1),
         gate_results_by_gate=dict(gate_agg),
         entities_blocked=n - pass_all,

@@ -63,6 +63,34 @@ _RETRY_STATUS = {429, 500, 502, 503}
 _MAX_RETRIES = 3
 
 
+def _parse_completion(completion: Any, payload: dict[str, Any], start: float) -> SonarResponse:
+    """Build a SonarResponse from a successful SDK completion object."""
+    latency = int((time.monotonic() - start) * 1000)
+    tokens = completion.usage.total_tokens if completion.usage else 0
+    content = completion.choices[0].message.content
+    try:
+        data = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        data = {"_raw": content}
+    return SonarResponse(
+        data=data,
+        tokens_used=tokens,
+        citations=getattr(completion, "citations", []) or [],
+        search_results=getattr(completion, "search_results", []) or [],
+        model=completion.model or payload.get("model", ""),
+        latency_ms=latency,
+    )
+
+
+def _should_retry_perplexity(exc: PerplexityError, attempt: int, backoff: float) -> bool:
+    """Return True and log if the PerplexityError is retryable and attempts remain."""
+    status = getattr(exc, "status_code", 0)
+    if status in _RETRY_STATUS and attempt < _MAX_RETRIES - 1:
+        logger.warning("retrying", status=status, attempt=attempt + 1, backoff=backoff)
+        return True
+    return False
+
+
 def _sync_call(payload: dict[str, Any], api_key: str, timeout: int) -> SonarResponse:
     """Blocking SDK call with retry. Executed via asyncio.to_thread()."""
     client = _get_client(api_key)
@@ -73,37 +101,11 @@ def _sync_call(payload: dict[str, Any], api_key: str, timeout: int) -> SonarResp
     for attempt in range(_MAX_RETRIES):
         try:
             completion = client.chat.completions.create(**payload)
-
-            latency = int((time.monotonic() - start) * 1000)
-            usage = completion.usage
-            tokens = usage.total_tokens if usage else 0
-
-            # Extract structured content
-            content = completion.choices[0].message.content
-            try:
-                data = json.loads(content)
-            except (json.JSONDecodeError, TypeError):
-                data = {"_raw": content}
-
-            return SonarResponse(
-                data=data,
-                tokens_used=tokens,
-                citations=getattr(completion, "citations", []) or [],
-                search_results=getattr(completion, "search_results", []) or [],
-                model=completion.model or payload.get("model", ""),
-                latency_ms=latency,
-            )
+            return _parse_completion(completion, payload, start)
 
         except PerplexityError as e:
             last_err = e
-            status = getattr(e, "status_code", 0)
-            if status in _RETRY_STATUS and attempt < _MAX_RETRIES - 1:
-                logger.warning(
-                    "retrying",
-                    status=status,
-                    attempt=attempt + 1,
-                    backoff=backoff,
-                )
+            if _should_retry_perplexity(e, attempt, backoff):
                 time.sleep(backoff)
                 backoff *= 2
                 continue

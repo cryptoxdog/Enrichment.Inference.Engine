@@ -307,6 +307,76 @@ def _select_max_tokens(mode: str, target_field_count: int) -> int:
 
 
 # ──────────────────────────────────────────────
+# Internal resolve helpers
+# ──────────────────────────────────────────────
+
+
+def _pick_model(
+    mode: str,
+    difficulty: FieldDifficulty,
+    signals: EntitySignals,
+    amb_fields: set[str],
+    searchable: list[str],
+    force_model: SonarModel | None,
+) -> SonarModel:
+    """Select the Sonar model based on mode, difficulty, and signal state."""
+    if force_model:
+        return force_model
+    if mode == "discovery":
+        return SonarModel.SONAR_PRO
+    if _needs_reasoning(searchable, signals, amb_fields):
+        return SonarModel.SONAR_REASONING
+    if difficulty == FieldDifficulty.OBSCURE:
+        return SonarModel.SONAR_PRO
+    if difficulty in (FieldDifficulty.PUBLIC, FieldDifficulty.TRIVIAL):
+        return SonarModel.SONAR
+    if mode == "targeted" and signals.gate_fields_missing > 0:
+        return SonarModel.SONAR_PRO
+    return SonarModel.SONAR
+
+
+def _pick_context_size(mode: str, difficulty: FieldDifficulty) -> SearchContextSize:
+    """Map mode/difficulty to the appropriate search context window size."""
+    if mode == "discovery" or difficulty == FieldDifficulty.OBSCURE:
+        return SearchContextSize.HIGH
+    if mode == "verification" or difficulty in (FieldDifficulty.TRIVIAL, FieldDifficulty.PUBLIC):
+        return SearchContextSize.LOW
+    return SearchContextSize.MEDIUM
+
+
+def _pick_reasoning_effort(model: SonarModel, signals: EntitySignals) -> str | None:
+    """Return reasoning effort level for reasoning-capable models, else None."""
+    if model in (SonarModel.SONAR_REASONING, SonarModel.SONAR_REASONING_PRO):
+        return "high" if signals.failed_matches >= 3 else "medium"
+    return None
+
+
+def _build_resolution_reason(
+    mode: str,
+    difficulty: FieldDifficulty,
+    searchable: list[str],
+    signals: EntitySignals,
+    model: SonarModel,
+    ctx: SearchContextSize,
+    variations: int,
+    cost: float,
+) -> str:
+    """Compose the human-readable resolution reason string for logging and SonarConfig."""
+    return (
+        f"mode={mode} "
+        f"difficulty={difficulty.value} "
+        f"fields={len(searchable)} "
+        f"null={signals.null_count} "
+        f"conf={signals.avg_confidence:.2f} "
+        f"gate_missing={signals.gate_fields_missing} "
+        f"failed={signals.failed_matches} "
+        f"→ {model.value}/{ctx.value} "
+        f"×{variations} "
+        f"≈${cost:.4f}"
+    )
+
+
+# ──────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────
 
@@ -361,36 +431,10 @@ def resolve(
     difficulty = _dominant_difficulty(searchable, field_map)
 
     # 3. Model selection
-    if force_model:
-        model = force_model
-    elif search_plan_mode == "discovery":
-        model = SonarModel.SONAR_PRO
-    elif _needs_reasoning(searchable, signals, amb_fields):
-        model = SonarModel.SONAR_REASONING
-    elif difficulty == FieldDifficulty.OBSCURE:
-        model = SonarModel.SONAR_PRO
-    elif difficulty == FieldDifficulty.PUBLIC:
-        model = SonarModel.SONAR
-    elif difficulty == FieldDifficulty.TRIVIAL:
-        model = SonarModel.SONAR
-    else:
-        model = (
-            SonarModel.SONAR_PRO
-            if search_plan_mode == "targeted" and signals.gate_fields_missing > 0
-            else SonarModel.SONAR
-        )
+    model = _pick_model(search_plan_mode, difficulty, signals, amb_fields, searchable, force_model)
 
     # 4. Context depth
-    if search_plan_mode == "discovery":
-        ctx = SearchContextSize.HIGH
-    elif difficulty == FieldDifficulty.OBSCURE:
-        ctx = SearchContextSize.HIGH
-    elif search_plan_mode == "verification":
-        ctx = SearchContextSize.LOW
-    elif difficulty in (FieldDifficulty.TRIVIAL, FieldDifficulty.PUBLIC):
-        ctx = SearchContextSize.LOW
-    else:
-        ctx = SearchContextSize.MEDIUM
+    ctx = _pick_context_size(search_plan_mode, difficulty)
 
     # 5. Domain filters — from classification, not hardcoded
     domain_filter = _select_domain_filters(
@@ -425,24 +469,12 @@ def resolve(
     }.get(search_plan_mode, 0.3)
 
     # 11. Reasoning effort
-    reasoning_effort = None
-    if model in (SonarModel.SONAR_REASONING, SonarModel.SONAR_REASONING_PRO):
-        reasoning_effort = "high" if signals.failed_matches >= 3 else "medium"
+    reasoning_effort = _pick_reasoning_effort(model, signals)
 
-    # 12. Cost estimate
+    # 12. Cost estimate + reason
     cost = estimate_call_cost(model, ctx, max_tokens, variations)
-
-    reason = (
-        f"mode={search_plan_mode} "
-        f"difficulty={difficulty.value} "
-        f"fields={len(searchable)} "
-        f"null={signals.null_count} "
-        f"conf={signals.avg_confidence:.2f} "
-        f"gate_missing={signals.gate_fields_missing} "
-        f"failed={signals.failed_matches} "
-        f"→ {model.value}/{ctx.value} "
-        f"×{variations} "
-        f"≈${cost:.4f}"
+    reason = _build_resolution_reason(
+        search_plan_mode, difficulty, searchable, signals, model, ctx, variations, cost
     )
     logger.info("search_optimizer.resolve", reason=reason)
 

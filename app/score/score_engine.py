@@ -86,6 +86,79 @@ class ScoreStore(Protocol):
 # ── ICP Field Matching ────────────────────────────────────────
 
 
+def _eval_exact_match(criterion: ICPFieldCriterion, value: Any) -> float:
+    """Score EXACT_MATCH criterion: case-insensitive string equality or direct equality."""
+    if isinstance(value, str) and isinstance(criterion.target_value, str):
+        return 1.0 if value.strip().lower() == criterion.target_value.strip().lower() else 0.0
+    return 1.0 if value == criterion.target_value else 0.0
+
+
+def _eval_range(criterion: ICPFieldCriterion, value: Any) -> float:
+    """Score RANGE criterion: full credit in range, proximity-decay outside."""
+    if criterion.target_range is None:
+        return 0.0
+    low, high = criterion.target_range
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if low <= num <= high:
+        return 1.0
+    range_span = high - low
+    if range_span == 0:
+        return 0.0
+    distance = (low - num) if num < low else (num - high)
+    return max(0.0, 1.0 - (distance / range_span))
+
+
+def _eval_contains(criterion: ICPFieldCriterion, value: Any) -> float:
+    """Score CONTAINS criterion: list-overlap ratio or substring match."""
+    if isinstance(value, list):
+        target = criterion.target_value
+        if isinstance(target, list):
+            matched = sum(1 for t in target if t in value)
+            return matched / len(target) if target else 0.0
+        return 1.0 if target in value else 0.0
+    if isinstance(value, str) and isinstance(criterion.target_value, str):
+        return 1.0 if criterion.target_value.lower() in value.lower() else 0.0
+    return 0.0
+
+
+def _eval_boolean(criterion: ICPFieldCriterion, value: Any) -> float:
+    """Score BOOLEAN criterion: 1.0 if bool(value) matches target, else 0.0."""
+    try:
+        bool_val = bool(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return 1.0 if bool_val == bool(criterion.target_value) else 0.0
+
+
+def _eval_weighted_set(criterion: ICPFieldCriterion, value: Any) -> float:
+    """Score WEIGHTED_SET criterion: weighted overlap against set_weights map."""
+    if criterion.target_set is None or criterion.set_weights is None:
+        return 0.0
+    if isinstance(value, list):
+        total_weight = sum(criterion.set_weights.values())
+        if total_weight == 0:
+            return 0.0
+        matched_weight = sum(
+            criterion.set_weights.get(str(v), 0.0)
+            for v in value
+            if str(v) in criterion.set_weights
+        )
+        return min(matched_weight / total_weight, 1.0)
+    return criterion.set_weights.get(str(value), 0.0)
+
+
+_CRITERION_EVALUATORS = {
+    ICPFieldType.EXACT_MATCH: _eval_exact_match,
+    ICPFieldType.RANGE: _eval_range,
+    ICPFieldType.CONTAINS: _eval_contains,
+    ICPFieldType.BOOLEAN: _eval_boolean,
+    ICPFieldType.WEIGHTED_SET: _eval_weighted_set,
+}
+
+
 def _evaluate_criterion(
     criterion: ICPFieldCriterion,
     value: Any,
@@ -93,73 +166,52 @@ def _evaluate_criterion(
     """Evaluate a single ICP criterion against a field value. Returns 0.0-1.0 match score."""
     if value is None:
         return 0.0
-
-    match criterion.field_type:
-        case ICPFieldType.EXACT_MATCH:
-            if isinstance(value, str) and isinstance(criterion.target_value, str):
-                return (
-                    1.0 if value.strip().lower() == criterion.target_value.strip().lower() else 0.0
-                )
-            return 1.0 if value == criterion.target_value else 0.0
-
-        case ICPFieldType.RANGE:
-            if criterion.target_range is None:
-                return 0.0
-            low, high = criterion.target_range
-            try:
-                num = float(value)
-            except (TypeError, ValueError):
-                return 0.0
-            if low <= num <= high:
-                return 1.0
-            range_span = high - low
-            if range_span == 0:
-                return 0.0
-            if num < low:
-                distance = low - num
-            else:
-                distance = num - high
-            proximity = max(0.0, 1.0 - (distance / range_span))
-            return proximity
-
-        case ICPFieldType.CONTAINS:
-            if isinstance(value, list):
-                target = criterion.target_value
-                if isinstance(target, list):
-                    matched = sum(1 for t in target if t in value)
-                    return matched / len(target) if target else 0.0
-                return 1.0 if target in value else 0.0
-            if isinstance(value, str) and isinstance(criterion.target_value, str):
-                return 1.0 if criterion.target_value.lower() in value.lower() else 0.0
-            return 0.0
-
-        case ICPFieldType.BOOLEAN:
-            try:
-                bool_val = bool(value)
-            except (TypeError, ValueError):
-                return 0.0
-            return 1.0 if bool_val == bool(criterion.target_value) else 0.0
-
-        case ICPFieldType.WEIGHTED_SET:
-            if criterion.target_set is None or criterion.set_weights is None:
-                return 0.0
-            if isinstance(value, list):
-                total_weight = sum(criterion.set_weights.values())
-                if total_weight == 0:
-                    return 0.0
-                matched_weight = sum(
-                    criterion.set_weights.get(str(v), 0.0)
-                    for v in value
-                    if str(v) in criterion.set_weights
-                )
-                return min(matched_weight / total_weight, 1.0)
-            val_str = str(value)
-            return criterion.set_weights.get(val_str, 0.0)
-
-    return 0.0
+    evaluator = _CRITERION_EVALUATORS.get(criterion.field_type)
+    return evaluator(criterion, value) if evaluator else 0.0
 
 
 # ── Dimension Scorers ─────────────────────────────────────────
+
+
+def _missing_fit_field(
+    criterion: ICPFieldCriterion, total_weight: float
+) -> MissingField:
+    """Build a MissingField entry for a criterion that cannot be scored."""
+    impact = criterion.weight / max(total_weight, 1.0)
+    return MissingField(
+        field_name=criterion.field_name,
+        dimension=ScoreDimension.FIT,
+        impact_estimate=min(impact, 1.0),
+        is_gate_critical=criterion.is_gate_critical,
+        recommendation=RecommendationType.ENRICH_FIELD,
+    )
+
+
+def _fit_field_contribution(
+    criterion: ICPFieldCriterion,
+    value: Any,
+    conf: float,
+    total_weight: float,
+    source_str: str,
+) -> tuple[FieldContribution, float]:
+    """Score one FIT criterion and return (contribution, weighted_score)."""
+    match_score = _evaluate_criterion(criterion, value)
+    weighted = match_score * conf * criterion.weight
+    try:
+        source = ScoreSource(source_str)
+    except ValueError:
+        source = ScoreSource.ENRICHMENT
+    contribution = FieldContribution(
+        field_name=criterion.field_name,
+        dimension=ScoreDimension.FIT,
+        raw_value=value,
+        contribution=min(weighted / max(total_weight, 0.01), 1.0),
+        confidence=conf,
+        source=source,
+        match_type=criterion.field_type,
+        match_detail=criterion.description or f"ICP match: {criterion.field_name}",
+    )
+    return contribution, weighted
 
 
 def score_fit(
@@ -172,9 +224,7 @@ def score_fit(
     """Score entity fit against ICP definition."""
     contributions: list[FieldContribution] = []
     missing: list[MissingField] = []
-    fit_criteria = []
-    if icp:
-        fit_criteria = icp.criteria_by_dimension.get(ScoreDimension.FIT, [])
+    fit_criteria = icp.criteria_by_dimension.get(ScoreDimension.FIT, []) if icp else []
 
     if not fit_criteria:
         return DimensionScore(
@@ -197,42 +247,16 @@ def score_fit(
         conf = field_confidences.get(criterion.field_name, 0.0)
 
         if value is None or conf < profile.confidence_floor:
-            impact = criterion.weight / max(total_weight, 1.0)
-            missing.append(
-                MissingField(
-                    field_name=criterion.field_name,
-                    dimension=ScoreDimension.FIT,
-                    impact_estimate=min(impact, 1.0),
-                    is_gate_critical=criterion.is_gate_critical,
-                    recommendation=RecommendationType.ENRICH_FIELD,
-                )
-            )
+            missing.append(_missing_fit_field(criterion, total_weight))
             continue
 
         fields_present += 1
-        match_score = _evaluate_criterion(criterion, value)
-        confidence_adjusted = match_score * conf
-        weighted = confidence_adjusted * criterion.weight
-        total_weighted_score += weighted
-
-        source_str = field_sources.get(criterion.field_name, "enrichment")
-        try:
-            source = ScoreSource(source_str)
-        except ValueError:
-            source = ScoreSource.ENRICHMENT
-
-        contributions.append(
-            FieldContribution(
-                field_name=criterion.field_name,
-                dimension=ScoreDimension.FIT,
-                raw_value=value,
-                contribution=min(weighted / max(total_weight, 0.01), 1.0),
-                confidence=conf,
-                source=source,
-                match_type=criterion.field_type,
-                match_detail=criterion.description or f"ICP match: {criterion.field_name}",
-            )
+        contrib, weighted = _fit_field_contribution(
+            criterion, value, conf, total_weight,
+            field_sources.get(criterion.field_name, "enrichment"),
         )
+        contributions.append(contrib)
+        total_weighted_score += weighted
 
     raw_score = total_weighted_score / total_weight if total_weight > 0 else 0.0
     avg_conf = (
