@@ -1,165 +1,171 @@
-#!/usr/bin/env python3
-"""
-Test script for search optimizer — validates all decision paths.
-"""
+"""Tests for app/engines/search_optimizer.py — validates decision paths."""
 
-import yaml
-from app.engines.field_classifier import auto_classify_domain
-from app.engines.search_optimizer import EntitySignals, SearchMode
+from __future__ import annotations
 
-
-def test_field_classification():
-    """Test auto-classification from domain YAML."""
-    print("=" * 60)
-    print("TEST 1: Field Auto-Classification")
-    print("=" * 60)
-
-    # Load example domain
-    with open("examples/plasticos_domain.yaml") as f:
-        domain_spec = yaml.safe_load(f)
-
-    gate_fields = set(domain_spec["metadata"]["gate_fields"])
-    scoring_fields = set(domain_spec["metadata"]["scoring_fields"])
-
-    classification = auto_classify_domain(domain_spec, gate_fields, scoring_fields)
-
-    print(f"\nDomain: {classification.domain}")
-    print(f"Total fields: {sum(classification.stats.values())}")
-    print(f"\nDistribution: {classification.stats}\n")
-
-    # Print by difficulty
-    for diff in ["trivial", "public", "findable", "obscure", "inferrable"]:
-        fields = [k for k, v in classification.field_map.items() if v.value == diff]
-        if fields:
-            print(f"{diff.upper()}:")
-            for f in fields:
-                marker = " [GATE]" if f in gate_fields else ""
-                marker += " [SCORING]" if f in scoring_fields else ""
-                print(f"  • {f}{marker}")
-
-    return classification
+from app.engines.search_optimizer import (
+    EntitySignals,
+    SonarConfig,
+    SonarModel,
+    SearchContextSize,
+    MessageStrategy,
+    FieldDifficulty,
+    resolve,
+    resolve_from_classification,
+    estimate_call_cost,
+)
+from app.engines.field_classifier import DomainClassification
 
 
-def test_search_optimizer(classification):
-    """Test search optimizer decision tree."""
-    print("\n" + "=" * 60)
-    print("TEST 2: Search Optimizer Decision Tree")
-    print("=" * 60)
+SAMPLE_FIELD_MAP = {
+    "name": FieldDifficulty.TRIVIAL,
+    "website": FieldDifficulty.TRIVIAL,
+    "revenue": FieldDifficulty.PUBLIC,
+    "employee_count": FieldDifficulty.PUBLIC,
+    "certifications": FieldDifficulty.FINDABLE,
+    "annual_capacity_tons": FieldDifficulty.OBSCURE,
+    "material_grade": FieldDifficulty.INFERRABLE,
+    "facility_tier": FieldDifficulty.INFERRABLE,
+}
 
-    # Patch optimizer with our classification
-    from optimizers import search_optimizer
 
-    search_optimizer.FIELD_DIFFICULTY = classification.field_map
+class TestResolveBasic:
+    """Test the core resolve() function."""
 
-    scenarios = [
-        {
-            "name": "Discovery (name + address only)",
-            "mode": SearchMode.DISCOVERY,
-            "targets": ["polymers_handled", "facility_type", "processing_capabilities"],
-            "known": {"company_legal_name": "Acme Plastics", "address": "123 Main St"},
-            "pass": 1,
-        },
-        {
-            "name": "Targeted obscure fields",
-            "mode": SearchMode.TARGETED,
-            "targets": ["annual_capacity_tons", "equipment_types", "pcr_content_capability"],
-            "known": {
-                "company_legal_name": "Acme",
-                "polymers_handled": ["HDPE", "PP"],
-                "facility_type": "processor",
-            },
-            "pass": 2,
-        },
-        {
-            "name": "Public DB lookup",
-            "mode": SearchMode.TARGETED,
-            "targets": ["annual_revenue_usd", "employee_count", "naics_codes"],
-            "known": {"company_legal_name": "Acme Plastics Inc", "address": "123 Main St"},
-            "pass": 2,
-        },
-        {
-            "name": "Verification (2 fields)",
-            "mode": SearchMode.VERIFICATION,
-            "targets": ["certifications", "pcr_content_capability"],
-            "known": {"company_legal_name": "Acme", "polymers_handled": ["PET"]},
-            "pass": 3,
-        },
-        {
-            "name": "All inferrable (should skip)",
-            "mode": SearchMode.TARGETED,
-            "targets": ["material_grade", "facility_tier", "buyer_class"],
-            "known": {"polymers_handled": ["HDPE"], "certifications": ["ISO 9001"]},
-            "pass": 2,
-        },
-    ]
-
-    for i, scenario in enumerate(scenarios, 1):
-        print(f"\n[{i}] {scenario['name']}")
-        print(f"    Mode: {scenario['mode'].value}, Pass: {scenario['pass']}")
-        print(f"    Targets: {scenario['targets']}")
-
-        signals = EntitySignals(
-            known_fields=scenario["known"],
-            confidence_map={},
-            gate_fields={"polymers_handled", "facility_type"},
-            pass_number=scenario["pass"],
-            allocated_tokens=10000,
-        )
-
+    def test_all_inferrable_returns_disabled(self):
+        """When all target fields are inferrable, search should be disabled."""
         config = resolve(
-            search_plan_mode=scenario["mode"],
-            target_fields=scenario["targets"],
-            signals=signals,
+            search_plan_mode="targeted",
+            target_fields=["material_grade", "facility_tier"],
+            signals=EntitySignals(known_count=5, pass_number=2),
+            field_map=SAMPLE_FIELD_MAP,
         )
+        assert config.disable_search is True
+        assert config.variations == 0
+        assert config.estimated_cost_per_call == 0.0
 
-        if config.disable_search:
-            print("    → SKIP (all inferrable)")
-        else:
-            print(f"    → Model: {config.model.value}")
-            print(f"    → Context: {config.context_size.value}")
-            print(f"    → Variations: {config.variations}")
-            print(f"    → Cost: ${config.estimated_cost:.4f}")
-            if config.domain_filters:
-                print(f"    → Domains: {config.domain_filters[:3]}")
+    def test_discovery_uses_sonar_pro(self):
+        """Discovery mode should select sonar-pro for broad search."""
+        config = resolve(
+            search_plan_mode="discovery",
+            target_fields=["revenue", "certifications", "annual_capacity_tons"],
+            signals=EntitySignals(null_count=8, known_count=2, pass_number=1),
+            field_map=SAMPLE_FIELD_MAP,
+        )
+        assert config.model == SonarModel.SONAR_PRO
+        assert config.search_context_size == SearchContextSize.HIGH
+
+    def test_targeted_trivial_uses_sonar_base(self):
+        """Targeting trivial/public fields should use base sonar."""
+        config = resolve(
+            search_plan_mode="targeted",
+            target_fields=["revenue", "employee_count"],
+            signals=EntitySignals(known_count=5, pass_number=2),
+            field_map=SAMPLE_FIELD_MAP,
+        )
+        assert config.model == SonarModel.SONAR
+
+    def test_verification_low_context(self):
+        """Verification mode should use low context size."""
+        config = resolve(
+            search_plan_mode="verification",
+            target_fields=["certifications"],
+            signals=EntitySignals(known_count=10, pass_number=3),
+            field_map=SAMPLE_FIELD_MAP,
+        )
+        assert config.search_context_size == SearchContextSize.LOW
+
+    def test_obscure_uses_high_context(self):
+        """Obscure fields should trigger high context size."""
+        config = resolve(
+            search_plan_mode="targeted",
+            target_fields=["annual_capacity_tons"],
+            signals=EntitySignals(known_count=5, pass_number=2),
+            field_map=SAMPLE_FIELD_MAP,
+        )
+        assert config.search_context_size in (SearchContextSize.HIGH, SearchContextSize.MEDIUM)
+
+    def test_message_strategy_targeted_with_known(self):
+        """Targeted mode with >5 known fields should use assistant strategy."""
+        config = resolve(
+            search_plan_mode="targeted",
+            target_fields=["certifications"],
+            signals=EntitySignals(known_count=8, pass_number=2),
+            field_map=SAMPLE_FIELD_MAP,
+        )
+        assert config.message_strategy == MessageStrategy.SYSTEM_USER_ASSISTANT
+
+    def test_force_model_override(self):
+        """force_model should override all selection logic."""
+        config = resolve(
+            search_plan_mode="discovery",
+            target_fields=["revenue"],
+            signals=EntitySignals(pass_number=1),
+            field_map=SAMPLE_FIELD_MAP,
+            force_model=SonarModel.SONAR_REASONING,
+        )
+        assert config.model == SonarModel.SONAR_REASONING
 
 
-def test_batch_cost():
-    """Estimate cost for batch enrichment."""
-    print("\n" + "=" * 60)
-    print("TEST 3: Batch Cost Estimation")
-    print("=" * 60)
+class TestResolveFromClassification:
+    """Test the convenience resolve_from_classification wrapper."""
 
-    lead_count = 500
-    passes = 3
-
-    # Simulate distribution
-    pass1_cost = 0.045  # discovery, sonar-pro/high
-    pass2_cost = 0.008  # targeted, sonar/medium
-    pass3_cost = 0.003  # verification, sonar/low
-
-    total = (pass1_cost + pass2_cost + pass3_cost) * lead_count
-    per_lead = total / lead_count
-
-    print(f"\n{lead_count} leads × {passes} passes:")
-    print(
-        f"  Pass 1 (discovery):   ${pass1_cost:.3f}/lead × {lead_count} = ${pass1_cost * lead_count:.2f}"
-    )
-    print(
-        f"  Pass 2 (targeted):    ${pass2_cost:.3f}/lead × {lead_count} = ${pass2_cost * lead_count:.2f}"
-    )
-    print(
-        f"  Pass 3 (verification): ${pass3_cost:.3f}/lead × {lead_count} = ${pass3_cost * lead_count:.2f}"
-    )
-    print("  ─────────────────────────────────────")
-    print(f"  Total: ${total:.2f}")
-    print(f"  Per lead: ${per_lead:.4f}")
+    def test_unpacks_classification(self):
+        """resolve_from_classification should work with DomainClassification."""
+        classification = DomainClassification(
+            domain="test",
+            field_map=SAMPLE_FIELD_MAP,
+            domain_filters={},
+            gate_fields={"certifications"},
+            scoring_fields=set(),
+            time_sensitive_fields=set(),
+            ambiguous_fields=set(),
+            stats={"trivial": 2, "public": 2, "findable": 1, "obscure": 1, "inferrable": 2},
+        )
+        signals = EntitySignals(known_count=3, null_count=5, pass_number=1)
+        config = resolve_from_classification(
+            search_plan_mode="discovery",
+            target_fields=["revenue", "certifications"],
+            signals=signals,
+            classification=classification,
+        )
+        assert isinstance(config, SonarConfig)
+        assert config.model in SonarModel
 
 
-if __name__ == "__main__":
-    classification = test_field_classification()
-    test_search_optimizer(classification)
-    test_batch_cost()
+class TestCostEstimation:
+    """Test cost model accuracy."""
 
-    print("\n" + "=" * 60)
-    print("✅ All tests complete")
-    print("=" * 60)
+    def test_sonar_base_cost(self):
+        cost = estimate_call_cost(SonarModel.SONAR, SearchContextSize.MEDIUM, 2048, 3)
+        assert cost > 0
+        assert cost < 0.1  # sanity
+
+    def test_sonar_pro_more_expensive(self):
+        base = estimate_call_cost(SonarModel.SONAR, SearchContextSize.MEDIUM, 2048, 3)
+        pro = estimate_call_cost(SonarModel.SONAR_PRO, SearchContextSize.MEDIUM, 2048, 3)
+        assert pro > base
+
+    def test_high_context_more_expensive(self):
+        low = estimate_call_cost(SonarModel.SONAR, SearchContextSize.LOW, 2048, 3)
+        high = estimate_call_cost(SonarModel.SONAR, SearchContextSize.HIGH, 2048, 3)
+        assert high > low
+
+
+class TestSonarConfigSerialization:
+    """Test to_dict and to_api_params."""
+
+    def test_to_dict_complete(self):
+        config = SonarConfig(
+            model=SonarModel.SONAR_PRO,
+            estimated_cost_per_call=0.05,
+        )
+        d = config.to_dict()
+        assert d["model"] == "sonar-pro"
+        assert "estimated_cost_per_call" in d
+        assert "resolution_reason" in d
+
+    def test_to_api_params(self):
+        config = SonarConfig(model=SonarModel.SONAR)
+        params = config.to_api_params()
+        assert params["model"] == "sonar"
+        assert "web_search_options" in params
