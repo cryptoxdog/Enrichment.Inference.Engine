@@ -94,6 +94,25 @@ class SonarConfig:
     estimated_cost_per_call: float = 0.0
     resolution_reason: str = ""
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for PacketEnvelope.metadata observability."""
+        return {
+            "model": self.model.value,
+            "search_context_size": self.search_context_size.value,
+            "search_mode": self.search_mode.value,
+            "recency_filter": self.recency_filter.value,
+            "domain_filter": self.domain_filter,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "response_format": self.response_format,
+            "message_strategy": self.message_strategy.value,
+            "variations": self.variations,
+            "reasoning_effort": self.reasoning_effort,
+            "disable_search": self.disable_search,
+            "estimated_cost_per_call": self.estimated_cost_per_call,
+            "resolution_reason": self.resolution_reason,
+        }
+
     def to_api_params(self) -> dict[str, Any]:
         params: dict[str, Any] = {
             "model": self.model.value,

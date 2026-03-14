@@ -42,14 +42,41 @@ async def enrich_entity(
     settings: Settings,
     kb_resolver,
     idem_store: IdempotencyStore | None = None,
+    sonar_config=None,
 ) -> EnrichResponse:
-    """Full enrichment pipeline for a single entity."""
+    """Full enrichment pipeline for a single entity.
+
+    Parameters
+    ----------
+    sonar_config : SonarConfig | None
+        When provided by the convergence controller, overrides default model,
+        search_context_size, domain_filter, max_tokens, temperature, and
+        variation count. This enables right-sized API calls per pass.
+    """
     start = time.monotonic()
 
     if request.idempotency_key and idem_store:
         cached = await idem_store.get(request.idempotency_key)
         if cached:
             return EnrichResponse(**cached)
+
+    # If sonar_config says all fields are inferrable, skip the API call entirely
+    if sonar_config and sonar_config.disable_search:
+        elapsed = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "pipeline_skipped_inferrable",
+            reason=sonar_config.resolution_reason,
+        )
+        return EnrichResponse(
+            fields={},
+            confidence=0.0,
+            variation_count=0,
+            uncertainty_score=0,
+            inference_version="v2.2.0",
+            processing_time_ms=elapsed,
+            tokens_used=0,
+            state="completed",
+        )
 
     try:
         target_schema = request.schema_
@@ -65,7 +92,15 @@ async def enrich_entity(
             target_schema=target_schema,
             max_variations=request.max_variations,
         )
-        variation_count = min(uncertainty, request.max_variations)
+
+        # Use sonar_config.variations if provided, else fall back to uncertainty
+        if sonar_config and sonar_config.variations > 0:
+            variation_count = sonar_config.variations
+        else:
+            variation_count = min(uncertainty, request.max_variations)
+
+        # Determine model — sonar_config overrides settings default
+        model = sonar_config.model.value if sonar_config else settings.perplexity_model
 
         logger.info(
             "pipeline_started",
@@ -73,6 +108,8 @@ async def enrich_entity(
             object_type=request.object_type,
             variations=variation_count,
             kb_fragments=len(kb_data["fragment_ids"]),
+            sonar_optimized=sonar_config is not None,
+            model=model,
         )
 
         payload = build_prompt(
@@ -81,8 +118,29 @@ async def enrich_entity(
             objective=request.objective,
             target_schema=target_schema,
             kb_context_text=kb_data["context_text"],
-            model=settings.perplexity_model,
+            model=model,
+            sonar_config=sonar_config,
         )
+
+        # If sonar_config provides API params, merge them into the payload
+        if sonar_config:
+            api_params = sonar_config.to_api_params()
+            # Overlay sonar_config params onto the payload (model, temperature, max_tokens, etc.)
+            payload["model"] = api_params.get("model", payload.get("model"))
+            payload["temperature"] = api_params.get("temperature", payload.get("temperature"))
+            payload["max_tokens"] = api_params.get("max_tokens", payload.get("max_tokens"))
+            if "web_search_options" in api_params:
+                payload["web_search_options"] = api_params["web_search_options"]
+            if "search_recency_filter" in api_params:
+                payload["search_recency_filter"] = api_params["search_recency_filter"]
+            if "search_domain_filter" in api_params:
+                payload["search_domain_filter"] = api_params["search_domain_filter"]
+            if "response_format" in api_params:
+                payload["response_format"] = api_params["response_format"]
+            if "search_mode" in api_params:
+                payload["search_mode"] = api_params["search_mode"]
+            if api_params.get("disable_search"):
+                payload["disable_search"] = True
 
         sem = asyncio.Semaphore(settings.max_concurrent_variations)
 

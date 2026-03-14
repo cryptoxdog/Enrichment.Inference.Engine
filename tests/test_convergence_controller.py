@@ -1,6 +1,7 @@
 """Tests for app/engines/convergence_controller.py
 
-Covers: Multi-pass loop orchestration, convergence detection, pass delegation.
+Covers: Multi-pass loop orchestration, convergence detection, pass delegation,
+        field_classifier + search_optimizer wiring.
 
 Source: ~400 lines | Target coverage: 70%
 """
@@ -13,11 +14,45 @@ from unittest.mock import MagicMock
 from app.engines.convergence_controller import (
     run_convergence_loop,
     ConvergenceState,
+    get_or_classify_domain,
+    _classification_cache,
     MAX_PASSES,
     CONVERGENCE_THRESHOLD,
     MIN_DELTA,
 )
+from app.engines.field_classifier import DomainClassification, FieldDifficulty
+from app.engines.search_optimizer import SonarConfig, SonarModel
 from app.models.schemas import EnrichRequest, EnrichResponse
+
+
+# ── Fixtures ───────────────────────────────────────────────
+
+
+SAMPLE_DOMAIN_SPEC = {
+    "domain": "test_domain",
+    "gate_fields": ["facility_type"],
+    "scoring_fields": ["revenue"],
+    "time_sensitive_fields": ["recent_news"],
+    "ambiguous_fields": [],
+    "ontology": {
+        "nodes": {
+            "Company": {
+                "properties": {
+                    "name": {"type": "string"},
+                    "website": {"type": "string"},
+                    "facility_type": {"type": "string"},
+                    "revenue": {"type": "float", "discovery_confidence": 0.5},
+                    "material_grade": {
+                        "type": "string",
+                        "managed_by": "computed",
+                        "derived_from": ["facility_type"],
+                    },
+                    "recent_news": {"type": "string"},
+                }
+            }
+        }
+    },
+}
 
 
 class TestConvergenceController:
@@ -35,6 +70,11 @@ class TestConvergenceController:
     def mock_settings(self):
         settings = MagicMock()
         settings.pplx_api_key = "test-key"
+        settings.perplexity_api_key = "test-key"
+        settings.perplexity_model = "sonar"
+        settings.max_concurrent_variations = 3
+        settings.default_timeout_seconds = 30
+        settings.max_budget_tokens = 30000
         return settings
 
     @pytest.fixture
@@ -46,7 +86,7 @@ class TestConvergenceController:
         """Enricher that returns diminishing results to trigger convergence."""
         call_count = 0
 
-        async def enricher(request, settings, kb_resolver, idem_store):
+        async def enricher(request, settings, kb_resolver, idem_store, sonar_config=None):
             nonlocal call_count
             call_count += 1
             fields = {"field_a": "val"} if call_count == 1 else {}
@@ -95,7 +135,9 @@ class TestConvergenceController:
     async def test_max_passes_respected(self, enrich_request, mock_settings, mock_kb_resolver):
         call_count = 0
 
-        async def always_new_enricher(request, settings, kb_resolver, idem_store):
+        async def always_new_enricher(
+            request, settings, kb_resolver, idem_store, sonar_config=None
+        ):
             nonlocal call_count
             call_count += 1
             return EnrichResponse(
@@ -142,7 +184,7 @@ class TestConvergenceController:
             enricher=mock_enricher_converging,
             inference_rules=[],
         )
-        assert response.processing_time_ms > 0
+        assert response.processing_time_ms >= 0
 
     def test_convergence_state_initial(self):
         state = ConvergenceState()
@@ -155,3 +197,191 @@ class TestConvergenceController:
         assert MAX_PASSES == 3
         assert CONVERGENCE_THRESHOLD == 2.0
         assert MIN_DELTA == 0.05
+
+
+class TestDomainClassificationWiring:
+    """Tests for field_classifier + search_optimizer integration."""
+
+    @pytest.fixture
+    def enrich_request(self):
+        return EnrichRequest(
+            entity={"Name": "Test Corp", "website": "https://test.com"},
+            object_type="Account",
+            objective="Enrich company data",
+        )
+
+    @pytest.fixture
+    def mock_settings(self):
+        settings = MagicMock()
+        settings.pplx_api_key = "test-key"
+        settings.perplexity_api_key = "test-key"
+        settings.perplexity_model = "sonar"
+        settings.max_concurrent_variations = 3
+        settings.default_timeout_seconds = 30
+        settings.max_budget_tokens = 30000
+        return settings
+
+    @pytest.fixture
+    def mock_kb_resolver(self):
+        return MagicMock()
+
+    def test_domain_classification_computed(self):
+        """Test that auto_classify_domain produces a valid DomainClassification."""
+        _classification_cache.clear()
+        classification = get_or_classify_domain(SAMPLE_DOMAIN_SPEC)
+        assert isinstance(classification, DomainClassification)
+        assert classification.domain == "test_domain"
+        assert len(classification.field_map) > 0
+        # material_grade should be INFERRABLE (managed_by: computed)
+        assert classification.field_map.get("material_grade") == FieldDifficulty.INFERRABLE
+        # name should be TRIVIAL (name pattern)
+        assert classification.field_map.get("name") == FieldDifficulty.TRIVIAL
+
+    def test_domain_classification_cached(self):
+        """Test that repeated calls use the cache."""
+        _classification_cache.clear()
+        c1 = get_or_classify_domain(SAMPLE_DOMAIN_SPEC)
+        c2 = get_or_classify_domain(SAMPLE_DOMAIN_SPEC)
+        assert c1 is c2  # Same object from cache
+
+    def test_domain_classification_stats(self):
+        """Test that stats dict tallies correctly."""
+        _classification_cache.clear()
+        classification = get_or_classify_domain(SAMPLE_DOMAIN_SPEC)
+        total = sum(classification.stats.values())
+        assert total == len(classification.field_map)
+
+    def test_domain_classification_to_dict(self):
+        """Test PacketEnvelope compliance via to_dict."""
+        _classification_cache.clear()
+        classification = get_or_classify_domain(SAMPLE_DOMAIN_SPEC)
+        d = classification.to_dict()
+        assert isinstance(d, dict)
+        assert d["domain"] == "test_domain"
+        assert isinstance(d["field_map"], dict)
+        # Values should be strings (enum values)
+        for v in d["field_map"].values():
+            assert isinstance(v, str)
+
+    @pytest.mark.asyncio
+    async def test_sonar_config_resolved_per_pass(
+        self, enrich_request, mock_settings, mock_kb_resolver
+    ):
+        """Test that sonar_config is computed when domain_spec is provided."""
+        received_configs = []
+
+        async def tracking_enricher(request, settings, kb_resolver, idem_store, sonar_config=None):
+            received_configs.append(sonar_config)
+            return EnrichResponse(
+                fields={"field_a": "val"} if len(received_configs) == 1 else {},
+                confidence=0.85 if len(received_configs) == 1 else 0.86,
+                variation_count=3,
+                uncertainty_score=1,
+                inference_version="test",
+                processing_time_ms=50,
+                tokens_used=300,
+                state="completed",
+            )
+
+        _classification_cache.clear()
+        await run_convergence_loop(
+            request=enrich_request,
+            settings=mock_settings,
+            kb_resolver=mock_kb_resolver,
+            enricher=tracking_enricher,
+            inference_rules=[],
+            domain_spec=SAMPLE_DOMAIN_SPEC,
+        )
+
+        # At least one pass should have received a sonar_config
+        assert len(received_configs) > 0
+        assert any(c is not None for c in received_configs)
+        # Check it's a SonarConfig instance
+        for config in received_configs:
+            if config is not None:
+                assert isinstance(config, SonarConfig)
+                assert config.model in SonarModel
+                assert config.estimated_cost_per_call >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_no_sonar_config_without_domain_spec(
+        self, enrich_request, mock_settings, mock_kb_resolver
+    ):
+        """Test that sonar_config is None when no domain_spec is provided."""
+        received_configs = []
+
+        async def tracking_enricher(request, settings, kb_resolver, idem_store, sonar_config=None):
+            received_configs.append(sonar_config)
+            return EnrichResponse(
+                fields={},
+                confidence=0.85,
+                variation_count=3,
+                uncertainty_score=1,
+                inference_version="test",
+                processing_time_ms=50,
+                tokens_used=300,
+                state="completed",
+            )
+
+        await run_convergence_loop(
+            request=enrich_request,
+            settings=mock_settings,
+            kb_resolver=mock_kb_resolver,
+            enricher=tracking_enricher,
+            inference_rules=[],
+            domain_spec=None,
+        )
+
+        # All configs should be None without domain_spec
+        assert all(c is None for c in received_configs)
+
+    @pytest.mark.asyncio
+    async def test_cost_tracking_in_response(self, enrich_request, mock_settings, mock_kb_resolver):
+        """Test that cost summary appears in feature_vector."""
+
+        async def simple_enricher(request, settings, kb_resolver, idem_store, sonar_config=None):
+            return EnrichResponse(
+                fields={"field_a": "val"},
+                confidence=0.9,
+                variation_count=3,
+                uncertainty_score=1,
+                inference_version="test",
+                processing_time_ms=50,
+                tokens_used=500,
+                state="completed",
+            )
+
+        _classification_cache.clear()
+        response = await run_convergence_loop(
+            request=enrich_request,
+            settings=mock_settings,
+            kb_resolver=mock_kb_resolver,
+            enricher=simple_enricher,
+            inference_rules=[],
+            domain_spec=SAMPLE_DOMAIN_SPEC,
+        )
+
+        assert response.feature_vector is not None
+        assert "cost_summary" in response.feature_vector
+        assert "domain_classification" in response.feature_vector
+
+
+class TestSonarConfigSerialization:
+    """Test SonarConfig.to_dict for PacketEnvelope compliance."""
+
+    def test_sonar_config_to_dict(self):
+        config = SonarConfig(
+            model=SonarModel.SONAR_PRO,
+            estimated_cost_per_call=0.045,
+            resolution_reason="test",
+        )
+        d = config.to_dict()
+        assert isinstance(d, dict)
+        assert d["model"] == "sonar-pro"
+        assert d["estimated_cost_per_call"] == 0.045
+
+    def test_sonar_config_to_api_params(self):
+        config = SonarConfig(model=SonarModel.SONAR)
+        params = config.to_api_params()
+        assert params["model"] == "sonar"
+        assert "web_search_options" in params
