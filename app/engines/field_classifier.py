@@ -487,6 +487,20 @@ class DomainClassification:
     stats: dict[str, int]
     calibrated: bool = False
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for PacketEnvelope.metadata observability."""
+        return {
+            "domain": self.domain,
+            "field_map": {k: v.value for k, v in self.field_map.items()},
+            "domain_filters": self.domain_filters,
+            "gate_fields": sorted(self.gate_fields),
+            "scoring_fields": sorted(self.scoring_fields),
+            "time_sensitive_fields": sorted(self.time_sensitive_fields),
+            "ambiguous_fields": sorted(self.ambiguous_fields),
+            "stats": self.stats,
+            "calibrated": self.calibrated,
+        }
+
 
 def auto_classify_domain(
     domain_spec: dict[str, Any],

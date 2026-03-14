@@ -54,8 +54,11 @@ class MetaPromptPlanner:
             return self._plan_discovery(entity, domain_hints)
 
         missing = self._find_high_value_gaps(
-            entity, known_fields, inferred_fields,
-            domain_hints, inference_rule_catalog,
+            entity,
+            known_fields,
+            inferred_fields,
+            domain_hints,
+            inference_rule_catalog,
             unlock_map=unlock_map,
         )
 

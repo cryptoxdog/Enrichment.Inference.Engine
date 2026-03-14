@@ -6,6 +6,11 @@ Audit fixes applied:
          output format example — not a one-liner.
   - H14: Passes ALL non-empty entity fields, not just name+country.
   - M10: Computes real schema hash from actual schema content.
+
+Search intelligence integration:
+  - Accepts optional SonarConfig for message_strategy-aware prompt construction
+  - SYSTEM_USER_ASSISTANT strategy injects known fields as assistant context
+    (primes the model with prior-pass knowledge for surgical targeting)
 """
 
 from __future__ import annotations
@@ -36,6 +41,28 @@ TARGET SCHEMA:
 {schema_block}"""
 
 
+def _build_assistant_context(entity: dict[str, Any]) -> str | None:
+    """Build an assistant message summarizing known fields from prior passes.
+
+    This primes the model with existing knowledge so targeted passes don't
+    re-research what's already known — they focus on gaps.
+    """
+    non_null = {k: v for k, v in entity.items() if v is not None and v != "" and v != []}
+    if not non_null:
+        return None
+
+    lines = ["I already have the following verified data for this entity:"]
+    for key, value in sorted(non_null.items()):
+        if key.startswith("_"):
+            continue  # skip internal fields
+        str_val = str(value)
+        if len(str_val) > 300:
+            str_val = str_val[:297] + "..."
+        lines.append(f"  {key}: {str_val}")
+    lines.append("\nFocus your research on the fields I'm still missing from the target schema.")
+    return "\n".join(lines)
+
+
 def build_prompt(
     entity: dict[str, Any],
     object_type: str,
@@ -43,8 +70,16 @@ def build_prompt(
     target_schema: dict[str, str] | None = None,
     kb_context_text: str = "",
     model: str = "sonar-reasoning",
+    sonar_config=None,
 ) -> dict:
-    """Build a Perplexity chat completion payload tailored to this entity."""
+    """Build a Perplexity chat completion payload tailored to this entity.
+
+    Parameters
+    ----------
+    sonar_config : SonarConfig | None
+        When provided, uses message_strategy to determine prompt structure.
+        SYSTEM_USER_ASSISTANT injects known fields as an assistant turn.
+    """
 
     # ── Schema block ─────────────────────────────────
     if target_schema:
@@ -82,12 +117,24 @@ def build_prompt(
         f"Research this entity thoroughly. Return strictly valid JSON."
     )
 
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_content},
+    ]
+
+    # ── Message strategy: inject assistant context if applicable ──
+    if sonar_config is not None:
+        # Import here to avoid circular imports
+        from ..engines.search_optimizer import MessageStrategy
+
+        if sonar_config.message_strategy == MessageStrategy.SYSTEM_USER_ASSISTANT:
+            assistant_ctx = _build_assistant_context(entity)
+            if assistant_ctx:
+                messages.append({"role": "assistant", "content": assistant_ctx})
+
     return {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_content},
-        ],
+        "messages": messages,
         "temperature": 0.7,
         "max_tokens": 4000,
     }
