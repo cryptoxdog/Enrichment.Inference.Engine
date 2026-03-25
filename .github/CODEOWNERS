@@ -1,0 +1,32 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [governance]
+# tags: [L9_TEMPLATE, codeowners]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# CODEOWNERS — Enrichment.Inference.Engine
+# Sibling parity: Cognitive.Engine.Graphs/.github/CODEOWNERS
+
+# Default owner for everything
+* @cryptoxdog
+
+# Infrastructure & Configuration
+/.github/                   @cryptoxdog
+/docker-compose*.yml        @cryptoxdog
+/Dockerfile                 @cryptoxdog
+
+# CI/CD Workflows (protected)
+/.github/workflows/         @cryptoxdog
+
+# Package Configuration (protected)
+/pyproject.toml             @cryptoxdog
+/requirements*.txt          @cryptoxdog
+
+# Documentation
+/docs/                      @cryptoxdog
+/readme/                    @cryptoxdog
+/README.md                  @cryptoxdog

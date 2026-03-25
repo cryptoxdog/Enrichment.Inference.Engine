@@ -1,0 +1,84 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [ci]
+# tags: [L9_TEMPLATE, dependabot]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# Dependabot configuration — automated dependency updates
+# Sibling parity: Cognitive.Engine.Graphs/.github/dependabot.yml
+
+version: 2
+
+updates:
+  # ── Python dependencies ──────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps):"
+    labels:
+      - "dependencies"
+      - "python"
+    reviewers:
+      - "cryptoxdog"
+    groups:
+      web-framework:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "httpx*"
+          - "starlette*"
+      data-validation:
+        patterns:
+          - "pydantic*"
+      testing:
+        patterns:
+          - "pytest*"
+          - "respx*"
+          - "coverage*"
+      dev-tools:
+        patterns:
+          - "ruff*"
+          - "mypy*"
+          - "pre-commit*"
+      security:
+        patterns:
+          - "bandit*"
+          - "pip-audit*"
+          - "safety*"
+      observability:
+        patterns:
+          - "structlog*"
+
+  # ── GitHub Actions ───────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci):"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # ── Docker ───────────────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(docker):"
+    labels:
+      - "dependencies"
+      - "docker"

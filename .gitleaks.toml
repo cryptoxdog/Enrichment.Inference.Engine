@@ -1,0 +1,98 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [security]
+# tags: [L9_TEMPLATE, security, secrets]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# Gitleaks configuration — custom secret detection rules
+# Sibling parity: Cognitive.Engine.Graphs/.gitleaks.toml
+
+title = "L9 Enrichment Engine — Gitleaks Configuration"
+
+# ── Custom Rules ──────────────────────────────────────────────────────────
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{20,}'''
+tags = ["api", "openai"]
+
+[[rules]]
+id = "perplexity-api-key"
+description = "Perplexity API Key (Sonar enrichment)"
+regex = '''pplx-[a-zA-Z0-9]{40,}'''
+tags = ["api", "perplexity"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey|api[_-]?secret)\s*[=:]\s*['"][a-zA-Z0-9_\-]{20,}['"]'''
+tags = ["api", "generic"]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key ID"
+regex = '''AKIA[0-9A-Z]{16}'''
+tags = ["aws"]
+
+[[rules]]
+id = "slack-bot-token"
+description = "Slack Bot Token"
+regex = '''xoxb-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{20,}'''
+tags = ["slack"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "PostgreSQL Connection String with Password"
+regex = '''postgres(?:ql)?://[^:]+:[^@]+@[^/]+/[^\s'"]+'''
+tags = ["database", "postgres"]
+
+[[rules]]
+id = "redis-connection-string"
+description = "Redis Connection String with Password"
+regex = '''redis://:[^@]+@[^/]+'''
+tags = ["database", "redis"]
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'''
+tags = ["key"]
+
+[[rules]]
+id = "jwt-token"
+description = "JWT Token"
+regex = '''eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}'''
+tags = ["jwt"]
+
+[[rules]]
+id = "sendgrid-api-key"
+description = "SendGrid API Key"
+regex = '''SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}'''
+tags = ["api", "sendgrid"]
+
+# ── Allowlist ─────────────────────────────────────────────────────────────
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+    '''tests/''',
+    '''docs/''',
+    '''readme/''',
+    '''kb/''',
+    '''\.env\.example''',
+    '''\.env\.template''',
+    '''docker-compose\..*\.yml''',
+    '''requirements.*\.txt''',
+    '''.*\.md$''',
+    '''.*\.sarif$''',
+    '''.*\.json$''',
+]
+regexTarget = "match"
+regexes = [
+    '''(?i)example|placeholder|dummy|test|fake|mock|sample''',
+]
