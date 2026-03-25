@@ -1,0 +1,188 @@
+# Repository Contract Pairs Catalog — Enrichment.Inference.Engine
+# ================================================================
+# Enforces method/param call validity repo-wide via AST scanning.
+# Adapted from L9 10X CI pack for enrichment engine domain.
+
+schema_version: "1.0.0"
+
+dora_metadata:
+  created_at: "2026-03-25T00:00:00Z"
+  updated_at: "2026-03-25T00:00:00Z"
+  updated_by: "l9-ci-architect"
+  purpose: "Repository-wide method/param contract enforcement for enrichment engine"
+
+scan:
+  include_globs:
+    - "**/*.py"
+  exclude_globs:
+    - ".venv/**"
+    - ".git/**"
+    - "node_modules/**"
+    - "__pycache__/**"
+    - ".mypy_cache/**"
+    - ".pytest_cache/**"
+    - ".ruff_cache/**"
+    - "htmlcov/**"
+    - "tests/fixtures/**"
+
+pairs:
+  # ── Chassis Contract: inflate_ingress packet_type ────────────
+  - method: "inflate_ingress"
+    param: "packet_type"
+    allowed_literals:
+      - "enrichment_request"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "inflate_ingress must produce enrichment_request packet_type"
+
+  # ── Chassis Contract: deflate_egress packet_type ─────────────
+  - method: "deflate_egress"
+    param: "packet_type"
+    allowed_literals:
+      - "enrichment_result"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "deflate_egress must produce enrichment_result packet_type"
+
+  # ── Handler Registry: ACTION_REGISTRY action keys ────────────
+  - method: "ACTION_REGISTRY"
+    param: "action"
+    allowed_literals:
+      - "enrich"
+      - "enrichbatch"
+      - "converge"
+      - "discover"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Handler action must be a registered chassis action"
+
+  # ── Graph Sync Client: _build_envelope action ────────────────
+  - method: "_build_envelope"
+    param: "action"
+    allowed_literals:
+      - "sync"
+      - "match"
+      - "outcome"
+      - "resolve"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Graph sync envelope action must be from the known set"
+
+  # ── ScoreDimension enum enforcement ──────────────────────────
+  - method: "ScoreDimensionResult"
+    param: "dimension"
+    allowed_literals:
+      - "fit"
+      - "intent"
+      - "engagement"
+      - "readiness"
+      - "graph_affinity"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Score dimension must be from ScoreDimension enum"
+
+  # ── FieldSource enum enforcement ─────────────────────────────
+  - method: "FieldConfidence"
+    param: "source"
+    allowed_literals:
+      - "crm"
+      - "enrichment"
+      - "inference"
+      - "manual"
+      - "seed"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "FieldConfidence source must be from FieldSource enum"
+
+  # ── HealthAction enum enforcement ────────────────────────────
+  - method: "HealthRecommendation"
+    param: "action"
+    allowed_literals:
+      - "re_enrich"
+      - "verify_field"
+      - "resolve_conflict"
+      - "fill_missing"
+      - "refresh_stale"
+      - "flag_outlier"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Health recommendation action must be from HealthAction enum"
+
+  # ── AssessmentScope enum enforcement ─────────────────────────
+  - method: "assess"
+    param: "scope"
+    allowed_literals:
+      - "full"
+      - "incremental"
+      - "entity"
+      - "field"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Assessment scope must be from AssessmentScope enum"
+
+  # ── ConvergenceMode enum enforcement ─────────────────────────
+  - method: "ConvergeRequest"
+    param: "mode"
+    allowed_literals:
+      - "discovery"
+      - "targeted"
+      - "verification"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Convergence mode must be from ConvergenceMode enum"
+
+  # ── LoopStatus enum enforcement ──────────────────────────────
+  - method: "LoopState"
+    param: "status"
+    allowed_literals:
+      - "running"
+      - "converged"
+      - "budget_exhausted"
+      - "max_passes"
+      - "diminishing_returns"
+      - "human_hold"
+      - "failed"
+    dynamic_policy: "hybrid_warn"
+    severity: "error"
+    description: "Loop status must be from LoopStatus enum"
+
+dynamic_sources:
+  allow_patterns:
+    - kind: "enum_member"
+      pattern: "ScoreDimension.*"
+      trust_level: "proven"
+    - kind: "enum_member"
+      pattern: "FieldSource.*"
+      trust_level: "proven"
+    - kind: "enum_member"
+      pattern: "HealthAction.*"
+      trust_level: "proven"
+    - kind: "enum_member"
+      pattern: "AssessmentScope.*"
+      trust_level: "proven"
+    - kind: "enum_member"
+      pattern: "ConvergenceMode.*"
+      trust_level: "proven"
+    - kind: "enum_member"
+      pattern: "LoopStatus.*"
+      trust_level: "proven"
+    - kind: "enum_member"
+      pattern: "ScoreSource.*"
+      trust_level: "proven"
+    - kind: "attribute_chain"
+      pattern: "self.source"
+      trust_level: "semi_proven"
+    - kind: "attribute_chain"
+      pattern: "self.dimension"
+      trust_level: "semi_proven"
+    - kind: "variable"
+      pattern: "action"
+      trust_level: "semi_proven"
+    - kind: "variable"
+      pattern: "packet_type"
+      trust_level: "semi_proven"
+
+baseline:
+  file: "config/contracts/contract_baseline_counts.json"
+  drift_threshold_percent: 10
+  drift_policy: "warn"

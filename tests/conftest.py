@@ -1,8 +1,24 @@
 """Shared pytest fixtures for all test modules."""
 
+from pathlib import Path
+
 import pytest
 from app.models.field_confidence import FieldConfidenceMap, FieldConfidence, FieldSource
 from app.models.loop_schemas import ConvergeRequest
+
+REPO_ROOT = Path(__file__).parent.parent
+
+
+@pytest.fixture(scope="session")
+def repo_root() -> Path:
+    """Absolute path to the repository root."""
+    return REPO_ROOT
+
+
+@pytest.fixture(scope="session")
+def engine_dir() -> Path:
+    """Absolute path to the engine source directory."""
+    return REPO_ROOT / "app"
 
 
 @pytest.fixture
