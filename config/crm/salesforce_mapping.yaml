@@ -21,7 +21,7 @@ objects:
       company_ticker_symbol: TickerSymbol
       enrichment_timestamp: Enrichment_Last_Updated__c
       enrichment_quality_score: Data_Quality_Score__c
-      
+
   contact:
     salesforce_object: Contact
     mappings:
@@ -39,7 +39,7 @@ objects:
       contact_company_id: AccountId
       enrichment_timestamp: Enrichment_Last_Updated__c
       enrichment_quality_score: Data_Quality_Score__c
-      
+
   opportunity:
     salesforce_object: Opportunity
     mappings:

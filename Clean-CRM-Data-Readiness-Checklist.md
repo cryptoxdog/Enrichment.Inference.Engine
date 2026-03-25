@@ -5,7 +5,7 @@
 
 **Target Audience:** Engineering teams, RevOps, Data Engineers, Marketing Ops
 
-**Success Criteria:** 
+**Success Criteria:**
 - Google Customer Match lists achieve >50% match rates
 - Enhanced Conversions capture >80% of offline revenue
 - Salesforce Data Cloud can unify >90% of customer records
@@ -51,7 +51,7 @@
 - [ ] **Completeness Check**
   - Query for null/empty critical fields:
     ```sql
-    SELECT 
+    SELECT
       COUNT(*) as total_records,
       SUM(CASE WHEN email IS NULL OR email = '' THEN 1 ELSE 0 END) as missing_email,
       SUM(CASE WHEN phone IS NULL OR phone = '' THEN 1 ELSE 0 END) as missing_phone,
@@ -80,9 +80,9 @@
     WHERE email IS NOT NULL
     GROUP BY email
     HAVING COUNT(*) > 1;
-    
+
     -- Fuzzy name + address matches
-    SELECT 
+    SELECT
       first_name, last_name, postal_code, COUNT(*) as count
     FROM contacts
     GROUP BY first_name, last_name, postal_code
@@ -94,7 +94,7 @@
 - [ ] **Timeliness Check**
   - Query for stale data:
     ```sql
-    SELECT 
+    SELECT
       COUNT(*) as total,
       SUM(CASE WHEN last_updated < NOW() - INTERVAL '1 year' THEN 1 ELSE 0 END) as stale_1yr,
       SUM(CASE WHEN last_updated < NOW() - INTERVAL '6 months' THEN 1 ELSE 0 END) as stale_6mo
@@ -119,7 +119,7 @@
   - Is consent source/method documented? (web form, in-person, email)
   - What % of database has explicit consent?
     ```sql
-    SELECT 
+    SELECT
       COUNT(*) as total,
       SUM(CASE WHEN marketing_consent = TRUE THEN 1 ELSE 0 END) as consented,
       (SUM(CASE WHEN marketing_consent = TRUE THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as consent_rate
@@ -160,9 +160,9 @@
     ```sql
     UPDATE contacts
     SET email_primary = LOWER(TRIM(email_primary)),
-        email_verified = CASE 
-          WHEN email_primary ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$' 
-          THEN TRUE ELSE FALSE 
+        email_verified = CASE
+          WHEN email_primary ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
+          THEN TRUE ELSE FALSE
         END;
     ```
 
@@ -175,14 +175,14 @@
   - **Script template (pseudo-code):**
     ```python
     import phonenumbers
-    
+
     def normalize_phone(phone, default_country='US'):
         try:
             parsed = phonenumbers.parse(phone, default_country)
             return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         except:
             return None
-    
+
     # Apply to all phone fields in batch
     ```
 
@@ -312,7 +312,7 @@
   WHERE email_primary IS NOT NULL
   GROUP BY email_primary
   HAVING COUNT(*) > 1;
-  
+
   -- Mark duplicates
   UPDATE contacts
   SET is_duplicate = TRUE,
@@ -358,7 +358,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       return urlParams.get(name);
     }
-    
+
     const gclid = getURLParameter('gclid');
     if (gclid) {
       // Store in cookie
@@ -480,10 +480,10 @@
     ```python
     import hashlib
     from google.ads.googleads.client import GoogleAdsClient
-    
+
     def hash_value(value):
         return hashlib.sha256(value.strip().lower().encode()).hexdigest()
-    
+
     # Build conversion payload
     conversion = {
         'conversion_action': f'customers/{customer_id}/conversionActions/{action_id}',
@@ -495,11 +495,11 @@
             {'hashed_phone_number': hash_value(contact['phone'])}
         ]
     }
-    
+
     # If gclid available, add it
     if transaction['gclid']:
         conversion['gclid'] = transaction['gclid']
-    
+
     # Send to Google Ads API
     ```
 
@@ -526,7 +526,7 @@
   - Hash PII with SHA-256 before upload (or let Google hash)
   - **Sample export query:**
     ```sql
-    SELECT 
+    SELECT
       SHA2(LOWER(TRIM(email_primary)), 256) AS Email,
       SHA2(REGEXP_REPLACE(phone_mobile, '[^0-9+]', ''), 256) AS Phone,
       SHA2(LOWER(first_name), 256) AS "First Name",
@@ -955,6 +955,6 @@ Before declaring "data readiness" complete, verify:
 4. Expand to additional ad platforms (Meta CAPI, Trade Desk)
 5. Monthly performance review and optimization
 
-**Document Version:** 1.0  
-**Last Updated:** March 8, 2026  
+**Document Version:** 1.0
+**Last Updated:** March 8, 2026
 **Owner:** Engineering & RevOps Teams

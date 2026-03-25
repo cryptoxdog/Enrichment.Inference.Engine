@@ -9,7 +9,7 @@ sources:
     retry_count: 2
     supported_domains: [company, contact]
     quality_tier: premium
-    
+
   zoominfo:
     enabled: true
     api_endpoint: https://api.zoominfo.com/lookup
@@ -20,7 +20,7 @@ sources:
     retry_count: 1
     supported_domains: [company, contact]
     quality_tier: premium
-    
+
   apollo:
     enabled: true
     api_endpoint: https://api.apollo.io/v1
@@ -31,7 +31,7 @@ sources:
     retry_count: 2
     supported_domains: [company, contact]
     quality_tier: standard
-    
+
   hunter:
     enabled: true
     api_endpoint: https://api.hunter.io/v2
@@ -42,7 +42,7 @@ sources:
     retry_count: 2
     supported_domains: [contact]
     quality_tier: standard
-    
+
   linkedin:
     enabled: false
     api_endpoint: https://api.linkedin.com/v2
@@ -53,7 +53,7 @@ sources:
     retry_count: 1
     supported_domains: [company, contact]
     quality_tier: premium
-    
+
   perplexity_sonar:
     enabled: true
     api_endpoint: https://api.perplexity.ai

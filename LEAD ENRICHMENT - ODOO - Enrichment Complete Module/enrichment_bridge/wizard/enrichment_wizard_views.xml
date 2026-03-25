@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="enrichment_wizard_form" model="ir.ui.view">
+        <field name="name">enrichment.wizard.form</field>
+        <field name="model">enrichment.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="lead_ids" widget="many2many_tags"/>
+                    <field name="lead_count"/>
+                </group>
+                <footer>
+                    <button name="action_enrich_selected"
+                            string="Enrich Selected"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_enrichment_wizard" model="ir.actions.act_window">
+        <field name="name">Enrich Leads</field>
+        <field name="res_model">enrichment.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="crm.model_crm_lead"/>
+        <field name="binding_view_types">list</field>
+    </record>
+</odoo>

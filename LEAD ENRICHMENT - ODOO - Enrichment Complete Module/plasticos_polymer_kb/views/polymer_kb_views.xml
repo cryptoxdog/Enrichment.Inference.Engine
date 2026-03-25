@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ======================== KB FORM ======================== -->
+    <record id="view_polymer_kb_form" model="ir.ui.view">
+        <field name="name">plasticos.polymer.kb.form</field>
+        <field name="model">plasticos.polymer.kb</field>
+        <field name="arch" type="xml">
+            <form string="Polymer Knowledge Base">
+                <header>
+                    <button name="action_reload_yaml"
+                            string="Reload from YAML" type="object"
+                            class="btn-primary"
+                            confirm="This will re-parse YAML and replace all sub-records. Continue?"/>
+                    <button name="action_sync_to_graph"
+                            string="Sync to Neo4j" type="object"
+                            class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="display_name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Identity">
+                            <field name="polymer_type"/>
+                            <field name="polymer_id"/>
+                            <field name="full_name"/>
+                            <field name="polymer_family"/>
+                            <field name="resin_id_code"/>
+                        </group>
+                        <group string="Versioning">
+                            <field name="version"/>
+                            <field name="last_updated"/>
+                            <field name="data_quality"/>
+                            <field name="source_tier"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <field name="note" placeholder="Notes..."/>
+                    <notebook>
+                        <page string="Material Grades" name="grades">
+                            <field name="grade_ids">
+                                <list editable="bottom">
+                                    <field name="grade_id"/>
+                                    <field name="grade_name"/>
+                                    <field name="mi_min"/>
+                                    <field name="mi_max"/>
+                                    <field name="density_min"/>
+                                    <field name="density_max"/>
+                                    <field name="max_pcr_pct"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Quality Tiers" name="tiers">
+                            <field name="tier_ids">
+                                <list editable="bottom">
+                                    <field name="tier_key"/>
+                                    <field name="contamination_max_pct"/>
+                                    <field name="cross_polymer_contam_max_pct"/>
+                                    <field name="moisture_max_pct"/>
+                                    <field name="ash_max_pct"/>
+                                    <field name="property_retention_min_pct"/>
+                                    <field name="sorting_purity_min_pct"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Recycling Rules" name="rules">
+                            <field name="rule_ids">
+                                <list>
+                                    <field name="rule_id"/>
+                                    <field name="rule_text"/>
+                                    <field name="safety_critical"/>
+                                    <field name="confidence"/>
+                                    <field name="threshold_value"/>
+                                    <field name="action"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Buyer Profiles" name="buyer_profiles">
+                            <field name="buyer_profile_ids">
+                                <list>
+                                    <field name="buyer_id"/>
+                                    <field name="buyer_type"/>
+                                    <field name="industry_segment"/>
+                                    <field name="mi_min"/>
+                                    <field name="mi_max"/>
+                                    <field name="contamination_max_pct"/>
+                                    <field name="quality_tiers_required"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Inference Rules" name="inference">
+                            <field name="inference_rule_ids">
+                                <list>
+                                    <field name="rule_id"/>
+                                    <field name="inference_type"/>
+                                    <field name="logic"/>
+                                    <field name="confidence"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Contamination Profiles" name="contam">
+                            <field name="contamination_profile_ids">
+                                <list>
+                                    <field name="profile_id"/>
+                                    <field name="source"/>
+                                    <field name="quality_tier"/>
+                                    <field name="contamination_level"/>
+                                    <field name="sorting_purity_pct"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Product Mappings" name="mappings">
+                            <field name="product_mapping_ids">
+                                <list>
+                                    <field name="category"/>
+                                    <field name="product"/>
+                                    <field name="scrap_grade"/>
+                                    <field name="quality_tier_min"/>
+                                    <field name="quality_tier_max"/>
+                                    <field name="suitable_buyers"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Raw YAML" name="yaml">
+                            <field name="yaml_content" widget="ace"
+                                   options="{'mode': 'yaml'}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ======================== KB LIST ======================== -->
+    <record id="view_polymer_kb_list" model="ir.ui.view">
+        <field name="name">plasticos.polymer.kb.list</field>
+        <field name="model">plasticos.polymer.kb</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="polymer_type"/>
+                <field name="full_name"/>
+                <field name="version"/>
+                <field name="data_quality"/>
+                <field name="last_updated"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ======================== KB ACTION ======================== -->
+    <record id="action_polymer_kb" model="ir.actions.act_window">
+        <field name="name">Polymer Knowledge Bases</field>
+        <field name="res_model">plasticos.polymer.kb</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

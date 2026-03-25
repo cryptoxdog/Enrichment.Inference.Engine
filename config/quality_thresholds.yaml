@@ -31,7 +31,7 @@ per_domain_thresholds:
         rule: positive_integer
       - field: annual_revenue
         rule: positive_integer
-        
+
   contact:
     completeness: 0.85
     required_fields:
@@ -48,7 +48,7 @@ per_domain_thresholds:
         rule: deliverable_email
       - field: contact_phone
         rule: valid_phone_format
-        
+
   opportunity:
     completeness: 0.80
     required_fields:
@@ -69,34 +69,34 @@ per_domain_thresholds:
 validation_rules:
   valid_domain_format:
     regex: "^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}$"
-    
+
   valid_email_format:
     regex: "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
-    
+
   valid_phone_format:
     regex: "^\\+?[1-9]\\d{1,14}$"
-    
+
   positive_integer:
     min: 1
     type: integer
-    
+
   positive_number:
     min: 0
     type: float
-    
+
   range_0_to_1:
     min: 0.0
     max: 1.0
     type: float
-    
+
   range_0_to_100:
     min: 0
     max: 100
     type: integer
-    
+
   future_date:
     constraint: ">= today"
-    
+
   year_range:
     min: 1800
     max: current_year

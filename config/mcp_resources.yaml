@@ -3,7 +3,7 @@ resources:
     name: CRM Contacts
     description: Read/write access to CRM contact records
     mime_type: application/json
-    
+
   - uri: pipeline://forecast
     name: Pipeline Forecast
     description: Real-time pipeline forecast with AI scoring

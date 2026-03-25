@@ -7,7 +7,7 @@ providers:
     coverage_score: 0.90
     enabled: true
     circuit_breaker_threshold: 0.5
-  
+
   - provider: zoominfo
     api_key: ${ZOOMINFO_API_KEY}
     api_url: https://api.zoominfo.com/rest

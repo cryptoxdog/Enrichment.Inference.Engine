@@ -12,7 +12,7 @@ waterfall_strategies:
         cost: 0.015
         quality_threshold: 0.90
         fields: [company_industry, company_description, employee_count, company_location_*]
-        
+
       - name: zoominfo
         priority: 2
         timeout: 8
@@ -20,7 +20,7 @@ waterfall_strategies:
         cost: 0.05
         quality_threshold: 0.85
         fields: [employee_count, annual_revenue, company_industry_code, company_phone]
-        
+
       - name: apollo
         priority: 3
         timeout: 5
@@ -28,7 +28,7 @@ waterfall_strategies:
         cost: 0.02
         quality_threshold: 0.75
         fields: [employee_count, company_location_*, company_linkedin_url]
-        
+
       - name: perplexity_sonar
         priority: 4
         timeout: 10
@@ -36,7 +36,7 @@ waterfall_strategies:
         cost: 0.03
         quality_threshold: 0.70
         fields: [company_industry, company_description, company_funding_stage]
-        
+
   contact:
     max_attempts: 4
     quality_threshold: 0.80
@@ -48,7 +48,7 @@ waterfall_strategies:
         cost: 0.015
         quality_threshold: 0.85
         fields: [contact_first_name, contact_last_name, contact_title, contact_linkedin_url]
-        
+
       - name: apollo
         priority: 2
         timeout: 5
@@ -56,7 +56,7 @@ waterfall_strategies:
         cost: 0.02
         quality_threshold: 0.80
         fields: [contact_first_name, contact_last_name, contact_title, contact_phone]
-        
+
       - name: hunter
         priority: 3
         timeout: 5
@@ -64,7 +64,7 @@ waterfall_strategies:
         cost: 0.01
         quality_threshold: 0.75
         fields: [contact_first_name, contact_last_name, contact_title]
-        
+
       - name: perplexity_sonar
         priority: 4
         timeout: 10
@@ -72,7 +72,7 @@ waterfall_strategies:
         cost: 0.03
         quality_threshold: 0.70
         fields: [contact_title, contact_company_name]
-        
+
   opportunity:
     max_attempts: 2
     quality_threshold: 0.75
@@ -84,7 +84,7 @@ waterfall_strategies:
         cost: 0.0
         quality_threshold: 0.80
         fields: [opportunity_competitors, opportunity_stakeholders, opportunity_engagement_score]
-        
+
       - name: perplexity_sonar
         priority: 2
         timeout: 10

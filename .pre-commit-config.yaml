@@ -25,7 +25,8 @@ repos:
         args: [--allow-multiple-documents, --unsafe]
         exclude: >
           (?x)^(
-            \.github/.*\.yml
+            \.github/.*\.yml|
+            infra/k8s/helm/.*\.yaml
           )$
       - id: check-added-large-files
         args: [--maxkb=1000]

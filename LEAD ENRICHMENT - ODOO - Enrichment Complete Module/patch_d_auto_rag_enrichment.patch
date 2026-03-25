@@ -1,0 +1,105 @@
+--- a/models/graph_service.py
++++ b/models/graph_service.py
+@@ Description:
+@  Auto-trigger RAG enrichment on top match results after Stage 2
+@  scoring completes.  Fires inside persist_two_stage_results() so
+@  every two-stage run gets RAG context without manual button clicks.
+@
+@  Safe: checks module installed, catches all exceptions, never
+@  blocks the match pipeline.  RAG is best-effort enrichment.
+@
+@ Target method: persist_two_stage_results(self, intake, results)
+@ Insert point: AFTER the for-loop that creates match.result records,
+@               BEFORE the return statement.
+@
+@ Depends: plasticos_kb_rag module installed (graceful skip if not)
+
+================================================================================
+PATCH D — Auto RAG Enrichment Hook
+================================================================================
+
+In graph_service.py, locate the method:
+
+    def persist_two_stage_results(self, intake, results):
+
+Find the END of the method, just before the final return.  You'll see
+something like:
+
+        ...
+        return rows
+
+Insert the following block BEFORE that return:
+
+--------------------------------------------------------------------------------
+INSERT THIS (before `return rows` or `return merged_results`):
+--------------------------------------------------------------------------------
+
+        # ── AUTO RAG ENRICHMENT (Patch D) ──────────────────────────────
+        # Best-effort: enrich top match results with KB context.
+        # Skips gracefully if plasticos_kb_rag is not installed.
+        try:
+            if "plasticos.match.result" in self.env:
+                MatchResult = self.env["plasticos.match.result"].sudo()
+                # Check if RAG module is installed (rag_insight field exists)
+                if "rag_insight" in MatchResult.fields_get():
+                    top_n = int(
+                        self.env["ir.config_parameter"].sudo().get_param(
+                            "plasticos.rag.auto_enrich_top_n", "5"
+                        )
+                    )
+                    top_results = MatchResult.search(
+                        [("intake_id", "=", intake.id)],
+                        order="score desc",
+                        limit=top_n,
+                    )
+                    if top_results:
+                        top_results.action_rag_enrich()
+                        _logger.info(
+                            "Auto RAG enrichment: %d results enriched "
+                            "for intake %s",
+                            len(top_results),
+                            intake.name,
+                        )
+        except Exception as exc:
+            # NEVER block the match pipeline for RAG failures
+            _logger.warning(
+                "Auto RAG enrichment skipped (non-fatal): %s", exc
+            )
+        # ── END PATCH D ────────────────────────────────────────────────
+
+--------------------------------------------------------------------------------
+ALSO ADD this system parameter (optional, controls batch size):
+--------------------------------------------------------------------------------
+
+In Settings → Technical → System Parameters, add:
+
+    Key:   plasticos.rag.auto_enrich_top_n
+    Value: 5
+
+This controls how many top results get auto-enriched per intake run.
+Default is 5 if the parameter doesn't exist.
+
+================================================================================
+VERIFICATION:
+================================================================================
+
+After applying, trigger a match run:
+
+    intake.action_find_buyers()
+
+Check the top 5 match.result records — they should have:
+  - rag_enrichment_date  populated
+  - rag_chunk_count      > 0  (if KB chunks exist)
+  - rag_insight          non-empty
+  - Chatter note         "🧠 RAG Enrichment Complete"
+
+If plasticos_kb_rag is NOT installed, the patch does nothing (safe skip).
+If no KB chunks exist yet, each result gets a chatter warning instead.
+
+================================================================================
+ALSO APPLICABLE TO: match_buyers_for_intake() (single-stage legacy path)
+================================================================================
+
+If you also want RAG on the single-stage path, add the same block to
+match_buyers_for_intake(), after the result persistence loop and before
+the return.  Same code, same placement.

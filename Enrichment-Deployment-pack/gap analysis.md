@@ -219,20 +219,20 @@ async def handle_enrich(tenant: str, payload: dict) -> dict:
     """
     # Inflate incoming packet
     packet = inflate_ingress(payload)
-    
+
     # Execute enrichment pipeline
     result = await enrich_pipeline(
         request=packet.payload,
         tenant=tenant,
         ...
     )
-    
+
     # Wrap result in PacketEnvelope for lineage
     response_packet = packet.derive(
         kind="enrichment_result",
         payload=result,
     )
-    
+
     return deflate_egress(response_packet)
 
 
@@ -271,7 +271,7 @@ from engine.packet.chassis_contract import delegate_to_node
 async def handle_match_with_enrichment(tenant: str, payload: dict) -> dict:
     # 1. Execute graph match
     match_result = await execute_match(tenant, payload)
-    
+
     # 2. Delegate to enrichment engine for top candidates
     for candidate in match_result["candidates"][:5]:
         enrichment_packet = PacketEnvelope.create(
@@ -279,16 +279,16 @@ async def handle_match_with_enrichment(tenant: str, payload: dict) -> dict:
             payload={"entity": candidate, "kb_context": payload.get("domain")},
             parent_id=match_result["packet_id"],  # Lineage!
         )
-        
+
         enriched = await delegate_to_node(
             target_node="enrichment-engine",
             action="enrich",
             packet=enrichment_packet,
             tenant=tenant,
         )
-        
+
         candidate["enrichment"] = enriched.payload
-    
+
     return match_result
 ```
 

@@ -23,7 +23,7 @@ objects:
       company_facebook_url: facebook_company_page
       enrichment_timestamp: enrichment_last_updated
       enrichment_quality_score: data_quality_score
-      
+
   contact:
     hubspot_object: contacts
     mappings:
@@ -41,7 +41,7 @@ objects:
       contact_company_id: associatedcompanyid
       enrichment_timestamp: enrichment_last_updated
       enrichment_quality_score: data_quality_score
-      
+
   opportunity:
     hubspot_object: deals
     mappings:

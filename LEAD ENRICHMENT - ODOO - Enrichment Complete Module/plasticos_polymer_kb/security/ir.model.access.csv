@@ -1,0 +1,18 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_polymer_kb_admin,plasticos.polymer.kb admin,model_plasticos_polymer_kb,base.group_system,1,1,1,1
+access_polymer_kb_user,plasticos.polymer.kb user,model_plasticos_polymer_kb,base.group_user,1,0,0,0
+access_polymer_kb_grade_admin,plasticos.polymer.kb.grade admin,model_plasticos_polymer_kb_grade,base.group_system,1,1,1,1
+access_polymer_kb_grade_user,plasticos.polymer.kb.grade user,model_plasticos_polymer_kb_grade,base.group_user,1,0,0,0
+access_polymer_kb_tier_admin,plasticos.polymer.kb.tier admin,model_plasticos_polymer_kb_tier,base.group_system,1,1,1,1
+access_polymer_kb_tier_user,plasticos.polymer.kb.tier user,model_plasticos_polymer_kb_tier,base.group_user,1,0,0,0
+access_polymer_kb_rule_admin,plasticos.polymer.kb.rule admin,model_plasticos_polymer_kb_rule,base.group_system,1,1,1,1
+access_polymer_kb_rule_user,plasticos.polymer.kb.rule user,model_plasticos_polymer_kb_rule,base.group_user,1,0,0,0
+access_polymer_kb_buyer_profile_admin,plasticos.polymer.kb.buyer.profile admin,model_plasticos_polymer_kb_buyer_profile,base.group_system,1,1,1,1
+access_polymer_kb_buyer_profile_user,plasticos.polymer.kb.buyer.profile user,model_plasticos_polymer_kb_buyer_profile,base.group_user,1,0,0,0
+access_polymer_kb_inference_rule_admin,plasticos.polymer.kb.inference.rule admin,model_plasticos_polymer_kb_inference_rule,base.group_system,1,1,1,1
+access_polymer_kb_inference_rule_user,plasticos.polymer.kb.inference.rule user,model_plasticos_polymer_kb_inference_rule,base.group_user,1,0,0,0
+access_polymer_kb_contamination_profile_admin,plasticos.polymer.kb.contamination.profile admin,model_plasticos_polymer_kb_contamination_profile,base.group_system,1,1,1,1
+access_polymer_kb_contamination_profile_user,plasticos.polymer.kb.contamination.profile user,model_plasticos_polymer_kb_contamination_profile,base.group_user,1,0,0,0
+access_polymer_kb_product_mapping_admin,plasticos.polymer.kb.product.mapping admin,model_plasticos_polymer_kb_product_mapping,base.group_system,1,1,1,1
+access_polymer_kb_product_mapping_user,plasticos.polymer.kb.product.mapping user,model_plasticos_polymer_kb_product_mapping,base.group_user,1,0,0,0
+access_polymer_kb_import_wizard,plasticos.polymer.kb.import.wizard admin,model_plasticos_polymer_kb_import_wizard,base.group_system,1,1,1,1

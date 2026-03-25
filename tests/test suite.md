@@ -86,7 +86,7 @@ def test_hashable_value_lists_and_dicts()
 Estimated Lines: 320 lines
 Coverage Impact: +290 lines (~7%)
 
- 
+
 test_loop_schemas.py
 
 Module: app/models/loop_schemas.py (480 lines)
@@ -206,7 +206,7 @@ def test_schema_proposal_set_optional()
 Estimated Lines: 380 lines
 Coverage Impact: +384 lines (~9%)
 
- 
+
 Category 2: Convergence Engine (Core Loop Logic)
 
 test_rule_loader.py
@@ -240,7 +240,7 @@ def test_cached_rule_loading()
 Estimated Lines: 240 lines
 Coverage Impact: +149 lines (~4%)
 
- 
+
 test_rule_engine.py
 
 Module: app/engines/convergence/rule_engine.py (195 lines)
@@ -276,7 +276,7 @@ def test_field_confidence_source_set_to_inference()
 Estimated Lines: 280 lines
 Coverage Impact: +166 lines (~4%)
 
- 
+
 test_grade_engine.py
 
 Module: app/engines/convergence/grade_engine.py (195 lines)
@@ -313,7 +313,7 @@ def test_missing_critical_field_lowers_confidence()
 Estimated Lines: 260 lines
 Coverage Impact: +166 lines (~4%)
 
- 
+
 test_cost_tracker.py
 
 Module: app/engines/convergence/cost_tracker.py (95 lines)
@@ -350,7 +350,7 @@ def test_roi_per_pass()
 Estimated Lines: 220 lines
 Coverage Impact: +86 lines (~2%)
 
- 
+
 test_pass_telemetry.py
 
 Module: app/engines/convergence/pass_telemetry.py (175 lines)
@@ -390,7 +390,7 @@ def test_roi_calculation_per_pass()
 Estimated Lines: 240 lines
 Coverage Impact: +149 lines (~4%)
 
- 
+
 test_loop_state.py
 
 Module: app/engines/convergence/loop_state.py (195 lines)
@@ -433,7 +433,7 @@ def test_state_to_response()
 Estimated Lines: 280 lines
 Coverage Impact: +166 lines (~4%)
 
- 
+
 test_schema_proposer.py
 
 Module: app/engines/convergence/schema_proposer.py (445 lines)
@@ -482,7 +482,7 @@ def test_no_proposals_when_all_in_schema()
 Estimated Lines: 340 lines
 Coverage Impact: +334 lines (~8%)
 
- 
+
 Category 3: Orchestration (Loop Coordination)
 
 test_convergence_controller.py
@@ -541,7 +541,7 @@ def test_error_handling_partial_convergence()
 Estimated Lines: 420 lines
 Coverage Impact: +280 lines (~7%)
 
- 
+
 test_enrichment_orchestrator.py
 
 Module: app/engines/enrichment_orchestrator.py (estimate 350 lines)
@@ -599,7 +599,7 @@ def test_idempotency_key_handling()
 Estimated Lines: 360 lines
 Coverage Impact: +245 lines (~6%)
 
- 
+
 test_meta_prompt_planner.py
 
 Module: app/engines/meta_prompt_planner.py (estimate 280 lines)
@@ -636,7 +636,7 @@ def test_prompt_length_token_budget()
 Estimated Lines: 280 lines
 Coverage Impact: +210 lines (~5%)
 
- 
+
 Category 4: Services (Supporting Infrastructure)
 
 test_consensus_engine.py
@@ -678,7 +678,7 @@ def test_threshold_filtering()
 Estimated Lines: 260 lines
 Coverage Impact: +187 lines (~5%)
 
- 
+
 test_kb_resolver.py
 
 Module: app/services/kb_resolver.py (estimate 190 lines)
@@ -711,7 +711,7 @@ def test_kb_caching()
 Estimated Lines: 220 lines
 Coverage Impact: +152 lines (~4%)
 
- 
+
 test_uncertainty_engine.py
 
 Module: app/services/uncertainty_engine.py (estimate 160 lines)
@@ -743,7 +743,7 @@ def test_uncertainty_influences_max_variations()
 Estimated Lines: 200 lines
 Coverage Impact: +136 lines (~3%)
 
- 
+
 test_validation_engine.py (Expand Existing)
 
 Module: app/services/validation_engine.py (estimate 200 lines)
@@ -787,7 +787,7 @@ def test_enum_value_validation()
 Estimated Lines: 180 additional lines
 Coverage Impact: +120 lines (~3%)
 
- 
+
 test_enrichment_profile.py
 
 Module: app/engines/convergence/enrichment_profile.py (285 lines)
@@ -845,7 +845,7 @@ def test_select_by_confidence_threshold()
 Estimated Lines: 280 lines
 Coverage Impact: +228 lines (~5%)
 
- 
+
 test_pplx_research.py
 
 Module: app/services/pplx_research.py (estimate 180 lines)
@@ -881,7 +881,7 @@ def test_empty_response_handling()
 Estimated Lines: 240 lines
 Coverage Impact: +135 lines (~3%)
 
- 
+
 Test Infrastructure & Fixtures
 
 Shared Fixtures (tests/conftest.py)
@@ -1006,7 +1006,7 @@ consensus_threshold=0.65,
 max_variations=5,
 )
 
- 
+
 Test Execution & Coverage Reporting
 
 pytest Configuration (pytest.ini)
@@ -1097,7 +1097,7 @@ steps:
  run: |
    coverage report --fail-under=80
 
- 
+
 Estimated Coverage Impact Summary
 
 Category
@@ -1164,11 +1164,11 @@ Adjusted for Overlap
 
 ~80% target
 
- 
+
 
 Final Estimated Coverage: 80.2%
 
- 
+
 Implementation Priority Order
 
 Phase 1: Foundation (Week 1)
@@ -1200,7 +1200,7 @@ Phase 4: Services (Week 4)
 Phase 5: Schema Proposer (Week 5)
 
 19. test_schema_proposer.py
- 
+
 Success Criteria
 
 • [ ] 80% code coverage across in-scope modules
@@ -1212,7 +1212,7 @@ Success Criteria
 • [ ] Clear test names — test_what_it_does_when_condition()
 • [ ] Isolated tests — no shared mutable state, each test independent
 • [ ] Mocked external calls — no real LLM/API calls in unit tests
- 
+
 Anti-Patterns to Avoid
 
 ❌ Don't test scope-creep modules (score/, health/, simulation_bridge.py)
@@ -1223,7 +1223,7 @@ Anti-Patterns to Avoid
 ❌ Don't mock what you own (mock external dependencies, not internal modules unless necessary)
 ❌ Don't write one giant test (one assertion focus per test, multiple tests per function)
 
- 
+
 References
 
 • Gap Analysis: Revised Gap Analysis — Enrichment.Inference.Engine
@@ -1231,5 +1231,5 @@ References
 • Architecture: RevOpsOS Layer 2 (ENRICH) + Layer 3 (GRAPH) convergence loop
 • Pytest Docs: https://docs.pytest.org/
 • Coverage.py: https://coverage.readthedocs.io/
- 
+
 Next Action: Copy test skeleton files into /tests directory and begin Phase 1 implementation.

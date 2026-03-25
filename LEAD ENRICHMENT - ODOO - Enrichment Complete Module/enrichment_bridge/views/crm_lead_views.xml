@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add Enrich button + status to CRM Lead form -->
+    <record id="crm_lead_enrichment_form" model="ir.ui.view">
+        <field name="name">crm.lead.enrichment.form</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Add Enrich button to header -->
+            <xpath expr="//header" position="inside">
+                <button name="action_enrich"
+                        string="Enrich"
+                        type="object"
+                        class="oe_highlight"
+                        confirm="This will call the Enrichment API. Continue?"/>
+            </xpath>
+
+            <!-- Add enrichment fields to a new tab -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Enrichment" name="enrichment_tab">
+                    <group>
+                        <group>
+                            <field name="enrichment_state"/>
+                            <field name="last_enrichment_date"/>
+                            <field name="last_enrichment_confidence"
+                                   widget="progressbar"/>
+                        </group>
+                    </group>
+                    <field name="enrichment_run_ids"
+                           readonly="1"
+                           context="{'default_res_model': 'crm.lead', 'default_res_id': active_id}">
+                        <tree decoration-success="state == 'completed'"
+                              decoration-danger="state == 'failed'">
+                            <field name="create_date"/>
+                            <field name="state"/>
+                            <field name="confidence"/>
+                            <field name="fields_enriched"/>
+                            <field name="tokens_used"/>
+                        </tree>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -25,12 +25,12 @@ The [Enrichment.Inference.Engine](https://github.com/cryptoxdog/Enrichment.Infer
 ### Core Enrichment Loop (Layer 2)
 The multi-pass convergence loop is implemented across `convergence_controller.py`, `loop_state.py`, and the convergence sub-package . This includes:
 
-- **Schema Discovery** → `schema_discovery.py` + `schema_proposer.py` — discovers fields the customer didn't know they needed 
-- **Multi-Variation LLM Consensus** → `consensus_engine.py` with confidence scoring 
-- **Domain KB Injection** → `kb_resolver.py` + `domain_yaml_reader.py` + plastics recycling YAML 
-- **Inference Bridge** → Deterministic YAML rules firing in dependency order with topological sort, producing `material_grade`, `facility_tier`, etc. 
-- **Cost Tracking** → `cost_tracker.py` tracks tokens/cost per pass 
-- **Graph Sync** → `graph_sync_client.py` pushes enriched entities to Neo4j 
+- **Schema Discovery** → `schema_discovery.py` + `schema_proposer.py` — discovers fields the customer didn't know they needed
+- **Multi-Variation LLM Consensus** → `consensus_engine.py` with confidence scoring
+- **Domain KB Injection** → `kb_resolver.py` + `domain_yaml_reader.py` + plastics recycling YAML
+- **Inference Bridge** → Deterministic YAML rules firing in dependency order with topological sort, producing `material_grade`, `facility_tier`, etc.
+- **Cost Tracking** → `cost_tracker.py` tracks tokens/cost per pass
+- **Graph Sync** → `graph_sync_client.py` pushes enriched entities to Neo4j
 
 ### Chassis Contract (PacketEnvelope)
 `chassis_contract.py` implements `inflate_ingress`, `deflate_egress`, and `delegate_to_node` — the full PacketEnvelope protocol with content_hash verification, hop_trace, delegation_chain, lineage tracking, and governance fields .
