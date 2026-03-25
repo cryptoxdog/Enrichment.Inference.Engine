@@ -204,6 +204,96 @@ jobs:
         continue-on-error: true
 
   # ===========================================================================
+  # L9-CONTRACT-AUDIT — 27-Rule Engine Scanner
+  # ===========================================================================
+  l9-contract-audit:
+    name: L9 Contract Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run L9 Audit Engine
+        run: |
+          if [ -f tools/audit_engine.py ]; then
+            python tools/audit_engine.py --strict
+          else
+            echo "audit_engine.py not found, skipping"
+          fi
+
+      - name: Run L9 Contract Verification
+        run: |
+          if [ -f tools/verify_contracts.py ]; then
+            python tools/verify_contracts.py
+          else
+            echo "verify_contracts.py not found, skipping"
+          fi
+
+  # ===========================================================================
+  # ARCHITECTURE-GUARD — Block FastAPI in Engine Modules
+  # ===========================================================================
+  architecture-guard:
+    name: Architecture Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Block FastAPI imports in engine modules
+        run: |
+          echo "Checking for FastAPI imports in engine modules..."
+          VIOLATIONS=$(find app -name "*.py" \
+            ! -path "app/api/*" \
+            ! -name "main.py" \
+            ! -name "handlers.py" \
+            -exec grep -l "from fastapi import\|import fastapi" {} \; 2>/dev/null || true)
+          
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ FastAPI imports found in engine modules:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "FastAPI imports are only allowed in: app/api/, app/main.py, handlers.py"
+            exit 1
+          fi
+          echo "✅ No FastAPI imports in engine modules"
+
+      - name: Check terminology consistency
+        run: |
+          echo "Checking for banned patterns (print, Optional[], List[], Dict[])..."
+          VIOLATIONS=0
+          
+          for pattern in "print(" "Optional\[" "List\[" "Dict\["; do
+            FOUND=$(grep -r -l "$pattern" app/ tests/ 2>/dev/null | grep -v __pycache__ | grep -v ".pyc" || true)
+            if [ -n "$FOUND" ]; then
+              echo "⚠️  Found '$pattern' in:"
+              echo "$FOUND"
+              VIOLATIONS=$((VIOLATIONS+1))
+            fi
+          done
+          
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo ""
+            echo "❌ Use: structlog (not print), list[T] (not List[T]), T | None (not Optional[T])"
+            exit 1
+          fi
+          echo "✅ Terminology check passed"
+
+  # ===========================================================================
   # QUALITY-GATE — Aggregation job (add to your ci-complete "needs:")
   # ===========================================================================
   quality-gate:
@@ -215,6 +305,8 @@ jobs:
       - secrets-scan
       - coverage
       - yaml-validate
+      - l9-contract-audit
+      - architecture-guard
     if: always()
 
     steps:
@@ -224,11 +316,13 @@ jobs:
           echo "║              QUALITY GATE SUMMARY                           ║"
           echo "╚══════════════════════════════════════════════════════════════╝"
           echo ""
-          echo "  ├─ Lint & Format:  ${{ needs.lint-format.result }}"
-          echo "  ├─ Semgrep:        ${{ needs.semgrep.result }}"
-          echo "  ├─ Secrets Scan:   ${{ needs.secrets-scan.result }}"
-          echo "  ├─ Coverage:       ${{ needs.coverage.result }}"
-          echo "  └─ YAML Validate:  ${{ needs.yaml-validate.result }}"
+          echo "  ├─ Lint & Format:     ${{ needs.lint-format.result }}"
+          echo "  ├─ Semgrep:           ${{ needs.semgrep.result }}"
+          echo "  ├─ Secrets Scan:      ${{ needs.secrets-scan.result }}"
+          echo "  ├─ Coverage:          ${{ needs.coverage.result }}"
+          echo "  ├─ YAML Validate:     ${{ needs.yaml-validate.result }}"
+          echo "  ├─ L9 Contract Audit: ${{ needs.l9-contract-audit.result }}"
+          echo "  └─ Architecture Guard: ${{ needs.architecture-guard.result }}"
           echo ""
 
           # Fail on critical gates
@@ -244,6 +338,14 @@ jobs:
 
           if [[ "${{ needs.coverage.result }}" == "failure" ]]; then
             echo "❌ Coverage below threshold"; FAILED=true
+          fi
+
+          if [[ "${{ needs.l9-contract-audit.result }}" == "failure" ]]; then
+            echo "❌ L9 Contract Audit failed"; FAILED=true
+          fi
+
+          if [[ "${{ needs.architecture-guard.result }}" == "failure" ]]; then
+            echo "❌ Architecture Guard failed"; FAILED=true
           fi
 
           if [[ "$FAILED" == "true" ]]; then
