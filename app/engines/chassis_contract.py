@@ -12,7 +12,7 @@ It only sees (tenant, payload) from the chassis router.
 
 PacketEnvelope alignment:
     - packettype: "enrichment_request" | "enrichment_result"
-    - action: "enrich" | "enrichbatch" | "converge" | "discover"
+    - action: "enrich" | "enrichbatch" | "converge" | "discover" | "writeback"
     - address.sourcenode: "enrichment-engine"
     - contenthash: SHA-256 of canonical payload
 """

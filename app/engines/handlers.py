@@ -14,6 +14,7 @@ Registered actions:
     - enrichbatch: Batch enrichment
     - converge:  Multi-pass convergence loop
     - discover:  Schema discovery (Seed tier)
+    - writeback: CRM write-back (Odoo-first)
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ from ..engines.schema_discovery import SchemaDiscoveryEngine
 from ..models.schemas import BatchEnrichRequest, EnrichRequest
 from ..services.domain_yaml_reader import DomainYamlReader
 from ..services.idempotency import IdempotencyStore
+from ..services.crm.base import CRMType
+from ..services.crm.writeback import WriteBackOrchestrator
 from ..services.kbresolver import KBResolver
 
 logger = structlog.get_logger("handlers")
@@ -144,6 +147,57 @@ async def handle_discover(tenant: str, payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+async def handle_writeback(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    CRM write-back — push enriched data back to originating CRM.
+
+    Payload:
+        domain: str — entity domain (company, contact, account, opportunity)
+        canonical: dict — canonical enrichment fields to write
+        crm_type: str — CRM platform (default: "odoo")
+        credentials: dict — CRM connection credentials
+        mapping_path: str — path to CRM field mapping YAML
+    """
+    settings = get_settings()
+    domain = payload.get("domain", "company")
+    canonical = payload.get("canonical", {})
+    crm_type_str = payload.get("crm_type", "odoo")
+    credentials = payload.get("credentials", {
+        "url": settings.odoo_url,
+        "db": settings.odoo_db,
+        "username": settings.odoo_username,
+        "password": settings.odoo_password,
+    })
+    mapping_path = payload.get(
+        "mapping_path", "config/crm/odoo_mapping.yaml"
+    )
+
+    crm_type = CRMType(crm_type_str)
+    orchestrator = WriteBackOrchestrator(
+        crm_type=crm_type,
+        credentials=credentials,
+        mapping_path=mapping_path,
+    )
+
+    result = await orchestrator.async_write_back(domain, canonical)
+
+    logger.info(
+        "writeback_completed",
+        tenant=tenant,
+        domain=domain,
+        crm_type=crm_type_str,
+        success=result.success,
+        record_id=result.record_id,
+    )
+
+    return {
+        "success": result.success,
+        "record_id": result.record_id,
+        "fields_written": result.fields_written,
+        "error": result.error,
+    }
+
+
 def get_handler_map() -> dict[str, Any]:
     """Return all handlers for chassis registration."""
     return {
@@ -151,4 +205,5 @@ def get_handler_map() -> dict[str, Any]:
         "enrichbatch": handle_enrichbatch,
         "converge": handle_converge,
         "discover": handle_discover,
+        "writeback": handle_writeback,
     }

@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     max_concurrent_variations: int = 3
     max_entities_per_batch: int = 50
 
+    # ── CRM / Odoo ────────────────────────────────────
+    odoo_url: str = ""
+    odoo_db: str = ""
+    odoo_username: str = ""
+    odoo_password: str = ""
+    crm_mapping_path: str = "config/crm/odoo_mapping.yaml"
+
     # ── Circuit Breaker ──────────────────────────────
     cb_failure_threshold: int = 5
     cb_cooldown_seconds: int = 60

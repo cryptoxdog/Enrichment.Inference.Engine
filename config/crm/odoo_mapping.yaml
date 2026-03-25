@@ -1,0 +1,102 @@
+crm: odoo
+version: 2.0
+
+objects:
+  company:
+    odoo_model: res.partner
+    mappings:
+      company_id: id
+      company_name: name
+      company_domain: website
+      company_industry: industry_id
+      company_description: comment
+      employee_count: number_of_employees
+      annual_revenue: revenue_expected
+      company_location_street: street
+      company_location_city: city
+      company_location_state: state_id
+      company_location_country: country_id
+      company_location_postal: zip
+      company_phone: phone
+      company_linkedin_url: social_linkedin
+      company_twitter_handle: social_twitter
+      enrichment_timestamp: enrichment_last_updated
+      enrichment_quality_score: data_quality_score
+
+  contact:
+    odoo_model: res.partner
+    extra_domain:
+      - [is_company, "=", false]
+    mappings:
+      contact_id: id
+      contact_email: email
+      contact_first_name: firstname
+      contact_last_name: lastname
+      contact_title: function
+      contact_phone: phone
+      contact_linkedin_url: social_linkedin
+      contact_location_city: city
+      contact_location_state: state_id
+      contact_location_country: country_id
+      contact_company_id: parent_id
+      enrichment_timestamp: enrichment_last_updated
+      enrichment_quality_score: data_quality_score
+
+  opportunity:
+    odoo_model: crm.lead
+    extra_domain:
+      - [type, "=", "opportunity"]
+    mappings:
+      opportunity_id: id
+      opportunity_name: name
+      opportunity_stage: stage_id
+      opportunity_amount: expected_revenue
+      opportunity_probability: probability
+      opportunity_close_date: date_deadline
+      opportunity_created_date: create_date
+      opportunity_account_id: partner_id
+      opportunity_owner_id: user_id
+      opportunity_type: type
+      opportunity_lead_source: source_id
+      opportunity_risk_score: risk_score
+      opportunity_engagement_score: engagement_score
+      opportunity_last_activity_date: date_action
+      enrichment_timestamp: enrichment_last_updated
+
+  account:
+    odoo_model: res.partner
+    extra_domain:
+      - [is_company, "=", true]
+    mappings:
+      account_id: id
+      account_name: name
+      account_domain: website
+      account_industry: industry_id
+      employee_count: number_of_employees
+      account_phone: phone
+      account_location_city: city
+      account_location_state: state_id
+      account_location_country: country_id
+      account_arr: partner_arrenue
+      account_health_score: health_score
+      account_owner_id: user_id
+      enrichment_timestamp: enrichment_last_updated
+      enrichment_quality_score: data_quality_score
+
+custom_fields:
+  res.partner:
+    - name: enrichment_last_updated
+      type: datetime
+    - name: data_quality_score
+      type: float
+    - name: health_score
+      type: float
+    - name: partner_arrenue
+      type: float
+  crm.lead:
+    - name: enrichment_last_updated
+      type: datetime
+    - name: risk_score
+      type: float
+    - name: engagement_score
+      type: float
