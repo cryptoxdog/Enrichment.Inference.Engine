@@ -64,7 +64,7 @@ class AuditResult:
         return sum(1 for f in self.findings if f.severity == "INFO")
 
 
-def get_py_files(exclude: list[str] | None = None) -> list[Path]:
+def get_py_files(exclude: Optional[list[str]] = None) -> list[Path]:
     if not ENGINE_DIR.exists():
         return []
     exclude = exclude or []

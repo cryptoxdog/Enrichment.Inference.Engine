@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "domain-enrichment-api"
 version = "2.2.0"
@@ -28,12 +32,13 @@ dev = [
     "coverage==7.6.0",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "tools*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-
-[tool.mypy]
-python_version = "3.12"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]
@@ -43,7 +48,7 @@ ignore = ["E501"]
 known-first-party = ["app"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
