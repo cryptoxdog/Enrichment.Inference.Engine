@@ -1,0 +1,90 @@
+version: 2.0
+description: |
+  Supplemental inference rules loaded by InferenceBridgeAdapter for any
+  v1-format consumers. These are translated transparently to v2 DAG nodes.
+
+domain: mixed
+
+rules:
+  extract_contact_domain:
+    output_field: contact_email_domain
+    input_fields: [contact_email]
+    logic: return contact_email.split('@')[1] if '@' in contact_email else None
+
+  derive_contact_full_name:
+    output_field: contact_full_name
+    input_fields: [contact_first_name, contact_last_name]
+    logic: return f"{contact_first_name} {contact_last_name}".strip()
+
+  derive_contact_level:
+    output_field: contact_level
+    input_fields: [contact_title]
+    logic: |
+      t = (contact_title or '').lower()
+      if any(x in t for x in ['ceo','cto','cfo','cmo','coo','chief','president']): return 'C-Level'
+      elif any(x in t for x in ['vp','vice president']): return 'VP'
+      elif any(x in t for x in ['director','head of']): return 'Director'
+      elif any(x in t for x in ['manager','lead','principal']): return 'Manager'
+      else: return 'IC'
+
+  derive_employee_range:
+    output_field: employee_range
+    input_fields: [employee_count]
+    logic: |
+      c = employee_count or 0
+      if c <= 10: return '1-10'
+      elif c <= 50: return '11-50'
+      elif c <= 200: return '51-200'
+      elif c <= 1000: return '201-1000'
+      else: return '1000+'
+
+  derive_revenue_range:
+    output_field: revenue_range
+    input_fields: [annual_revenue]
+    logic: |
+      r = annual_revenue or 0
+      if r < 1000000: return '<$1M'
+      elif r < 10000000: return '$1M-$10M'
+      elif r < 50000000: return '$10M-$50M'
+      elif r < 100000000: return '$50M-$100M'
+      elif r < 500000000: return '$100M-$500M'
+      else: return '$500M+'
+
+  derive_is_public:
+    output_field: company_is_public
+    input_fields: [company_ticker_symbol]
+    logic: return bool(company_ticker_symbol and len(str(company_ticker_symbol).strip()) > 0)
+
+  derive_account_mrr:
+    output_field: account_mrr
+    input_fields: [account_arr]
+    logic: return round(account_arr / 12, 2) if account_arr else None
+
+  derive_account_segment:
+    output_field: account_segment
+    input_fields: [account_arr, employee_count]
+    logic: |
+      arr = account_arr or 0
+      emp = employee_count or 0
+      if arr >= 100000 or emp >= 500: return 'Enterprise'
+      elif arr >= 20000 or emp >= 100: return 'Mid-Market'
+      else: return 'SMB'
+
+  derive_opportunity_risk:
+    output_field: opportunity_risk_score
+    input_fields: [opportunity_engagement_score, opportunity_age_days, opportunity_days_since_activity]
+    logic: |
+      risk = 0.0
+      if (opportunity_engagement_score or 0.5) < 0.3: risk += 0.4
+      if (opportunity_age_days or 0) > 90: risk += 0.3
+      if (opportunity_days_since_activity or 0) > 14: risk += 0.3
+      return min(risk, 1.0)
+
+  derive_days_to_close:
+    output_field: opportunity_days_to_close
+    input_fields: [opportunity_close_date]
+    logic: |
+      from datetime import datetime
+      if not opportunity_close_date: return None
+      delta = opportunity_close_date - datetime.now().date()
+      return delta.days

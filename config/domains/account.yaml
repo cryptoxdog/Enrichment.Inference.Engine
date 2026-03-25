@@ -1,0 +1,230 @@
+domain: account
+version: 2.0
+description: Account-level enrichment schema (maps to Salesforce Account / HubSpot Company)
+
+fields:
+  - name: account_id
+    type: string
+    required: false
+    description: CRM-native account identifier
+
+  - name: account_name
+    type: string
+    required: true
+    difficulty: easy
+    description: Official account/company name
+
+  - name: account_domain
+    type: string
+    required: true
+    difficulty: easy
+    derived_from: [account_name]
+    validation: domain_format
+    description: Primary web domain
+
+  - name: account_type
+    type: string
+    required: false
+    difficulty: easy
+    description: Customer, Prospect, Partner, Churned
+
+  - name: account_segment
+    type: string
+    required: false
+    difficulty: medium
+    derived_from: [account_arr, employee_count]
+    description: SMB, Mid-Market, Enterprise
+
+  - name: account_industry
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, zoominfo]
+
+  - name: account_sub_industry
+    type: string
+    required: false
+    difficulty: hard
+    sources: [zoominfo]
+
+  - name: account_arr
+    type: float
+    required: false
+    difficulty: hard
+    description: Annual Recurring Revenue in USD
+
+  - name: account_mrr
+    type: float
+    required: false
+    difficulty: hard
+    derived_from: [account_arr]
+    description: Monthly Recurring Revenue in USD
+
+  - name: account_ltv
+    type: float
+    required: false
+    difficulty: hard
+    description: Estimated customer lifetime value
+
+  - name: account_health_score
+    type: float
+    required: false
+    difficulty: hard
+    validation: range_0_1
+    description: Composite CS health score (0-1)
+
+  - name: account_nrr
+    type: float
+    required: false
+    difficulty: hard
+    description: Net Revenue Retention (e.g. 1.15 = 115%)
+
+  - name: account_owner_id
+    type: string
+    required: false
+    description: CRM owner user ID
+
+  - name: account_csm_id
+    type: string
+    required: false
+    description: Customer Success Manager user ID
+
+  - name: employee_count
+    type: integer
+    required: false
+    difficulty: medium
+    sources: [zoominfo, clearbit]
+    validation: positive_integer
+
+  - name: employee_range
+    type: string
+    required: false
+    difficulty: easy
+    derived_from: [employee_count]
+
+  - name: annual_revenue
+    type: integer
+    required: false
+    difficulty: hard
+    sources: [zoominfo]
+
+  - name: account_location_city
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+
+  - name: account_location_state
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+
+  - name: account_location_country
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+
+  - name: account_phone
+    type: string
+    required: false
+    difficulty: medium
+    sources: [zoominfo]
+    validation: phone_format
+
+  - name: account_linkedin_url
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, apollo]
+
+  - name: account_contract_start_date
+    type: date
+    required: false
+    description: Initial contract start date
+
+  - name: account_contract_renewal_date
+    type: date
+    required: false
+    description: Upcoming renewal date
+
+  - name: account_days_to_renewal
+    type: integer
+    required: false
+    derived_from: [account_contract_renewal_date]
+
+  - name: account_product_usage_score
+    type: float
+    required: false
+    difficulty: hard
+    validation: range_0_1
+    description: Product engagement composite (0-1)
+
+  - name: account_expansion_score
+    type: float
+    required: false
+    difficulty: hard
+    validation: range_0_1
+    description: Propensity to expand (0-1)
+
+  - name: account_churn_risk_score
+    type: float
+    required: false
+    difficulty: hard
+    validation: range_0_1
+    description: Churn risk prediction (0-1)
+
+  - name: enrichment_timestamp
+    type: datetime
+    required: true
+    auto_populate: true
+
+  - name: enrichment_sources_used
+    type: array
+    required: true
+    auto_populate: true
+
+  - name: enrichment_quality_score
+    type: float
+    required: true
+    auto_populate: true
+    validation: range_0_1
+
+derivation_rules:
+  - field: account_domain
+    depends_on: [account_name]
+    logic: |
+      import re
+      cleaned = re.sub(r'[^a-z0-9]', '', account_name.lower())
+      return f"{cleaned}.com"
+
+  - field: account_mrr
+    depends_on: [account_arr]
+    logic: return round(account_arr / 12, 2) if account_arr else None
+
+  - field: employee_range
+    depends_on: [employee_count]
+    logic: |
+      if employee_count <= 10: return "1-10"
+      elif employee_count <= 50: return "11-50"
+      elif employee_count <= 200: return "51-200"
+      elif employee_count <= 1000: return "201-1000"
+      else: return "1000+"
+
+  - field: account_segment
+    depends_on: [account_arr, employee_count]
+    logic: |
+      arr = account_arr or 0
+      emp = employee_count or 0
+      if arr >= 100000 or emp >= 500: return "Enterprise"
+      elif arr >= 20000 or emp >= 100: return "Mid-Market"
+      else: return "SMB"
+
+  - field: account_days_to_renewal
+    depends_on: [account_contract_renewal_date]
+    logic: |
+      from datetime import datetime
+      if not account_contract_renewal_date: return None
+      delta = account_contract_renewal_date - datetime.now().date()
+      return delta.days
