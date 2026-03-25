@@ -1,0 +1,47 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [governance]
+# tags: [L9_TEMPLATE, governance, pr-review]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# PR Review Policy Configuration
+# Sibling parity: Cognitive.Engine.Graphs/.github/pr_review_config.yaml
+
+size_limits:
+  warn_threshold: 300
+  block_threshold: 1000
+  max_files_changed: 50
+
+protected_files:
+  - ".github/workflows/*"
+  - "Dockerfile"
+  - "docker-compose*.yml"
+  - "pyproject.toml"
+  - "requirements*.txt"
+  - ".pre-commit-config.yaml"
+  - ".gitleaks.toml"
+
+audit_scopes:
+  security:
+    - "app/security/*"
+    - "app/auth/*"
+    - ".gitleaks.toml"
+  performance:
+    - "app/enrichment/*"
+    - "app/inference/*"
+    - "app/convergence/*"
+  architecture:
+    - "app/chassis_contract.py"
+    - "app/handlers.py"
+    - "app/models/*"
+  testing:
+    - "tests/**"
+
+codeowners:
+  required_approvals: 1
+  dismiss_stale_reviews: true
+  require_code_owner_reviews: true
