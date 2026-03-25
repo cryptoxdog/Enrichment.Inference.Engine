@@ -5,8 +5,11 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - CEG_BASE_URL=${CEG_BASE_URL:-http://graph-engine:8001}
     volumes:
       - ./kb:/app/kb:ro
+      - ./config:/app/config:ro
     depends_on:
       redis:
         condition: service_healthy

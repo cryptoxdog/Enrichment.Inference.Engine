@@ -1,0 +1,18 @@
+providers:
+  - provider: clay
+    api_key: ${CLAY_API_KEY}
+    api_url: https://api.clay.com/v1
+    cost_per_call: 5.0
+    avg_latency_ms: 800
+    coverage_score: 0.90
+    enabled: true
+    circuit_breaker_threshold: 0.5
+  
+  - provider: zoominfo
+    api_key: ${ZOOMINFO_API_KEY}
+    api_url: https://api.zoominfo.com/rest
+    cost_per_call: 12.0
+    avg_latency_ms: 600
+    coverage_score: 0.95
+    enabled: true
+    specialty_fields: [Phone, MobilePhone, Title]

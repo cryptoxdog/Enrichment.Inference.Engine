@@ -1,0 +1,68 @@
+crm: salesforce
+version: 2.0
+
+objects:
+  company:
+    salesforce_object: Account
+    mappings:
+      company_id: Id
+      company_name: Name
+      company_domain: Website
+      company_industry: Industry
+      company_description: Description
+      employee_count: NumberOfEmployees
+      annual_revenue: AnnualRevenue
+      company_location_street: BillingStreet
+      company_location_city: BillingCity
+      company_location_state: BillingState
+      company_location_country: BillingCountry
+      company_location_postal: BillingPostalCode
+      company_phone: Phone
+      company_ticker_symbol: TickerSymbol
+      enrichment_timestamp: Enrichment_Last_Updated__c
+      enrichment_quality_score: Data_Quality_Score__c
+      
+  contact:
+    salesforce_object: Contact
+    mappings:
+      contact_id: Id
+      contact_email: Email
+      contact_first_name: FirstName
+      contact_last_name: LastName
+      contact_title: Title
+      contact_phone: Phone
+      contact_phone_type: Phone_Type__c
+      contact_linkedin_url: LinkedIn_URL__c
+      contact_location_city: MailingCity
+      contact_location_state: MailingState
+      contact_location_country: MailingCountry
+      contact_company_id: AccountId
+      enrichment_timestamp: Enrichment_Last_Updated__c
+      enrichment_quality_score: Data_Quality_Score__c
+      
+  opportunity:
+    salesforce_object: Opportunity
+    mappings:
+      opportunity_id: Id
+      opportunity_name: Name
+      opportunity_stage: StageName
+      opportunity_amount: Amount
+      opportunity_probability: Probability
+      opportunity_close_date: CloseDate
+      opportunity_created_date: CreatedDate
+      opportunity_account_id: AccountId
+      opportunity_owner_id: OwnerId
+      opportunity_type: Type
+      opportunity_lead_source: LeadSource
+      opportunity_engagement_score: Engagement_Score__c
+      opportunity_risk_score: Risk_Score__c
+      opportunity_last_activity_date: LastActivityDate
+      enrichment_timestamp: Enrichment_Last_Updated__c
+
+custom_fields:
+  - Enrichment_Last_Updated__c
+  - Data_Quality_Score__c
+  - Engagement_Score__c
+  - Risk_Score__c
+  - Phone_Type__c
+  - LinkedIn_URL__c

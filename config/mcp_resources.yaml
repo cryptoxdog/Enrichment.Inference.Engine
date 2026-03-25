@@ -1,0 +1,23 @@
+resources:
+  - uri: crm://contacts
+    name: CRM Contacts
+    description: Read/write access to CRM contact records
+    mime_type: application/json
+    
+  - uri: pipeline://forecast
+    name: Pipeline Forecast
+    description: Real-time pipeline forecast with AI scoring
+    mime_type: application/json
+
+tools:
+  - name: enrich_contact
+    description: Waterfall enrichment for contact records
+    input_schema:
+      type: object
+      properties:
+        contact_id:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string

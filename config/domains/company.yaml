@@ -1,0 +1,216 @@
+domain: company
+version: 2.0
+description: Company/account enrichment schema
+
+fields:
+  - name: company_id
+    type: string
+    required: false
+    description: Internal company identifier
+    
+  - name: company_name
+    type: string
+    required: true
+    difficulty: easy
+    description: Official company name
+    
+  - name: company_domain
+    type: string
+    required: true
+    difficulty: easy
+    derived_from: [company_name]
+    validation: domain_format
+    description: Primary company website domain
+    
+  - name: company_industry
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, zoominfo, perplexity_sonar]
+    description: Primary industry classification
+    
+  - name: company_industry_code
+    type: string
+    required: false
+    difficulty: medium
+    sources: [zoominfo]
+    description: NAICS or SIC code
+    
+  - name: company_description
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, zoominfo, perplexity_sonar]
+    description: Company description or mission statement
+    
+  - name: employee_count
+    type: integer
+    required: false
+    difficulty: medium
+    sources: [zoominfo, clearbit, linkedin]
+    validation: positive_integer
+    description: Approximate number of employees
+    
+  - name: employee_range
+    type: string
+    required: false
+    difficulty: easy
+    derived_from: [employee_count]
+    description: Employee count range (1-10, 11-50, etc.)
+    
+  - name: annual_revenue
+    type: integer
+    required: false
+    difficulty: hard
+    sources: [zoominfo]
+    validation: positive_integer
+    description: Annual revenue in USD
+    
+  - name: revenue_range
+    type: string
+    required: false
+    difficulty: medium
+    derived_from: [annual_revenue]
+    description: Revenue range classification
+    
+  - name: company_location_street
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+    
+  - name: company_location_city
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+    
+  - name: company_location_state
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+    
+  - name: company_location_country
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+    
+  - name: company_location_postal
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, zoominfo]
+    
+  - name: company_phone
+    type: string
+    required: false
+    difficulty: medium
+    sources: [zoominfo, hunter]
+    validation: phone_format
+    
+  - name: company_linkedin_url
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, apollo]
+    validation: url_format
+    
+  - name: company_twitter_handle
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit]
+    
+  - name: company_facebook_url
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit]
+    
+  - name: company_funding_stage
+    type: string
+    required: false
+    difficulty: hard
+    sources: [clearbit]
+    description: Latest funding stage (Seed, Series A, B, C, etc.)
+    
+  - name: company_funding_total
+    type: integer
+    required: false
+    difficulty: hard
+    sources: [clearbit]
+    description: Total funding raised in USD
+    
+  - name: company_tech_stack
+    type: array
+    required: false
+    difficulty: hard
+    sources: [clearbit]
+    description: Detected technologies used
+    
+  - name: company_is_public
+    type: boolean
+    required: false
+    difficulty: easy
+    derived_from: [company_ticker_symbol]
+    
+  - name: company_ticker_symbol
+    type: string
+    required: false
+    difficulty: medium
+    sources: [zoominfo, clearbit]
+    
+  - name: company_founded_year
+    type: integer
+    required: false
+    difficulty: medium
+    sources: [clearbit, zoominfo]
+    validation: year_range
+    
+  - name: enrichment_timestamp
+    type: datetime
+    required: true
+    auto_populate: true
+    
+  - name: enrichment_sources_used
+    type: array
+    required: true
+    auto_populate: true
+    description: List of sources that provided data
+    
+  - name: enrichment_quality_score
+    type: float
+    required: true
+    auto_populate: true
+    validation: range_0_1
+    description: Overall data quality score (0.0-1.0)
+
+derivation_rules:
+  - field: company_domain
+    depends_on: [company_name]
+    logic: extract_domain_from_name
+    
+  - field: employee_range
+    depends_on: [employee_count]
+    logic: |
+      if employee_count <= 10: return "1-10"
+      elif employee_count <= 50: return "11-50"
+      elif employee_count <= 200: return "51-200"
+      elif employee_count <= 1000: return "201-1000"
+      else: return "1000+"
+      
+  - field: revenue_range
+    depends_on: [annual_revenue]
+    logic: |
+      if annual_revenue < 1000000: return "<$1M"
+      elif annual_revenue < 10000000: return "$1M-$10M"
+      elif annual_revenue < 50000000: return "$10M-$50M"
+      elif annual_revenue < 100000000: return "$50M-$100M"
+      elif annual_revenue < 500000000: return "$100M-$500M"
+      else: return "$500M+"
+      
+  - field: company_is_public
+    depends_on: [company_ticker_symbol]
+    logic: company_ticker_symbol is not None and len(company_ticker_symbol) > 0

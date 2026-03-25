@@ -1,0 +1,140 @@
+domain: opportunity
+version: 2.0
+description: Sales opportunity enrichment schema
+
+fields:
+  - name: opportunity_id
+    type: string
+    required: true
+    
+  - name: opportunity_name
+    type: string
+    required: true
+    
+  - name: opportunity_stage
+    type: string
+    required: true
+    description: Current sales stage
+    
+  - name: opportunity_stage_normalized
+    type: string
+    required: false
+    derived_from: [opportunity_stage]
+    description: Standardized stage name
+    
+  - name: opportunity_amount
+    type: float
+    required: false
+    validation: positive_number
+    
+  - name: opportunity_probability
+    type: float
+    required: false
+    validation: range_0_100
+    
+  - name: opportunity_close_date
+    type: date
+    required: true
+    
+  - name: opportunity_days_to_close
+    type: integer
+    required: false
+    derived_from: [opportunity_close_date]
+    
+  - name: opportunity_age_days
+    type: integer
+    required: false
+    derived_from: [opportunity_created_date]
+    
+  - name: opportunity_created_date
+    type: date
+    required: false
+    
+  - name: opportunity_account_id
+    type: string
+    required: false
+    
+  - name: opportunity_owner_id
+    type: string
+    required: false
+    
+  - name: opportunity_owner_name
+    type: string
+    required: false
+    
+  - name: opportunity_type
+    type: string
+    required: false
+    description: New Business, Expansion, Renewal
+    
+  - name: opportunity_lead_source
+    type: string
+    required: false
+    
+  - name: opportunity_competitors
+    type: array
+    required: false
+    sources: [gong_ai, perplexity_sonar]
+    description: Detected competitors mentioned in calls
+    
+  - name: opportunity_stakeholders
+    type: array
+    required: false
+    sources: [gong_ai]
+    description: Key stakeholders identified
+    
+  - name: opportunity_engagement_score
+    type: float
+    required: false
+    sources: [gong_ai, salesloft]
+    validation: range_0_1
+    description: Buyer engagement signal strength
+    
+  - name: opportunity_risk_score
+    type: float
+    required: false
+    derived_from: [opportunity_engagement_score, opportunity_age_days, opportunity_stage]
+    validation: range_0_1
+    description: Deal risk assessment (0=low, 1=high)
+    
+  - name: opportunity_last_activity_date
+    type: date
+    required: false
+    
+  - name: opportunity_days_since_activity
+    type: integer
+    required: false
+    derived_from: [opportunity_last_activity_date]
+    
+  - name: enrichment_timestamp
+    type: datetime
+    required: true
+    auto_populate: true
+    
+  - name: enrichment_quality_score
+    type: float
+    required: true
+    auto_populate: true
+    validation: range_0_1
+
+derivation_rules:
+  - field: opportunity_days_to_close
+    depends_on: [opportunity_close_date]
+    logic: (opportunity_close_date - datetime.now().date()).days
+    
+  - field: opportunity_age_days
+    depends_on: [opportunity_created_date]
+    logic: (datetime.now().date() - opportunity_created_date).days
+    
+  - field: opportunity_days_since_activity
+    depends_on: [opportunity_last_activity_date]
+    logic: (datetime.now().date() - opportunity_last_activity_date).days if opportunity_last_activity_date else None
+    
+  - field: opportunity_risk_score
+    depends_on: [opportunity_engagement_score, opportunity_age_days, opportunity_days_since_activity]
+    logic: |
+      risk = 0.0
+      if opportunity_engagement_score < 0.3: risk += 0.4
+      if opportunity_age_days > 90: risk += 0.3
+      if opportunity_days_since_activity > 14: risk += 0.3
+      return min(risk, 1.0)

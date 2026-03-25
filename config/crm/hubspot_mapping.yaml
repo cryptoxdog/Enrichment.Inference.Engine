@@ -1,0 +1,69 @@
+crm: hubspot
+version: 2.0
+
+objects:
+  company:
+    hubspot_object: companies
+    mappings:
+      company_id: hs_object_id
+      company_name: name
+      company_domain: domain
+      company_industry: industry
+      company_description: description
+      employee_count: numberofemployees
+      annual_revenue: annualrevenue
+      company_location_street: address
+      company_location_city: city
+      company_location_state: state
+      company_location_country: country
+      company_location_postal: zip
+      company_phone: phone
+      company_linkedin_url: linkedin_company_page
+      company_twitter_handle: twitterhandle
+      company_facebook_url: facebook_company_page
+      enrichment_timestamp: enrichment_last_updated
+      enrichment_quality_score: data_quality_score
+      
+  contact:
+    hubspot_object: contacts
+    mappings:
+      contact_id: hs_object_id
+      contact_email: email
+      contact_first_name: firstname
+      contact_last_name: lastname
+      contact_title: jobtitle
+      contact_phone: phone
+      contact_phone_type: phone_type
+      contact_linkedin_url: linkedin_url
+      contact_location_city: city
+      contact_location_state: state
+      contact_location_country: country
+      contact_company_id: associatedcompanyid
+      enrichment_timestamp: enrichment_last_updated
+      enrichment_quality_score: data_quality_score
+      
+  opportunity:
+    hubspot_object: deals
+    mappings:
+      opportunity_id: hs_object_id
+      opportunity_name: dealname
+      opportunity_stage: dealstage
+      opportunity_amount: amount
+      opportunity_close_date: closedate
+      opportunity_created_date: createdate
+      opportunity_account_id: associatedcompanyid
+      opportunity_owner_id: hubspot_owner_id
+      opportunity_type: dealtype
+      opportunity_lead_source: lead_source
+      opportunity_engagement_score: engagement_score
+      opportunity_risk_score: risk_score
+      opportunity_last_activity_date: notes_last_updated
+      enrichment_timestamp: enrichment_last_updated
+
+custom_properties:
+  - enrichment_last_updated
+  - data_quality_score
+  - engagement_score
+  - risk_score
+  - phone_type
+  - linkedin_url

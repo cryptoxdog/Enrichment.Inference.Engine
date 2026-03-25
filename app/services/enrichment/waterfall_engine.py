@@ -23,6 +23,7 @@ import yaml
 
 from .quality_scorer import QualityScorer
 from .sources.base import BaseSource, EnrichmentResult, SourceConfig
+from .sources import SOURCE_REGISTRY
 from .sources.perplexity_adapter import PerplexitySonarSource
 
 logger = structlog.get_logger("waterfall_engine")
@@ -70,6 +71,53 @@ class WaterfallEngine:
 
         self._waterfall_cfg = cfg.get("waterfall_strategies", {})
         self._fallback_cfg = cfg.get("fallback_behavior", {})
+
+    def auto_register_sources(
+        self, provider_config_path: str = "config/provider_config.yaml"
+    ) -> None:
+        """
+        Auto-register enrichment sources from provider_config.yaml.
+
+        Reads the config file and instantiates source classes from the
+        SOURCE_REGISTRY for any provider that has enabled=true and a
+        valid api_key.
+        """
+        try:
+            with open(provider_config_path) as f:
+                cfg = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            logger.warning("provider_config_not_found", path=provider_config_path)
+            return
+
+        providers = cfg.get("providers", {})
+        for name, pcfg in providers.items():
+            if not pcfg.get("enabled", False):
+                continue
+            api_key = pcfg.get("api_key", "")
+            if not api_key or api_key.startswith("${"):
+                continue  # Placeholder — not configured
+
+            source_cls = SOURCE_REGISTRY.get(name)
+            if not source_cls:
+                logger.warning("unknown_source_provider", name=name)
+                continue
+
+            if name in self.source_clients:
+                continue  # Already registered (e.g. perplexity)
+
+            config = SourceConfig(
+                name=name,
+                enabled=True,
+                api_endpoint=pcfg.get("base_url", ""),
+                auth_type=pcfg.get("auth_type", "api_key"),
+                api_key=api_key,
+                timeout=pcfg.get("timeout", 30),
+                retry_count=pcfg.get("retry_count", 2),
+                supported_domains=pcfg.get("supported_domains", ["company", "contact"]),
+                quality_tier=pcfg.get("quality_tier", "standard"),
+            )
+            self.source_clients[name] = source_cls(config=config)
+            logger.info("auto_registered_source", name=name)
 
     def _register_perplexity(
         self, api_key: str, breaker: Any | None
