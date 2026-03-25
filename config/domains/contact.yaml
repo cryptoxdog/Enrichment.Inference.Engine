@@ -1,0 +1,160 @@
+domain: contact
+version: 2.0
+description: Contact/lead enrichment schema
+
+fields:
+  - name: contact_id
+    type: string
+    required: false
+    
+  - name: contact_email
+    type: string
+    required: true
+    difficulty: easy
+    validation: email_format
+    
+  - name: contact_email_domain
+    type: string
+    required: true
+    difficulty: easy
+    derived_from: [contact_email]
+    
+  - name: contact_email_valid
+    type: boolean
+    required: true
+    difficulty: easy
+    derived_from: [contact_email]
+    validation: email_deliverability
+    
+  - name: contact_first_name
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, apollo, hunter]
+    
+  - name: contact_last_name
+    type: string
+    required: false
+    difficulty: easy
+    sources: [clearbit, apollo, hunter]
+    
+  - name: contact_full_name
+    type: string
+    required: false
+    difficulty: easy
+    derived_from: [contact_first_name, contact_last_name]
+    
+  - name: contact_title
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, zoominfo, apollo, linkedin]
+    
+  - name: contact_level
+    type: string
+    required: false
+    difficulty: easy
+    derived_from: [contact_title]
+    description: IC, Manager, Director, VP, C-Level
+    
+  - name: contact_department
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, apollo]
+    
+  - name: contact_phone
+    type: string
+    required: false
+    difficulty: hard
+    sources: [zoominfo, apollo]
+    validation: phone_format
+    
+  - name: contact_phone_type
+    type: string
+    required: false
+    difficulty: medium
+    sources: [zoominfo]
+    description: mobile, work, direct
+    
+  - name: contact_linkedin_url
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, apollo, hunter]
+    validation: url_format
+    
+  - name: contact_twitter_handle
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit]
+    
+  - name: contact_location_city
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, linkedin]
+    
+  - name: contact_location_state
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, linkedin]
+    
+  - name: contact_location_country
+    type: string
+    required: false
+    difficulty: medium
+    sources: [clearbit, linkedin]
+    
+  - name: contact_company_id
+    type: string
+    required: false
+    description: Link to company domain
+    
+  - name: contact_company_name
+    type: string
+    required: false
+    difficulty: easy
+    derived_from: [contact_email_domain]
+    sources: [clearbit]
+    
+  - name: enrichment_timestamp
+    type: datetime
+    required: true
+    auto_populate: true
+    
+  - name: enrichment_sources_used
+    type: array
+    required: true
+    auto_populate: true
+    
+  - name: enrichment_quality_score
+    type: float
+    required: true
+    auto_populate: true
+    validation: range_0_1
+
+derivation_rules:
+  - field: contact_email_domain
+    depends_on: [contact_email]
+    logic: contact_email.split('@')[1] if '@' in contact_email else None
+    
+  - field: contact_full_name
+    depends_on: [contact_first_name, contact_last_name]
+    logic: f"{contact_first_name} {contact_last_name}".strip()
+    
+  - field: contact_level
+    depends_on: [contact_title]
+    logic: |
+      title_lower = contact_title.lower()
+      if any(x in title_lower for x in ['ceo', 'cto', 'cfo', 'cmo', 'chief']): return "C-Level"
+      elif any(x in title_lower for x in ['vp', 'vice president']): return "VP"
+      elif any(x in title_lower for x in ['director', 'head of']): return "Director"
+      elif any(x in title_lower for x in ['manager', 'lead']): return "Manager"
+      else: return "IC"
+      
+  - field: contact_email_valid
+    depends_on: [contact_email]
+    logic: validate_email_deliverability(contact_email)

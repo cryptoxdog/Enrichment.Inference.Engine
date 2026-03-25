@@ -32,12 +32,31 @@ class Settings(BaseSettings):
     max_concurrent_variations: int = 3
     max_entities_per_batch: int = 50
 
-    # ── CRM / Odoo ────────────────────────────────────
+    # ── CRM / Odoo (first consumer) ──────────────────
     odoo_url: str = ""
     odoo_db: str = ""
     odoo_username: str = ""
     odoo_password: str = ""
     crm_mapping_path: str = "config/crm/odoo_mapping.yaml"
+
+    # ── CRM / Salesforce ─────────────────────────────
+    salesforce_client_id: str = ""
+    salesforce_client_secret: str = ""
+    salesforce_username: str = ""
+    salesforce_password: str = ""
+    salesforce_security_token: str = ""
+
+    # ── CRM / HubSpot ───────────────────────────────
+    hubspot_access_token: str = ""
+
+    # ── Enrichment Sources (waterfall providers) ─────
+    clearbit_api_key: str = ""
+    zoominfo_api_key: str = ""
+    apollo_api_key: str = ""
+    hunter_api_key: str = ""
+
+    # ── Cognitive Engine Graphs (sibling node) ───────
+    ceg_base_url: str = "http://localhost:8001"
 
     # ── Circuit Breaker ──────────────────────────────
     cb_failure_threshold: int = 5

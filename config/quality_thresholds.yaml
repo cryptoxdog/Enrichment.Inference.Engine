@@ -1,0 +1,108 @@
+version: 2.0
+
+global_thresholds:
+  completeness: 0.85
+  accuracy: 0.90
+  freshness_days: 90
+  confidence: 0.75
+  data_integrity_score: 0.85
+
+dimension_weights:
+  completeness: 0.30
+  accuracy: 0.25
+  freshness: 0.20
+  consistency: 0.15
+  confidence: 0.10
+
+per_domain_thresholds:
+  company:
+    completeness: 0.90
+    required_fields:
+      - company_name
+      - company_domain
+      - company_industry
+    critical_fields:
+      - employee_count
+      - company_location_country
+    validation_rules:
+      - field: company_domain
+        rule: valid_domain_format
+      - field: employee_count
+        rule: positive_integer
+      - field: annual_revenue
+        rule: positive_integer
+        
+  contact:
+    completeness: 0.85
+    required_fields:
+      - contact_email
+      - contact_first_name
+      - contact_last_name
+    critical_fields:
+      - contact_title
+      - contact_email_valid
+    validation_rules:
+      - field: contact_email
+        rule: valid_email_format
+      - field: contact_email
+        rule: deliverable_email
+      - field: contact_phone
+        rule: valid_phone_format
+        
+  opportunity:
+    completeness: 0.80
+    required_fields:
+      - opportunity_name
+      - opportunity_stage
+      - opportunity_close_date
+    critical_fields:
+      - opportunity_amount
+      - opportunity_account_id
+    validation_rules:
+      - field: opportunity_amount
+        rule: positive_number
+      - field: opportunity_probability
+        rule: range_0_to_100
+      - field: opportunity_close_date
+        rule: future_date
+
+validation_rules:
+  valid_domain_format:
+    regex: "^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}$"
+    
+  valid_email_format:
+    regex: "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
+    
+  valid_phone_format:
+    regex: "^\\+?[1-9]\\d{1,14}$"
+    
+  positive_integer:
+    min: 1
+    type: integer
+    
+  positive_number:
+    min: 0
+    type: float
+    
+  range_0_to_1:
+    min: 0.0
+    max: 1.0
+    type: float
+    
+  range_0_to_100:
+    min: 0
+    max: 100
+    type: integer
+    
+  future_date:
+    constraint: ">= today"
+    
+  year_range:
+    min: 1800
+    max: current_year
+
+convergence_criteria:
+  max_passes: 3
+  min_quality_improvement: 0.05
+  fields_added_threshold: 2
+  quality_score_plateau_threshold: 0.02

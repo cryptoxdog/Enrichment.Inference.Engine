@@ -1,0 +1,66 @@
+sources:
+  clearbit:
+    enabled: true
+    api_endpoint: https://person.clearbit.com/v2
+    auth_type: bearer
+    rate_limit: 600/hour
+    cost_per_call: 0.015
+    timeout: 5
+    retry_count: 2
+    supported_domains: [company, contact]
+    quality_tier: premium
+    
+  zoominfo:
+    enabled: true
+    api_endpoint: https://api.zoominfo.com/lookup
+    auth_type: jwt
+    rate_limit: 1000/hour
+    cost_per_call: 0.05
+    timeout: 8
+    retry_count: 1
+    supported_domains: [company, contact]
+    quality_tier: premium
+    
+  apollo:
+    enabled: true
+    api_endpoint: https://api.apollo.io/v1
+    auth_type: api_key
+    rate_limit: 10000/day
+    cost_per_call: 0.02
+    timeout: 5
+    retry_count: 2
+    supported_domains: [company, contact]
+    quality_tier: standard
+    
+  hunter:
+    enabled: true
+    api_endpoint: https://api.hunter.io/v2
+    auth_type: api_key
+    rate_limit: 1000/month
+    cost_per_call: 0.01
+    timeout: 5
+    retry_count: 2
+    supported_domains: [contact]
+    quality_tier: standard
+    
+  linkedin:
+    enabled: false
+    api_endpoint: https://api.linkedin.com/v2
+    auth_type: oauth2
+    rate_limit: 100/day
+    cost_per_call: 0.0
+    timeout: 10
+    retry_count: 1
+    supported_domains: [company, contact]
+    quality_tier: premium
+    
+  perplexity_sonar:
+    enabled: true
+    api_endpoint: https://api.perplexity.ai
+    auth_type: bearer
+    rate_limit: 5000/day
+    cost_per_call: 0.03
+    timeout: 10
+    retry_count: 1
+    supported_domains: [company, contact, opportunity]
+    quality_tier: ai_inference
