@@ -67,7 +67,7 @@ class BaseSource(ABC):
         - handle retries internally
         - never raise on network errors (return EnrichmentResult with error)
         """
-        raise NotImplementedError
+        ...
 
     def _now_ms(self) -> int:
         """Return current time in milliseconds."""

@@ -23,32 +23,49 @@ from score_models import (
     ScoringProfile,
 )
 
+from ..core.exceptions import DependencyNotConfiguredError
+
 # ── Dependency stubs (replaced by DI in production) ───────────
 
 
 def get_score_engine():
-    """Injected by app startup."""
-    raise NotImplementedError("ScoreEngine not configured")
+    """Injected by app startup via dependency_overrides."""
+    raise DependencyNotConfiguredError(
+        "ScoreEngine",
+        "Call configure_score_dependencies() in lifespan",
+    )
 
 
 def get_decay_engine():
-    """Injected by app startup."""
-    raise NotImplementedError("DecayEngine not configured")
+    """Injected by app startup via dependency_overrides."""
+    raise DependencyNotConfiguredError(
+        "DecayEngine",
+        "Call configure_score_dependencies() in lifespan",
+    )
 
 
 def get_explainer():
-    """Injected by app startup."""
-    raise NotImplementedError("ScoreExplainer not configured")
+    """Injected by app startup via dependency_overrides."""
+    raise DependencyNotConfiguredError(
+        "ScoreExplainer",
+        "Call configure_score_dependencies() in lifespan",
+    )
 
 
 def get_profile_store():
-    """Injected by app startup."""
-    raise NotImplementedError("ProfileStore not configured")
+    """Injected by app startup via dependency_overrides."""
+    raise DependencyNotConfiguredError(
+        "ProfileStore",
+        "Call configure_score_dependencies() in lifespan",
+    )
 
 
 def get_score_store():
-    """Injected by app startup."""
-    raise NotImplementedError("ScoreStore not configured")
+    """Injected by app startup via dependency_overrides."""
+    raise DependencyNotConfiguredError(
+        "ScoreStore",
+        "Call configure_score_dependencies() in lifespan",
+    )
 
 
 # ── Request / Response Models ─────────────────────────────────
