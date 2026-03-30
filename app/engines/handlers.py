@@ -10,11 +10,12 @@ Handler signature (L9 contract):
     async def handle_<action>(tenant: str, payload: dict) -> dict
 
 Registered actions:
-    - enrich:    Single entity enrichment (single-pass)
+    - enrich:      Single entity enrichment (single-pass)
     - enrichbatch: Batch enrichment
-    - converge:  Multi-pass convergence loop
-    - discover:  Schema discovery (Seed tier)
-    - writeback: CRM write-back (Odoo-first)
+    - converge:    Multi-pass convergence loop
+    - discover:    Schema discovery (Seed tier)
+    - simulate:    ROI simulation — ENRICH+GRAPH twin (Sonar-powered)
+    - writeback:   CRM write-back (Odoo-first)
 """
 
 from __future__ import annotations
@@ -25,7 +26,6 @@ import aiofiles
 import structlog
 
 from ..core.config import get_settings
-from ..engines.convergence.convergence_config import ConvergenceConfig  # NEW
 from ..engines.convergence_controller import run_convergence_loop
 from ..engines.enrichment_orchestrator import enrich_batch, enrich_entity
 from ..engines.schema_discovery import SchemaDiscoveryEngine
@@ -35,6 +35,12 @@ from ..services.crm.writeback import WriteBackOrchestrator
 from ..services.domain_yaml_reader import DomainYamlReader
 from ..services.idempotency import IdempotencyStore
 from ..services.kbresolver import KBResolver
+from ..services.simulation_bridge import (
+    analyze_leverage,
+    brief_to_dict,
+    generate_executive_brief,
+    simulate,
+)
 
 logger = structlog.get_logger("handlers")
 
@@ -85,14 +91,12 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
 
     domain_hints: dict[str, Any] = {}
     inference_rules: list[dict] = []
-    domain_spec: dict[str, Any] = {}
 
     domain_id = payload.get("domain_id")
     node_label = payload.get("node_label")
     if domain_id and node_label and _domain_reader:
         domain_hints = _domain_reader.get_enrichment_hints(domain_id, node_label)
         config = _domain_reader.load(domain_id)
-        domain_spec = config.to_dict() if hasattr(config, "to_dict") else {}
         if config.inference_rules_path:
             from pathlib import Path
 
@@ -104,13 +108,6 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
                     content = await f.read()
                     inference_rules = yaml.safe_load(content) or []
 
-    # NEW: Extract convergence_config from payload
-    convergence_config = None
-    if "convergence_config" in payload:
-        convergence_config = ConvergenceConfig.from_dict(payload["convergence_config"])
-    elif domain_id:
-        convergence_config = ConvergenceConfig.from_domain_yaml(domain_id)
-
     response = await run_convergence_loop(
         request=request,
         settings=settings,
@@ -118,8 +115,6 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
         idem_store=_idem,
         inference_rules=inference_rules,
         domain_hints=domain_hints,
-        domain_spec=domain_spec,
-        convergence_config=convergence_config,  # NEW
     )
     return response.model_dump()
 
@@ -161,16 +156,98 @@ async def handle_discover(tenant: str, payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+async def handle_simulate(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    ROI simulation — ENRICH+GRAPH deterministic twin, now Sonar-powered.
+
+    Payload keys:
+        crm_field_names : list[str]   — customer's current CRM field names
+        domain_id       : str         — domain YAML identifier (e.g. "plastics")
+        customer_name   : str         — for executive brief attribution
+        query_profile   : dict | None — optional GRAPH query override
+        entity_count    : int         — number of entities to simulate (default 20)
+        seed            : int         — RNG seed for static fallback (default 42)
+        use_sonar       : bool        — use Sonar enrichment (default True)
+        company_names   : list[str] | None — override company names for Sonar research
+    """
+    settings = get_settings()
+
+    crm_field_names: list[str] = payload.get("crm_field_names", [])
+    domain_id: str = payload.get("domain_id", "plastics")
+    customer_name: str = payload.get("customer_name", tenant)
+    query_profile: dict[str, Any] | None = payload.get("query_profile")
+    entity_count: int = int(payload.get("entity_count", 20))
+    seed: int = int(payload.get("seed", 42))
+    use_sonar: bool = bool(payload.get("use_sonar", True))
+    company_names: list[str] | None = payload.get("company_names")
+
+    if not crm_field_names:
+        raise ValueError("simulate: crm_field_names is required and must be non-empty")
+
+    domain_spec: dict[str, Any] = {}
+    if _domain_reader:
+        try:
+            config = _domain_reader.load(domain_id)
+            domain_spec = config.raw_spec if hasattr(config, "raw_spec") else {}
+        except Exception as exc:
+            logger.warning(
+                "simulate_domain_spec_load_failed",
+                domain_id=domain_id,
+                error=str(exc),
+            )
+
+    logger.info(
+        "simulate_start",
+        tenant=tenant,
+        domain_id=domain_id,
+        crm_fields=len(crm_field_names),
+        entity_count=entity_count,
+        use_sonar=use_sonar,
+    )
+
+    seed_stats, enriched_stats, _seed_ents, _enr_ents = simulate(
+        crm_field_names=crm_field_names,
+        domain_spec=domain_spec,
+        query_profile=query_profile,
+        entity_count=entity_count,
+        seed=seed,
+        use_sonar=use_sonar,
+        sonar_api_key=settings.perplexity_api_key,
+        company_names=company_names,
+    )
+
+    leverage_points = analyze_leverage(seed_stats, enriched_stats)
+    brief = generate_executive_brief(
+        customer_name=customer_name,
+        domain_id=domain_id,
+        seed_stats=seed_stats,
+        enriched_stats=enriched_stats,
+        leverage_points=leverage_points,
+    )
+
+    logger.info(
+        "simulate_complete",
+        tenant=tenant,
+        domain_id=domain_id,
+        gate_pass_rate_seed=seed_stats.gate_pass_rate,
+        gate_pass_rate_enriched=enriched_stats.gate_pass_rate,
+        communities=enriched_stats.communities_found,
+        recommended_tier=brief.recommended_tier,
+    )
+
+    return brief_to_dict(brief)
+
+
 async def handle_writeback(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
     """
     CRM write-back — push enriched data back to originating CRM.
 
     Payload:
-        domain: str — entity domain (company, contact, account, opportunity)
-        canonical: dict — canonical enrichment fields to write
-        crm_type: str — CRM platform (default: "odoo")
-        credentials: dict — CRM connection credentials
-        mapping_path: str — path to CRM field mapping YAML
+        domain       : str  — entity domain (company, contact, account, opportunity)
+        canonical    : dict — canonical enrichment fields to write
+        crm_type     : str  — CRM platform (default: "odoo")
+        credentials  : dict — CRM connection credentials
+        mapping_path : str  — path to CRM field mapping YAML
     """
     settings = get_settings()
     domain = payload.get("domain", "company")
@@ -220,5 +297,6 @@ def get_handler_map() -> dict[str, Any]:
         "enrichbatch": handle_enrichbatch,
         "converge": handle_converge,
         "discover": handle_discover,
+        "simulate": handle_simulate,
         "writeback": handle_writeback,
     }

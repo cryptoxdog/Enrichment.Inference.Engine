@@ -30,6 +30,8 @@ from app.engines.handlers import (
     handle_discover,
     handle_enrich,
     handle_enrichbatch,
+    handle_simulate,
+    handle_writeback,
     init_handlers,
 )
 from chassis import register_handler
@@ -54,6 +56,8 @@ def register(kb, idem_store=None, domain_reader=None) -> None:
     register_handler("enrichbatch", handle_enrichbatch)
     register_handler("converge", handle_converge)
     register_handler("discover", handle_discover)
+    register_handler("simulate", handle_simulate)
+    register_handler("writeback", handle_writeback)
     register_handler("enrich_and_sync", _make_enrich_and_sync_handler(kb, idem_store))
 
     _graph_client = GraphSyncClient(
@@ -64,7 +68,15 @@ def register(kb, idem_store=None, domain_reader=None) -> None:
 
     logger.info(
         "orchestration.registered",
-        handlers=["enrich", "enrichbatch", "converge", "discover", "enrich_and_sync"],
+        handlers=[
+            "enrich",
+            "enrichbatch",
+            "converge",
+            "discover",
+            "simulate",
+            "writeback",
+            "enrich_and_sync",
+        ],
         graph_url=settings.graph_node_url,
     )
 
