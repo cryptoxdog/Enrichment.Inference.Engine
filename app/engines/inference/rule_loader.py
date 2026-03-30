@@ -11,6 +11,7 @@ by how many downstream inference rules they would unlock if populated.
 from __future__ import annotations
 
 from collections import defaultdict
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -19,6 +20,40 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 logger = structlog.get_logger("inference.rule_loader")
+
+__all__ = [
+    "Operator",
+    "RuleCondition",
+    "RuleOutput",
+    "RuleDefinition",
+    "RuleRegistry",
+    "load_rules",
+    "reload_rules",
+    "build_unlock_index",
+    "score_unlock_potential",
+    "rank_fields_by_unlock",
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Operator Enum
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class Operator(StrEnum):
+    """Supported condition operators for inference rules."""
+
+    CONTAINS = "CONTAINS"
+    EQUALS = "EQUALS"
+    GT = "GT"
+    LT = "LT"
+    GTE = "GTE"
+    LTE = "LTE"
+    IN = "IN"
+    NOT_IN = "NOTIN"
+    IS_TRUE = "ISTRUE"
+    IS_FALSE = "ISFALSE"
+    EXISTS = "EXISTS"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -30,19 +65,7 @@ class RuleCondition(BaseModel):
     """Single condition in an inference rule."""
 
     field: str
-    operator: Literal[
-        "CONTAINS",
-        "EQUALS",
-        "GT",
-        "LT",
-        "GTE",
-        "LTE",
-        "IN",
-        "NOTIN",
-        "ISTRUE",
-        "ISFALSE",
-        "EXISTS",
-    ]
+    operator: Operator
     value: Any | None = None
 
 
@@ -86,6 +109,11 @@ class RuleDefinition(BaseModel):
     priority: int = Field(default=10, ge=0, le=100)
     domain: str | None = None
     description: str | None = None
+
+    @property
+    def trigger_fields(self) -> set[str]:
+        """Set of field names that must exist for this rule to potentially fire."""
+        return {cond.field for cond in self.conditions}
 
     @field_validator("conditions")
     @classmethod
@@ -142,6 +170,14 @@ class RuleRegistry:
     def count(self) -> int:
         """Total number of rules in registry."""
         return len(self.rule_index)
+
+    def candidates_for(self, available_fields: set[str]) -> list[RuleDefinition]:
+        """Return rules whose trigger fields are a subset of available_fields."""
+        candidates: list[RuleDefinition] = []
+        for rule in self.rule_index.values():
+            if rule.trigger_fields.issubset(available_fields):
+                candidates.append(rule)
+        return candidates
 
     def clear(self) -> None:
         """Clear all rules (for hot reload)."""
