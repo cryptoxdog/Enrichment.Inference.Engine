@@ -174,6 +174,26 @@ jobs:
             || echo "⚠️  Type check warnings (non-blocking)"
 
 # ────────────────────────────────────────────────────────────────────────
+# PHASE 2.5: SEMGREP POLICY CHECK
+# ────────────────────────────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep Policy Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: '.semgrep/'
+
+# ────────────────────────────────────────────────────────────────────────
 # PHASE 3: TEST SUITE
 # ────────────────────────────────────────────────────────────────────────
   test:
@@ -380,6 +400,7 @@ jobs:
     needs:
       - validate
       - lint
+      - semgrep
       - test
       - security
       - sbom
@@ -397,6 +418,7 @@ jobs:
           echo "Job Results:"
           echo "  validate:  ${{ needs.validate.result }}"
           echo "  lint:      ${{ needs.lint.result }}"
+          echo "  semgrep:   ${{ needs.semgrep.result }}"
           echo "  test:      ${{ needs.test.result }}"
           echo "  security:  ${{ needs.security.result }}"
           echo "  sbom:      ${{ needs.sbom.result }}"
@@ -406,12 +428,14 @@ jobs:
           # Check for failures in required jobs
           if [[ "${{ needs.validate.result }}" == "failure" ]] || \
              [[ "${{ needs.lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.semgrep.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]]; then
             echo "❌ CI GATE FAILED — Critical job(s) failed"
             echo ""
             echo "Required jobs must pass:"
             echo "  • validate: syntax and structure checks"
             echo "  • lint: code quality and formatting"
+            echo "  • semgrep: policy rule checks"
             echo "  • test: test suite with coverage"
             exit 1
           fi

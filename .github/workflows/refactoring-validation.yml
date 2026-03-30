@@ -26,6 +26,9 @@ on:
       - develop
     paths:
       - '**/*.py'
+  push:
+    branches:
+      - 'refactor/**'
   workflow_dispatch:
 
 concurrency:
@@ -44,6 +47,7 @@ jobs:
     name: Refactoring Validation Gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: startsWith(github.head_ref, 'refactor/') || startsWith(github.ref, 'refs/heads/refactor/') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout Repository

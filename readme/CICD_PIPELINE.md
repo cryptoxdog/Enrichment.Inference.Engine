@@ -1,7 +1,7 @@
 # CI/CD Pipeline — Enrichment.Inference.Engine
 
-**Version:** 1.0.0
-**Date:** 2026-03-25
+**Version:** 1.1.0
+**Date:** 2026-03-30
 **Status:** Active
 **Sibling Parity:** Cognitive.Engine.Graphs
 
@@ -19,31 +19,34 @@ This document describes the production-grade CI/CD pipeline for the Enrichment.I
 
 | Workflow | Trigger | Purpose | Blocking |
 |----------|---------|---------|----------|
-| `ci.yml` | Push, PR | 7-phase main pipeline (validate, lint, test, security, SBOM, scorecard, ci-gate) | Yes |
-| `ci-quality.yml` | Push, PR | Quality gates (Ruff, MyPy, Semgrep, secrets, coverage, YAML) | Yes |
+| `ci.yml` | Push, PR | Main pipeline (validate, lint, semgrep, test, security, SBOM, scorecard) | Yes |
 | `compliance.yml` | PR (Python changes) | Architecture compliance (terminology, chassis isolation, KB schema, L9 contracts) | Yes |
-| `docker-build.yml` | Push to main, tags | Build, scan, sign Docker images | No |
-| `k8s-deploy.yml` | Manual dispatch | Helm-based K8s deployment with auto-rollback | No |
 | `supply-chain.yml` | PR, push, weekly | License compliance, dependency review | Partial |
 | `codeql.yml` | PR, push, weekly | GitHub CodeQL semantic analysis | No |
+| `docker-build.yml` | Push to main, tags | Build, scan, sign Docker images | No |
+| `k8s-deploy.yml` | Manual dispatch | Helm-based K8s deployment with auto-rollback | No |
 | `pr-review-enforcement.yml` | PR opened/sync | PR size limits and review policy | Yes (>1000 lines) |
-| `refactoring-validation.yml` | PR (Python changes) | Hard gate for refactoring PRs | Yes |
+| `refactoring-validation.yml` | refactor/* branches | Hard gate for refactoring PRs | Yes |
 | `release-drafter.yml` | Push to main | Auto-draft release notes | No |
 | `docs-sync.yml` | Docs changes | Validate documentation links | No |
+| `coderabbit-notify.yml` | PR review | CodeRabbit review notifications | No |
 
 ### CI Pipeline Phases (ci.yml)
 
 ```
-validate → lint → test → security → sbom → scorecard → ci-gate
-    │         │       │        │        │        │          │
-    │         │       │        │        │        │          └─ Fan-in: PASS/FAIL
-    │         │       │        │        │        └─ OpenSSF Scorecard
-    │         │       │        │        └─ SPDX SBOM generation
-    │         │       │        └─ Gitleaks + pip-audit + Safety + Bandit
-    │         │       └─ pytest with coverage (Postgres + Redis services)
+validate → lint → semgrep → test → security → sbom → scorecard → ci-gate
+    │         │       │        │        │        │        │          │
+    │         │       │        │        │        │        │          └─ Fan-in: PASS/FAIL
+    │         │       │        │        │        │        └─ OpenSSF Scorecard
+    │         │       │        │        │        └─ SPDX SBOM generation
+    │         │       │        │        └─ Gitleaks + pip-audit + Safety + Bandit
+    │         │       │        └─ pytest with coverage (Postgres + Redis services)
+    │         │       └─ Semgrep policy rules (.semgrep/)
     │         └─ Ruff lint + format + MyPy type check
     └─ Python syntax + YAML validation + KB schema
 ```
+
+**Note:** `ci-quality.yml` and `test.yml` were consolidated into `ci.yml` to eliminate redundant test runs.
 
 ---
 
