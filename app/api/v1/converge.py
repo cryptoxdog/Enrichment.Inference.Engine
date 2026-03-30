@@ -20,10 +20,6 @@ from pydantic import BaseModel, Field
 
 from ...core.auth import verify_api_key
 from ...engines.convergence.cost_tracker import CostTracker
-from ...engines.convergence.enrichment_profile import (
-    EnrichmentProfile,
-    ProfileRegistry,
-)
 from ...engines.convergence.loop_state import (
     LoopState,
     LoopStateStore,
@@ -45,6 +41,10 @@ from ...services.crm_field_scanner import (
     DiscoveryReport,
     generate_discovery_report,
     scan_crm_fields,
+)
+from ...services.enrichment_profile import (
+    EnrichmentProfile,
+    ProfileRegistry,
 )
 
 logger = logging.getLogger(__name__)

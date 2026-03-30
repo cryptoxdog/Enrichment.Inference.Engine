@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 DIMINISHING_RETURNS_MIN_IMPROVEMENT = 0.05  # 5%
 
 
+def _avg_confidence(field_confidences: dict[str, float]) -> float:
+    """Compute average confidence from a field_confidences dict."""
+    if not field_confidences:
+        return 0.0
+    return sum(field_confidences.values()) / len(field_confidences)
+
+
 class PassDelta(BaseModel):
     pass_a: int
     pass_b: int
@@ -55,7 +62,7 @@ class PassTelemetryCollector:
         b = self._get(pass_b)
         if a is None or b is None:
             return 0.0
-        return round(b.field_confidences.avg_confidence - a.field_confidences.avg_confidence, 4)
+        return round(_avg_confidence(b.field_confidences) - _avg_confidence(a.field_confidences), 4)
 
     def uncertainty_delta(self, pass_a: int, pass_b: int) -> float:
         a = self._get(pass_a)
@@ -72,10 +79,7 @@ class PassTelemetryCollector:
         for i in range(1, len(recent)):
             prev_unc = recent[i - 1].uncertainty_after
             curr_unc = recent[i].uncertainty_after
-            if prev_unc > 0:
-                pct_improvement = (prev_unc - curr_unc) / prev_unc
-            else:
-                pct_improvement = 0.0
+            pct_improvement = (prev_unc - curr_unc) / prev_unc if prev_unc > 0 else 0.0
             improvements.append(pct_improvement)
         avg_improvement = sum(improvements) / len(improvements) if improvements else 0.0
         return avg_improvement < DIMINISHING_RETURNS_MIN_IMPROVEMENT
@@ -91,7 +95,7 @@ class PassTelemetryCollector:
         for i, p in enumerate(self._passes):
             n_fields = len(p.fields_enriched) + len(p.fields_inferred)
             fields_per_pass.append(n_fields)
-            confidence_trajectory.append(round(p.field_confidences.avg_confidence, 4))
+            confidence_trajectory.append(round(_avg_confidence(p.field_confidences), 4))
             uncertainty_trajectory.append(round(p.uncertainty_after, 4))
             tokens_per_pass.append(p.tokens_used)
             roi = (n_fields / p.tokens_used) if p.tokens_used > 0 else 0.0
@@ -103,7 +107,8 @@ class PassTelemetryCollector:
                     pass_a=prev.pass_number,
                     pass_b=p.pass_number,
                     confidence_delta=round(
-                        p.field_confidences.avg_confidence - prev.field_confidences.avg_confidence,
+                        _avg_confidence(p.field_confidences)
+                        - _avg_confidence(prev.field_confidences),
                         4,
                     ),
                     uncertainty_delta=round(p.uncertainty_after - prev.uncertainty_after, 4),

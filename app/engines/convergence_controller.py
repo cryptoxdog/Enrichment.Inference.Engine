@@ -418,7 +418,8 @@ def _assemble_convergence_response(
         fields=final_fields,
         confidence=round(avg_confidence, 4),
         variation_count=sum(pr.tokens_used for pr in state.pass_results),
-        uncertainty_score=len(state.pass_results),
+        uncertainty_score=state.uncertainty_score,  # Actual uncertainty metric
+        pass_count=len(state.pass_results),  # Number of passes executed
         inference_version="v3.0.0-convergence",
         processing_time_ms=elapsed,
         tokens_used=state.total_tokens,

@@ -94,7 +94,8 @@ class TestConvergenceController:
                 fields=fields,
                 confidence=0.85 if call_count == 1 else 0.86,
                 variation_count=5,
-                uncertainty_score=1,
+                uncertainty_score=0.0,
+                pass_count=1,
                 inference_version="test",
                 processing_time_ms=100,
                 tokens_used=500,
@@ -129,7 +130,7 @@ class TestConvergenceController:
             inference_rules=[],
         )
         # Should converge before MAX_PASSES since enricher returns diminishing results
-        assert response.uncertainty_score <= MAX_PASSES
+        assert response.pass_count <= MAX_PASSES
 
     @pytest.mark.asyncio
     async def test_max_passes_respected(self, enrich_request, mock_settings, mock_kb_resolver):
@@ -144,7 +145,8 @@ class TestConvergenceController:
                 fields={f"field_{call_count}": f"val_{call_count}"},
                 confidence=0.5 + (call_count * 0.1),
                 variation_count=5,
-                uncertainty_score=1,
+                uncertainty_score=0.0,
+                pass_count=1,
                 inference_version="test",
                 processing_time_ms=100,
                 tokens_used=1000,
@@ -158,7 +160,7 @@ class TestConvergenceController:
             enricher=always_new_enricher,
             inference_rules=[],
         )
-        assert response.uncertainty_score <= MAX_PASSES
+        assert response.pass_count <= MAX_PASSES
 
     @pytest.mark.asyncio
     async def test_tokens_tracked_across_passes(
@@ -276,7 +278,8 @@ class TestDomainClassificationWiring:
                 fields={"field_a": "val"} if len(received_configs) == 1 else {},
                 confidence=0.85 if len(received_configs) == 1 else 0.86,
                 variation_count=3,
-                uncertainty_score=1,
+                uncertainty_score=0.0,
+                pass_count=1,
                 inference_version="test",
                 processing_time_ms=50,
                 tokens_used=300,
@@ -316,7 +319,8 @@ class TestDomainClassificationWiring:
                 fields={},
                 confidence=0.85,
                 variation_count=3,
-                uncertainty_score=1,
+                uncertainty_score=0.0,
+                pass_count=1,
                 inference_version="test",
                 processing_time_ms=50,
                 tokens_used=300,
@@ -344,7 +348,8 @@ class TestDomainClassificationWiring:
                 fields={"field_a": "val"},
                 confidence=0.9,
                 variation_count=3,
-                uncertainty_score=1,
+                uncertainty_score=0.0,
+                pass_count=1,
                 inference_version="test",
                 processing_time_ms=50,
                 tokens_used=500,

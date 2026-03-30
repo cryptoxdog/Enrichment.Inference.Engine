@@ -111,7 +111,8 @@ class EnrichResponse(BaseModel):
     kb_content_hash: str = ""
     variation_count: int = 0
     consensus_threshold: float = 0.0
-    uncertainty_score: int = 0
+    uncertainty_score: float = 0.0  # Aggregate uncertainty metric (0.0-10.0 scale)
+    pass_count: int = 0  # Number of convergence passes executed
     inference_version: str = "v2.2.0"
     processing_time_ms: int = 0
 
