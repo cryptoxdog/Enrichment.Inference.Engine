@@ -8,6 +8,7 @@ L9 Architecture Note:
     Chassis-agnostic. Implements CRMClientBase contract.
     Never imports FastAPI. Used by WriteBackOrchestrator.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,16 +28,12 @@ class SalesforceClient(CRMClientBase):
         super().__init__(credentials)
         self._instance_url: str = ""
         self._access_token: str = ""
-        self._api_version: str = credentials.credentials.get(
-            "api_version", "v59.0"
-        )
+        self._api_version: str = credentials.credentials.get("api_version", "v59.0")
 
     def connect(self) -> bool:
         """Authenticate via OAuth2 password flow or JWT."""
         creds = self.credentials.credentials
-        token_url = creds.get(
-            "token_url", "https://login.salesforce.com/services/oauth2/token"
-        )
+        token_url = creds.get("token_url", "https://login.salesforce.com/services/oauth2/token")
 
         grant_type = creds.get("grant_type", "password")
         body: dict[str, str] = {
@@ -47,9 +44,7 @@ class SalesforceClient(CRMClientBase):
 
         if grant_type == "password":
             body["username"] = creds.get("username", "")
-            body["password"] = creds.get("password", "") + creds.get(
-                "security_token", ""
-            )
+            body["password"] = creds.get("password", "") + creds.get("security_token", "")
 
         try:
             resp = httpx.post(token_url, data=body, timeout=30)
@@ -77,9 +72,7 @@ class SalesforceClient(CRMClientBase):
         except Exception:
             return False
 
-    def get_record(
-        self, object_type: str, record_id: str
-    ) -> dict[str, Any] | None:
+    def get_record(self, object_type: str, record_id: str) -> dict[str, Any] | None:
         """Fetch a single Salesforce record by ID."""
         url = (
             f"{self._instance_url}/services/data/{self._api_version}"
@@ -107,31 +100,20 @@ class SalesforceClient(CRMClientBase):
         where_clause = " AND ".join(where_parts) if where_parts else "Id != null"
         soql = f"SELECT {field_list} FROM {object_type} WHERE {where_clause}"
 
-        url = (
-            f"{self._instance_url}/services/data/{self._api_version}/query"
-        )
+        url = f"{self._instance_url}/services/data/{self._api_version}/query"
         try:
-            resp = httpx.get(
-                url, params={"q": soql}, headers=self._headers(), timeout=30
-            )
+            resp = httpx.get(url, params={"q": soql}, headers=self._headers(), timeout=30)
             resp.raise_for_status()
             return resp.json().get("records", [])
         except Exception as exc:
             logger.error("SF query error: %s", exc)
             return []
 
-    def create_record(
-        self, object_type: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def create_record(self, object_type: str, data: dict[str, Any]) -> WriteResult:
         """Create a new Salesforce record."""
-        url = (
-            f"{self._instance_url}/services/data/{self._api_version}"
-            f"/sobjects/{object_type}"
-        )
+        url = f"{self._instance_url}/services/data/{self._api_version}/sobjects/{object_type}"
         try:
-            resp = httpx.post(
-                url, json=data, headers=self._headers(), timeout=15
-            )
+            resp = httpx.post(url, json=data, headers=self._headers(), timeout=15)
             resp.raise_for_status()
             result = resp.json()
             return WriteResult(
@@ -142,18 +124,14 @@ class SalesforceClient(CRMClientBase):
         except Exception as exc:
             return WriteResult(success=False, error=str(exc))
 
-    def update_record(
-        self, object_type: str, record_id: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def update_record(self, object_type: str, record_id: str, data: dict[str, Any]) -> WriteResult:
         """Update an existing Salesforce record."""
         url = (
             f"{self._instance_url}/services/data/{self._api_version}"
             f"/sobjects/{object_type}/{record_id}"
         )
         try:
-            resp = httpx.patch(
-                url, json=data, headers=self._headers(), timeout=15
-            )
+            resp = httpx.patch(url, json=data, headers=self._headers(), timeout=15)
             resp.raise_for_status()
             return WriteResult(
                 success=True,
@@ -176,9 +154,7 @@ class SalesforceClient(CRMClientBase):
             f"/sobjects/{object_type}/{external_id_field}/{external_id_value}"
         )
         try:
-            resp = httpx.patch(
-                url, json=data, headers=self._headers(), timeout=15
-            )
+            resp = httpx.patch(url, json=data, headers=self._headers(), timeout=15)
             resp.raise_for_status()
             record_id = ""
             if resp.status_code == 201:
@@ -191,24 +167,15 @@ class SalesforceClient(CRMClientBase):
         except Exception as exc:
             return WriteResult(success=False, error=str(exc))
 
-    def bulk_create(
-        self, object_type: str, records: list[dict[str, Any]]
-    ) -> list[WriteResult]:
+    def bulk_create(self, object_type: str, records: list[dict[str, Any]]) -> list[WriteResult]:
         """Create multiple records using Salesforce Composite API."""
-        url = (
-            f"{self._instance_url}/services/data/{self._api_version}"
-            f"/composite/sobjects"
-        )
+        url = f"{self._instance_url}/services/data/{self._api_version}/composite/sobjects"
         payload = {
             "allOrNone": False,
-            "records": [
-                {"attributes": {"type": object_type}, **rec} for rec in records
-            ],
+            "records": [{"attributes": {"type": object_type}, **rec} for rec in records],
         }
         try:
-            resp = httpx.post(
-                url, json=payload, headers=self._headers(), timeout=60
-            )
+            resp = httpx.post(url, json=payload, headers=self._headers(), timeout=60)
             resp.raise_for_status()
             results = resp.json()
             return [
@@ -223,24 +190,15 @@ class SalesforceClient(CRMClientBase):
         except Exception as exc:
             return [WriteResult(success=False, error=str(exc))] * len(records)
 
-    def bulk_update(
-        self, object_type: str, records: list[dict[str, Any]]
-    ) -> list[WriteResult]:
+    def bulk_update(self, object_type: str, records: list[dict[str, Any]]) -> list[WriteResult]:
         """Update multiple records using Salesforce Composite API."""
-        url = (
-            f"{self._instance_url}/services/data/{self._api_version}"
-            f"/composite/sobjects"
-        )
+        url = f"{self._instance_url}/services/data/{self._api_version}/composite/sobjects"
         payload = {
             "allOrNone": False,
-            "records": [
-                {"attributes": {"type": object_type}, **rec} for rec in records
-            ],
+            "records": [{"attributes": {"type": object_type}, **rec} for rec in records],
         }
         try:
-            resp = httpx.patch(
-                url, json=payload, headers=self._headers(), timeout=60
-            )
+            resp = httpx.patch(url, json=payload, headers=self._headers(), timeout=60)
             resp.raise_for_status()
             results = resp.json()
             return [
@@ -255,9 +213,7 @@ class SalesforceClient(CRMClientBase):
         except Exception as exc:
             return [WriteResult(success=False, error=str(exc))] * len(records)
 
-    def get_field_metadata(
-        self, object_type: str
-    ) -> dict[str, Any]:
+    def get_field_metadata(self, object_type: str) -> dict[str, Any]:
         """Return field schema metadata for a Salesforce object."""
         url = (
             f"{self._instance_url}/services/data/{self._api_version}"

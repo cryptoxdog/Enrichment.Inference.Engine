@@ -8,6 +8,7 @@ Exit codes:
   0 = all checks pass
   1 = one or more FAIL conditions
 """
+
 import hashlib
 import sys
 from pathlib import Path
@@ -119,7 +120,7 @@ def main():
     # Print results
     print("=" * 60)
     print("L9 Contract Verification Report")
-    print(f"Engine: Enrichment.Inference.Engine")
+    print("Engine: Enrichment.Inference.Engine")
     print("=" * 60)
 
     for p in passes:

@@ -32,10 +32,12 @@ from typing import Any
 
 from .inference_bridge_v2 import (
     DerivationGraph,
-    InferenceResult as V2InferenceResult,
     InferenceStatus,
     build_derivation_graph,
     run_inference,
+)
+from .inference_bridge_v2 import (
+    InferenceResult as V2InferenceResult,
 )
 
 

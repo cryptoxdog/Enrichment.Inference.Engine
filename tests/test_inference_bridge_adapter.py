@@ -9,8 +9,8 @@ Validates:
 """
 
 import pytest
-from app.engines.inference_bridge_adapter import InferenceBridge, InferenceResult
 
+from app.engines.inference_bridge_adapter import InferenceBridge, InferenceResult
 
 # ── Fixtures ──────────────────────────────────────────────
 

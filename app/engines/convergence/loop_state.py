@@ -5,21 +5,22 @@ from __future__ import annotations
 import abc
 import logging
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from ...models.field_confidence import FieldConfidenceMap
-from ...models.loop_schemas import CostSummary, PassResult
+from ...models.loop_schemas import PassResult
+from .cost_tracker import CostSummary
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TTL_SECONDS = 86400  # 24h
 
 
-class LoopStatus(str, Enum):
+class LoopStatus(StrEnum):
     RUNNING = "running"
     CONVERGED = "converged"
     BUDGET_EXHAUSTED = "budget_exhausted"
@@ -40,11 +41,11 @@ class LoopState(BaseModel):
     accumulated_confidences: FieldConfidenceMap = Field(default_factory=FieldConfidenceMap)
     cost_summary: CostSummary = Field(default_factory=CostSummary)
     failure_reason: str = ""
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def touch(self) -> None:
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 class LoopStateStore(abc.ABC):

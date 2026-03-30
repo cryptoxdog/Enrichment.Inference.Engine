@@ -14,7 +14,7 @@ from app.engines.convergence.loop_state import (
     LoopStateStore,
     LoopStatus,
 )
-from app.models.loop_schemas import PassResult, CostSummary
+from app.models.loop_schemas import CostSummary, PassResult
 
 
 class TestLoopStatus:

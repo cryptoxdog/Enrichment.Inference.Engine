@@ -8,22 +8,22 @@ Source: ~400 lines | Target coverage: 70%
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.engines.convergence_controller import (
-    run_convergence_loop,
-    ConvergenceState,
-    get_or_classify_domain,
-    _classification_cache,
-    MAX_PASSES,
     CONVERGENCE_THRESHOLD,
+    MAX_PASSES,
     MIN_DELTA,
+    ConvergenceState,
+    _classification_cache,
+    get_or_classify_domain,
+    run_convergence_loop,
 )
 from app.engines.field_classifier import DomainClassification, FieldDifficulty
 from app.engines.search_optimizer import SonarConfig, SonarModel
 from app.models.schemas import EnrichRequest, EnrichResponse
-
 
 # ── Fixtures ───────────────────────────────────────────────
 

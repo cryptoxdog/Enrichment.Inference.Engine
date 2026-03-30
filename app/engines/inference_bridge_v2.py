@@ -32,9 +32,10 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +228,7 @@ def _default_rule(
 # ──────────────────────────────────────────────
 
 
-class InferenceStatus(str, Enum):
+class InferenceStatus(StrEnum):
     DERIVED = "derived"  # all inputs present, rule fired, value produced
     INPUTS_MISSING = "inputs_missing"  # one or more inputs not available
     BELOW_THRESHOLD = "below_threshold"  # inputs present but confidence too low

@@ -10,20 +10,18 @@ full provenance and downstream routing metadata.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-
 from score_models import (
     BatchScoreRequest,
     ScoreDimension,
     ScoreTier,
     ScoringProfile,
 )
-
 
 # ── Dependency stubs (replaced by DI in production) ───────────
 
@@ -141,7 +139,7 @@ def _envelope(
         "operation": operation,
         "entity_id": entity_id,
         "domain": domain,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "payload": payload,
         "metadata": {
             "version": "1.0.0",
@@ -435,7 +433,7 @@ async def create_profile(
                 dim = ScoreDimension(k)
                 weights[dim] = v
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid dimension: {k}")
+                raise HTTPException(status_code=400, detail=f"Invalid dimension: {k}") from None
 
     thresholds = {}
     if req.tier_thresholds:
@@ -444,7 +442,7 @@ async def create_profile(
                 tier = ScoreTier(k)
                 thresholds[tier] = v
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid tier: {k}")
+                raise HTTPException(status_code=400, detail=f"Invalid tier: {k}") from None
 
     profile = ScoringProfile(
         name=req.name,
@@ -517,7 +515,7 @@ async def get_tier_distribution(
             total=len(all_scores),
             distribution=distribution,
             avg_composite=round(avg, 4),
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         ).model_dump(),
         operation="tier_distribution",
         domain=domain,

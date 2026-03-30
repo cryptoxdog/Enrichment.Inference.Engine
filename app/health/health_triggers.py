@@ -10,7 +10,7 @@ applied to the HEALTH service.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -18,7 +18,6 @@ from .health_models import (
     EnrichmentTrigger,
     TriggerReason,
 )
-
 
 # ─── Trigger Store Protocol ──────────────────────────────────
 
@@ -108,7 +107,7 @@ class TriggerEngine:
 
     def ingest_triggers(self, triggers: list[EnrichmentTrigger]) -> IngestResult:
         """Accept triggers from an assessment run, deduplicate, and persist."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         dedup_since = now - timedelta(hours=self._config.dedup_window_hours)
 
         accepted: list[EnrichmentTrigger] = []
@@ -162,7 +161,7 @@ class TriggerEngine:
         Rate-limited to max_triggers_per_hour. Returns dispatch results
         including any failures.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         hour_ago = now - timedelta(hours=1)
         dispatched_recently = self._store.count_dispatched_since(domain, hour_ago)
         remaining_capacity = max(0, self._config.max_triggers_per_hour - dispatched_recently)
@@ -184,7 +183,7 @@ class TriggerEngine:
 
         for trigger in pending:
             try:
-                enrich_ref = self._dispatcher.queue_enrichment(
+                self._dispatcher.queue_enrichment(
                     entity_id=trigger.entity_id,
                     domain=trigger.domain,
                     target_fields=trigger.target_fields,
@@ -213,7 +212,7 @@ class TriggerEngine:
 
     def get_queue_status(self, domain: str) -> QueueStatus:
         """Return current trigger queue metrics."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         hour_ago = now - timedelta(hours=1)
 
         pending = self._store.count_pending(domain)

@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
-from score_models import (
+from .score_models import (
     BatchScoreRequest,
     BatchScoreResponse,
     DimensionScore,
@@ -31,7 +31,6 @@ from score_models import (
     apply_gate_penalty,
     compute_composite,
 )
-
 
 # ── Protocols ─────────────────────────────────────────────────
 

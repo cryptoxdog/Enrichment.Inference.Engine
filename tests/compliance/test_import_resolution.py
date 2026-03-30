@@ -5,6 +5,7 @@ Rules enforced:
 - No circular imports from engine to API layer
 - No star imports
 """
+
 import ast
 from pathlib import Path
 
@@ -31,8 +32,7 @@ def test_all_internal_imports_resolve():
                 if node.module.startswith("app."):
                     mod_path = REPO_ROOT / node.module.replace(".", "/")
                     if not (
-                        mod_path.with_suffix(".py").exists()
-                        or (mod_path / "__init__.py").exists()
+                        mod_path.with_suffix(".py").exists() or (mod_path / "__init__.py").exists()
                     ):
                         violations.append(
                             f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} "
@@ -53,7 +53,9 @@ def test_no_engine_to_api_imports():
         if "api/" in str(rel) or rel.name in ("main.py", "handlers.py"):
             continue
         # Only check engine modules
-        if not any(d in str(rel) for d in ("engines/", "score/", "health/", "models/", "services/")):
+        if not any(
+            d in str(rel) for d in ("engines/", "score/", "health/", "models/", "services/")
+        ):
             continue
         try:
             tree = ast.parse(py_file.read_text())
@@ -64,8 +66,7 @@ def test_no_engine_to_api_imports():
                 parts = node.module.split(".")
                 if "api" in parts:
                     violations.append(
-                        f"{rel}:{node.lineno} "
-                        f"engine imports from API layer: {node.module}"
+                        f"{rel}:{node.lineno} engine imports from API layer: {node.module}"
                     )
     assert not violations, "Engine→API imports:\n" + "\n".join(violations)
 

@@ -8,8 +8,7 @@ Source: ~200 lines | Target coverage: 90%
 
 from __future__ import annotations
 
-
-from app.services.validation_engine import validate_response, _coerce
+from app.services.validation_engine import _coerce, validate_response
 
 # Alias for test compatibility
 validate_payload = validate_response
@@ -107,5 +106,5 @@ class TestValidationRules:
             "x": None,
             "y": "valid",
         }
-        result = validate_payload(payload, {})
+        validate_payload(payload, {})
         # None values may or may not be excluded depending on implementation

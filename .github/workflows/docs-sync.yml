@@ -1,0 +1,83 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [ci]
+# tags: [L9_TEMPLATE, ci, docs]
+# owner: platform
+# status: active
+# --- /L9_META ---
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Universal CI/CD Pack — Documentation Sync Validation
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# VERSION: 1.0.0
+# PURPOSE: Validate documentation links and structure
+# SIBLING PARITY: Cognitive.Engine.Graphs/docs-sync.yml
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+name: Docs Sync Validation
+
+on:
+  pull_request:
+    paths:
+      - 'readme/**'
+      - 'docs/**'
+      - '*.md'
+  push:
+    branches:
+      - ${{ vars.PRIMARY_BRANCH || 'main' }}
+    paths:
+      - 'readme/**'
+      - 'docs/**'
+      - '*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Check Markdown Links
+        run: |
+          echo "Checking internal links in documentation..."
+          BROKEN=0
+
+          for dir in readme docs; do
+            if [ -d "$dir" ]; then
+              find "$dir" -name "*.md" -type f | while read file; do
+                grep -oP '\[.*?\]\(\K[^)]+' "$file" 2>/dev/null | while read link; do
+                  if [[ "$link" =~ ^\./ ]] || [[ "$link" =~ ^\.\./ ]]; then
+                    base_dir=$(dirname "$file")
+                    target="$base_dir/$link"
+                    if [ ! -f "$target" ] && [ ! -d "$target" ]; then
+                      echo "  Broken link in $file: $link"
+                      BROKEN=$((BROKEN + 1))
+                    fi
+                  fi
+                done
+              done
+            fi
+          done
+
+          if [ $BROKEN -gt 0 ]; then
+            echo "❌ Found $BROKEN broken internal link(s)"
+            exit 1
+          fi
+
+          echo "✅ All documentation links are valid"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# END OF DOCS SYNC
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

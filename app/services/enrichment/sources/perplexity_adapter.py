@@ -18,9 +18,9 @@ from typing import Any
 
 import structlog
 
-from ..sources.base import BaseSource, EnrichmentResult, SourceConfig
-from ...perplexity_client import query_perplexity, SonarResponse
+from ...perplexity_client import SonarResponse, query_perplexity
 from ...prompt_builder import build_prompt
+from ..sources.base import BaseSource, EnrichmentResult, SourceConfig
 
 logger = structlog.get_logger("perplexity_adapter")
 
@@ -41,9 +41,7 @@ class PerplexitySonarSource(BaseSource):
         super().__init__(config)
         self._breaker = breaker
 
-    async def enrich(
-        self, domain: str, payload: dict[str, Any]
-    ) -> EnrichmentResult:
+    async def enrich(self, domain: str, payload: dict[str, Any]) -> EnrichmentResult:
         """
         Perform enrichment via Perplexity Sonar.
 
@@ -69,10 +67,7 @@ class PerplexitySonarSource(BaseSource):
                 "location": payload.get("location", ""),
             }
             # Include all known fields for richer prompts
-            entity.update(
-                {k: v for k, v in payload.items()
-                 if v not in (None, "", [], {})}
-            )
+            entity.update({k: v for k, v in payload.items() if v not in (None, "", [], {})})
             sonar_payload = build_prompt(
                 entity=entity,
                 object_type=domain,
@@ -90,10 +85,7 @@ class PerplexitySonarSource(BaseSource):
 
             # Quality score based on data completeness
             data = response.data
-            non_empty = sum(
-                1 for v in data.values()
-                if v not in (None, "", [], {})
-            )
+            non_empty = sum(1 for v in data.values() if v not in (None, "", [], {}))
             total = max(len(data), 1)
             quality = min(non_empty / total, 1.0)
 

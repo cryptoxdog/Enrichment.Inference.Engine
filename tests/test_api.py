@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.consensus_engine import synthesize
 from app.services.uncertainty_engine import compute_uncertainty
-from app.services.validation_engine import validate_response, ValidationError
+from app.services.validation_engine import ValidationError, validate_response
 
 client = TestClient(app)
 AUTH = {"X-API-Key": "pass"}

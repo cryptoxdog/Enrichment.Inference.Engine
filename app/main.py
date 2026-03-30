@@ -1,9 +1,11 @@
 """
-Domain Enrichment API v2.2 — Single Ingress
-=============================================
+Domain Enrichment API v2.3.0 — Constellation-wired
+====================================================
 POST /api/v1/enrich        — single entity (Salesforce + Odoo)
 POST /api/v1/enrich/batch  — batch up to 50 (Odoo nightly cron)
 GET  /api/v1/health        — health + KB + circuit breaker status
+POST /v1/execute           — L9 chassis PacketEnvelope (node-to-node)
+POST /v1/outcomes          — match outcome feedback loop
 """
 
 from __future__ import annotations
@@ -15,10 +17,12 @@ from typing import Annotated
 import structlog
 from fastapi import Depends, FastAPI
 
+from .api.v1.chassis_endpoint import router as chassis_router
 from .core.auth import verify_api_key
 from .core.config import Settings, get_settings
 from .core.logging_config import setup_logging
 from .engines.enrichment_orchestrator import breaker, enrich_batch, enrich_entity
+from .engines.orchestration_layer import register as register_orchestration
 from .middleware.rate_limiter import RateLimitMiddleware
 from .models.schemas import (
     BatchEnrichRequest,
@@ -53,11 +57,14 @@ async def lifespan(app: FastAPI):
         logger.warning("redis_unavailable", error=str(e))
         _idem = None
 
+    register_orchestration(kb=_kb, idem_store=_idem)
+
     logger.info(
         "api_started",
-        version="2.2.0",
+        version="2.3.0",
         kb_files=len(_kb.index.files_loaded),
         kb_polymers=len(_kb.index.polymers),
+        constellation_handlers=["enrich", "enrichbatch", "converge", "discover", "enrich_and_sync"],
     )
 
     yield
@@ -69,17 +76,21 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Domain Enrichment API",
-    version="2.2.0",
+    title="L9 ENRICH — Domain Enrichment API",
+    version="2.3.0",
     description=(
         "Universal domain-aware entity enrichment. "
+        "Layer 2 of the L9 three-layer intelligence stack. "
         "Serves Salesforce Apex callouts, Odoo async_executor, "
-        "and any HTTP client with X-API-Key auth."
+        "and any L9 constellation node via PacketEnvelope."
     ),
     lifespan=lifespan,
 )
 
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
+
+# ── Chassis router (node-to-node PacketEnvelope traffic) ──────────
+app.include_router(chassis_router)
 
 
 @app.get("/api/v1/health", response_model=HealthCheckResponse)
@@ -87,7 +98,7 @@ async def health_check():
     kb = _kb or KBResolver("/dev/null")
     return HealthCheckResponse(
         status="ok",
-        version="2.2.0",
+        version="2.3.0",
         kb_loaded=kb.index.is_loaded,
         kb_polymers=len(kb.index.polymers),
         kb_grades=kb.index.total_grades,

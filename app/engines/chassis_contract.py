@@ -22,7 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -60,7 +60,7 @@ def inflate_ingress(raw: dict[str, Any]) -> dict[str, Any]:
         "packet_type": "enrichment_request",
         "action": action,
         "payload": payload,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "address": {
             "source_node": raw.get("source_node", "unknown"),
             "destination_node": "enrichment-engine",
@@ -121,7 +121,7 @@ def deflate_egress(
     - New content_hash over response payload
     """
     response_packet_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
     # Compute response hash
     action = envelope.get("action", "enrich")
@@ -175,7 +175,7 @@ def delegate_to_node(
     Used when enrichment needs to call graph-service for sync/match.
     """
     derived_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
     derived = {
         **envelope,

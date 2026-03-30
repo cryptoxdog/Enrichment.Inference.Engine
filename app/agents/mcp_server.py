@@ -10,6 +10,7 @@ L9 Architecture Note:
     contract (inflate_ingress / deflate_egress) for all engine operations.
     It never directly imports engine internals.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,9 +25,11 @@ logger = logging.getLogger(__name__)
 # MCP Tool Definitions
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MCPToolParam:
     """Parameter definition for an MCP tool."""
+
     name: str
     param_type: str
     description: str
@@ -36,6 +39,7 @@ class MCPToolParam:
 @dataclass
 class MCPTool:
     """MCP tool definition."""
+
     name: str
     description: str
     parameters: list[MCPToolParam]
@@ -49,8 +53,12 @@ TOOL_REGISTRY: dict[str, MCPTool] = {
         parameters=[
             MCPToolParam("domain", "string", "Domain type: company, contact, or opportunity"),
             MCPToolParam("entity_name", "string", "Name of the entity to enrich"),
-            MCPToolParam("entity_data", "object", "Known data fields for the entity", required=False),
-            MCPToolParam("quality_threshold", "number", "Minimum quality score (0-1)", required=False),
+            MCPToolParam(
+                "entity_data", "object", "Known data fields for the entity", required=False
+            ),
+            MCPToolParam(
+                "quality_threshold", "number", "Minimum quality score (0-1)", required=False
+            ),
         ],
     ),
     "lead_router": MCPTool(
@@ -58,7 +66,9 @@ TOOL_REGISTRY: dict[str, MCPTool] = {
         description="Route a lead to the best sales rep based on enrichment scores",
         parameters=[
             MCPToolParam("lead_data", "object", "Lead record data"),
-            MCPToolParam("team_config", "object", "Sales team routing configuration", required=False),
+            MCPToolParam(
+                "team_config", "object", "Sales team routing configuration", required=False
+            ),
         ],
     ),
     "deal_risk": MCPTool(
@@ -85,7 +95,9 @@ TOOL_REGISTRY: dict[str, MCPTool] = {
             MCPToolParam("object_type", "string", "CRM object type to write to"),
             MCPToolParam("record_id", "string", "Target record ID"),
             MCPToolParam("enriched_data", "object", "Enriched data to write back"),
-            MCPToolParam("confidence_threshold", "number", "Min confidence for writeback", required=False),
+            MCPToolParam(
+                "confidence_threshold", "number", "Min confidence for writeback", required=False
+            ),
         ],
     ),
 }
@@ -95,9 +107,11 @@ TOOL_REGISTRY: dict[str, MCPTool] = {
 # MCP Resource Definitions
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MCPResource:
     """MCP resource definition."""
+
     uri: str
     name: str
     description: str
@@ -132,6 +146,7 @@ RESOURCE_REGISTRY: dict[str, MCPResource] = {
 # MCP Server Protocol Handler
 # ---------------------------------------------------------------------------
 
+
 class MCPServer:
     """
     MCP protocol handler for the Enrichment Inference Engine.
@@ -153,9 +168,7 @@ class MCPServer:
         """
         self._dispatch = chassis_dispatch
 
-    def handle_request(
-        self, method: str, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def handle_request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Route an MCP request to the appropriate handler."""
         params = params or {}
 
@@ -190,15 +203,17 @@ class MCPServer:
                 if p.required:
                     required.append(p.name)
 
-            tools.append({
-                "name": tool.name,
-                "description": tool.description,
-                "inputSchema": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required,
-                },
-            })
+            tools.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": required,
+                    },
+                }
+            )
 
         return {"tools": tools}
 
@@ -247,17 +262,13 @@ class MCPServer:
             }
         except Exception as exc:
             return {
-                "content": [
-                    {"type": "text", "text": f"Error: {exc}"}
-                ],
+                "content": [{"type": "text", "text": f"Error: {exc}"}],
                 "isError": True,
             }
 
     def _list_resources(self, _params: dict[str, Any]) -> dict[str, Any]:
         """Return the list of available MCP resources."""
-        return {
-            "resources": [asdict(r) for r in RESOURCE_REGISTRY.values()]
-        }
+        return {"resources": [asdict(r) for r in RESOURCE_REGISTRY.values()]}
 
     def _read_resource(self, params: dict[str, Any]) -> dict[str, Any]:
         """Read a specific MCP resource."""

@@ -3,7 +3,8 @@
 from pathlib import Path
 
 import pytest
-from app.models.field_confidence import FieldConfidenceMap, FieldConfidence, FieldSource
+
+from app.models.field_confidence import FieldConfidence, FieldConfidenceMap, FieldSource
 from app.models.loop_schemas import ConvergeRequest
 
 REPO_ROOT = Path(__file__).parent.parent

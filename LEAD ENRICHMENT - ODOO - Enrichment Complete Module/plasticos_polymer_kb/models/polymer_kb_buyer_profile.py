@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """KB buyer archetypes -- used in Stage 2 scoring to boost archetype fit."""
+
 from odoo import fields, models
 
 
@@ -9,7 +9,10 @@ class PlasticosPolymerKBBuyerProfile(models.Model):
     _order = "buyer_id"
 
     kb_id = fields.Many2one(
-        "plasticos.polymer.kb", required=True, ondelete="cascade", index=True,
+        "plasticos.polymer.kb",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     buyer_id = fields.Char(required=True, index=True)
     buyer_type = fields.Char()

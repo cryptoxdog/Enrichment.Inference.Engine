@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from app.engines.field_classifier import (
-    FieldDifficulty,
     DomainClassification,
+    FieldDifficulty,
     auto_classify_domain,
     classify,
     extract_field_meta,
     resolve_domain_filters,
 )
-
 
 MINIMAL_SPEC = {
     "domain": "test",

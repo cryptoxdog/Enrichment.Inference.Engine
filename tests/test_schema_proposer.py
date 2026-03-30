@@ -11,9 +11,13 @@ from __future__ import annotations
 import pytest
 
 from app.engines.convergence.schema_proposer import (
-    propose as propose_schema,
-    apply as apply_proposals,
     SchemaProposalSet,
+)
+from app.engines.convergence.schema_proposer import (
+    apply as apply_proposals,
+)
+from app.engines.convergence.schema_proposer import (
+    propose as propose_schema,
 )
 from app.models.loop_schemas import ApprovalDecision
 

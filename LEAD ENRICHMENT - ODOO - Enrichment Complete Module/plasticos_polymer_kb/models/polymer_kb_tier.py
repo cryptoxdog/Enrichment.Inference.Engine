@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Quality tier definitions (Tier 1 Premium -> Tier 4 Marginal)."""
+
 from odoo import fields, models
 
 
@@ -9,10 +9,14 @@ class PlasticosPolymerKBTier(models.Model):
     _order = "tier_key"
 
     kb_id = fields.Many2one(
-        "plasticos.polymer.kb", required=True, ondelete="cascade", index=True,
+        "plasticos.polymer.kb",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     tier_key = fields.Char(
-        required=True, index=True,
+        required=True,
+        index=True,
         help="e.g. tier_1_premium, tier_2_standard",
     )
     definition = fields.Text()

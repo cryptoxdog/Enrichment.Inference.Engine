@@ -7,6 +7,7 @@ and territory rules. Routes leads to the best-fit sales representative.
 L9 Architecture Note:
     Chassis-agnostic. Receives enrichment results, returns routing decision.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RoutingDecision:
     """Result of lead routing analysis."""
+
     assigned_rep: str
     confidence: float
     reasoning: list[str] = field(default_factory=list)

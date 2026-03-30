@@ -24,9 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-
-from perplexity import Perplexity
-from perplexity import PerplexityError
+from perplexity import Perplexity, PerplexityError
 
 logger = structlog.get_logger("perplexity_client")
 

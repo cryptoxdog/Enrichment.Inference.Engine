@@ -8,11 +8,12 @@ into a customer success onboarding brief.
 L9 Architecture Note:
     Chassis-agnostic. Receives deal + enrichment data, returns document.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HandoffDocument:
     """Structured handoff document for CS team."""
+
     deal_id: str
     account_name: str
     generated_at: str
@@ -53,15 +55,14 @@ class HandoffAgent:
         engagement_history = engagement_history or []
 
         deal_id = deal_data.get("opportunity_id", deal_data.get("id", "unknown"))
-        account_name = (
-            deal_data.get("account_name")
-            or enrichment_data.get("company_name", "Unknown Account")
+        account_name = deal_data.get("account_name") or enrichment_data.get(
+            "company_name", "Unknown Account"
         )
 
         doc = HandoffDocument(
             deal_id=deal_id,
             account_name=account_name,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
         # Section 1: Account overview

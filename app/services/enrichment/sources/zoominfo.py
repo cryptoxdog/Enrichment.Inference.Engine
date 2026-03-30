@@ -7,6 +7,7 @@ Maps ZoomInfo response fields to L9 canonical field names.
 L9 Architecture Note:
     Chassis-agnostic. Implements BaseSource contract.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from .base import BaseSource, EnrichmentResult, SourceConfig
+from .base import BaseSource, EnrichmentResult
 
 logger = logging.getLogger(__name__)
 
@@ -22,21 +23,25 @@ logger = logging.getLogger(__name__)
 class ZoomInfoSource(BaseSource):
     """ZoomInfo enrichment source for company and contact domains."""
 
-    async def enrich(
-        self, domain: str, payload: dict[str, Any]
-    ) -> EnrichmentResult:
+    async def enrich(self, domain: str, payload: dict[str, Any]) -> EnrichmentResult:
         start = self._now_ms()
 
         if not self.config.enabled:
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="source_disabled",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="source_disabled",
             )
 
         if not self.config.api_key:
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="missing_api_key",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="missing_api_key",
             )
 
         if domain == "company":
@@ -45,13 +50,14 @@ class ZoomInfoSource(BaseSource):
             return await self._enrich_contact(payload, start)
 
         return EnrichmentResult(
-            data={}, quality_score=0.0, source_name=self.config.name,
-            latency_ms=self._now_ms() - start, error="unsupported_domain",
+            data={},
+            quality_score=0.0,
+            source_name=self.config.name,
+            latency_ms=self._now_ms() - start,
+            error="unsupported_domain",
         )
 
-    async def _enrich_company(
-        self, payload: dict[str, Any], start: int
-    ) -> EnrichmentResult:
+    async def _enrich_company(self, payload: dict[str, Any], start: int) -> EnrichmentResult:
         company_name = payload.get("company_name") or payload.get("entity_name", "")
         company_domain = payload.get("company_domain", "")
 
@@ -62,8 +68,11 @@ class ZoomInfoSource(BaseSource):
             search_body["companyName"] = company_name
         else:
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="missing_identifier",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="missing_identifier",
             )
 
         url = f"{self.config.api_endpoint}/search/company"
@@ -80,15 +89,21 @@ class ZoomInfoSource(BaseSource):
         except Exception as exc:
             logger.warning("ZoomInfo company error: %s", exc)
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="network_error",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="network_error",
             )
 
         records = data.get("data", [])
         if not records:
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="no_results",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="no_results",
             )
 
         rec = records[0]
@@ -114,9 +129,7 @@ class ZoomInfoSource(BaseSource):
             latency_ms=self._now_ms() - start,
         )
 
-    async def _enrich_contact(
-        self, payload: dict[str, Any], start: int
-    ) -> EnrichmentResult:
+    async def _enrich_contact(self, payload: dict[str, Any], start: int) -> EnrichmentResult:
         email = payload.get("contact_email", "")
         search_body: dict[str, Any] = {}
         if email:
@@ -131,8 +144,11 @@ class ZoomInfoSource(BaseSource):
                 search_body["companyName"] = company
             else:
                 return EnrichmentResult(
-                    data={}, quality_score=0.0, source_name=self.config.name,
-                    latency_ms=self._now_ms() - start, error="missing_identifier",
+                    data={},
+                    quality_score=0.0,
+                    source_name=self.config.name,
+                    latency_ms=self._now_ms() - start,
+                    error="missing_identifier",
                 )
 
         url = f"{self.config.api_endpoint}/search/contact"
@@ -149,15 +165,21 @@ class ZoomInfoSource(BaseSource):
         except Exception as exc:
             logger.warning("ZoomInfo contact error: %s", exc)
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="network_error",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="network_error",
             )
 
         records = data.get("data", [])
         if not records:
             return EnrichmentResult(
-                data={}, quality_score=0.0, source_name=self.config.name,
-                latency_ms=self._now_ms() - start, error="no_results",
+                data={},
+                quality_score=0.0,
+                source_name=self.config.name,
+                latency_ms=self._now_ms() - start,
+                error="no_results",
             )
 
         rec = records[0]

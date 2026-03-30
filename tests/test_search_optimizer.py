@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
+from app.engines.field_classifier import DomainClassification
 from app.engines.search_optimizer import (
     EntitySignals,
+    FieldDifficulty,
+    MessageStrategy,
+    SearchContextSize,
     SonarConfig,
     SonarModel,
-    SearchContextSize,
-    MessageStrategy,
-    FieldDifficulty,
+    estimate_call_cost,
     resolve,
     resolve_from_classification,
-    estimate_call_cost,
 )
-from app.engines.field_classifier import DomainClassification
-
 
 SAMPLE_FIELD_MAP = {
     "name": FieldDifficulty.TRIVIAL,

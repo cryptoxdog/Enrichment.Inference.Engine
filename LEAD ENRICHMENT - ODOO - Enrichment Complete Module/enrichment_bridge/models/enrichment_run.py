@@ -1,4 +1,3 @@
-import json
 import logging
 
 from odoo import api, fields, models
@@ -18,11 +17,16 @@ class EnrichmentRun(models.Model):
     idempotency_key = fields.Char("Idempotency Key", index=True)
 
     # ── State ────────────────────────────────────────
-    state = fields.Selection([
-        ("pending", "Pending"),
-        ("completed", "Completed"),
-        ("failed", "Failed"),
-    ], default="pending", required=True, index=True)
+    state = fields.Selection(
+        [
+            ("pending", "Pending"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
+        ],
+        default="pending",
+        required=True,
+        index=True,
+    )
 
     # ── Results ──────────────────────────────────────
     confidence = fields.Float("Confidence", digits=(3, 4))

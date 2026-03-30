@@ -4,11 +4,11 @@ plastics_enrichment_client.py — Reference implementation for the Perplexity Su
 Uses the YAML config to execute multi-pass facility enrichment via Perplexity Sonar Pro.
 """
 
-import yaml
 import json
 import time
-from typing import Optional
 from dataclasses import dataclass
+
+import yaml
 from perplexity import Perplexity  # pip install perplexity-sdk
 
 
@@ -127,7 +127,7 @@ def merge_results(base: dict, new: dict, strategy: str = "merge_non_null") -> di
 def enrich_facility(
     query: FacilityQuery,
     config_path: str = "plastics_recycling_super_prompt.yaml",
-    passes: Optional[list] = None,
+    passes: list | None = None,
 ) -> dict:
     """Full multi-pass enrichment pipeline for a single facility."""
     config = load_config(config_path)

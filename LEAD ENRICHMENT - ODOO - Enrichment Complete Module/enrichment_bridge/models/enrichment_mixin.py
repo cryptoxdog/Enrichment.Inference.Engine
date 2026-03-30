@@ -3,8 +3,7 @@ import logging
 import uuid
 
 import requests
-
-from odoo import api, fields, models
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -17,15 +16,20 @@ class EnrichmentMixin(models.AbstractModel):
     _description = "Enrichment Mixin"
 
     enrichment_run_ids = fields.One2many(
-        "enrichment.run", "res_id",
+        "enrichment.run",
+        "res_id",
         string="Enrichment Runs",
         domain=lambda self: [("res_model", "=", self._name)],
     )
-    enrichment_state = fields.Selection([
-        ("not_enriched", "Not Enriched"),
-        ("enriched", "Enriched"),
-        ("failed", "Failed"),
-    ], default="not_enriched", tracking=True)
+    enrichment_state = fields.Selection(
+        [
+            ("not_enriched", "Not Enriched"),
+            ("enriched", "Enriched"),
+            ("failed", "Failed"),
+        ],
+        default="not_enriched",
+        tracking=True,
+    )
     last_enrichment_date = fields.Datetime("Last Enrichment")
     last_enrichment_confidence = fields.Float("Last Confidence", digits=(3, 4))
 
@@ -52,7 +56,9 @@ class EnrichmentMixin(models.AbstractModel):
         return result
 
     def _get_enrichment_objective(self):
-        return f"Research and enrich this {self._description or self._name} record with missing data."
+        return (
+            f"Research and enrich this {self._description or self._name} record with missing data."
+        )
 
     def _get_enrichment_schema(self):
         return None
@@ -77,12 +83,14 @@ class EnrichmentMixin(models.AbstractModel):
         if schema:
             payload["schema"] = schema
 
-        run = self.env["enrichment.run"].create({
-            "res_model": self._name,
-            "res_id": self.id,
-            "idempotency_key": idem_key,
-            "state": "pending",
-        })
+        run = self.env["enrichment.run"].create(
+            {
+                "res_model": self._name,
+                "res_id": self.id,
+                "idempotency_key": idem_key,
+                "state": "pending",
+            }
+        )
 
         try:
             resp = requests.post(
@@ -97,28 +105,32 @@ class EnrichmentMixin(models.AbstractModel):
             resp.raise_for_status()
             data = resp.json()
 
-            run.write({
-                "state": data.get("state", "completed"),
-                "confidence": data.get("confidence", 0),
-                "fields_enriched": len(data.get("fields", {})),
-                "enriched_data": json.dumps(data.get("fields", {}), indent=2),
-                "failure_reason": data.get("failure_reason"),
-                "variation_count": data.get("variation_count", 0),
-                "consensus_threshold": data.get("consensus_threshold", 0),
-                "kb_content_hash": data.get("kb_content_hash", ""),
-                "inference_version": data.get("inference_version", ""),
-                "tokens_used": data.get("tokens_used", 0),
-                "processing_time_ms": data.get("processing_time_ms", 0),
-                "raw_response": json.dumps(data, indent=2),
-            })
+            run.write(
+                {
+                    "state": data.get("state", "completed"),
+                    "confidence": data.get("confidence", 0),
+                    "fields_enriched": len(data.get("fields", {})),
+                    "enriched_data": json.dumps(data.get("fields", {}), indent=2),
+                    "failure_reason": data.get("failure_reason"),
+                    "variation_count": data.get("variation_count", 0),
+                    "consensus_threshold": data.get("consensus_threshold", 0),
+                    "kb_content_hash": data.get("kb_content_hash", ""),
+                    "inference_version": data.get("inference_version", ""),
+                    "tokens_used": data.get("tokens_used", 0),
+                    "processing_time_ms": data.get("processing_time_ms", 0),
+                    "raw_response": json.dumps(data, indent=2),
+                }
+            )
 
             if data.get("state") == "completed" and data.get("fields"):
                 self._apply_enrichment(data["fields"])
-                self.write({
-                    "enrichment_state": "enriched",
-                    "last_enrichment_date": fields.Datetime.now(),
-                    "last_enrichment_confidence": data.get("confidence", 0),
-                })
+                self.write(
+                    {
+                        "enrichment_state": "enriched",
+                        "last_enrichment_date": fields.Datetime.now(),
+                        "last_enrichment_confidence": data.get("confidence", 0),
+                    }
+                )
             elif data.get("state") == "failed":
                 self.write({"enrichment_state": "failed"})
 

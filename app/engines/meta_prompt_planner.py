@@ -1,260 +1,325 @@
 """
-Meta-Prompt Planner — The Missing Piece.
+Meta-Prompt Planner — adaptive prompt strategy per convergence pass.
 
-Sits between convergence_controller and prompt_builder.
-Each pass, it analyzes what's known, what's missing, what inference rules
-could fire if specific fields were filled, and emits a SearchPlan.
+Analyzes entity state (field coverage, confidence, uncertainty) and determines:
+- Which enrichment mode: discovery / targeted / verification
+- Which fields to prioritize in the prompt
+- Which KB fragments to inject
+- Optimal variation budget (1-5 variations)
 
-This is NOT a prompt. It's a PLAN for what the prompt should ask about and why.
-The prompt_builder then turns the plan into the actual Sonar payload.
-
-Three modes:
-  - discovery: Pass 1, zero prior context, maximize surface area
-  - targeted: Pass 2+, surgical field targeting based on inference-gap analysis
-  - verification: Final pass, confirm single remaining unknowns
+ROI 4: Uses inference-unlock-aware field ranking from rule_loader to maximize
+derived-field output per Sonar token spent.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
+
+import structlog
+
+from ..models.loop_schemas import PassContext
+from ..services.domain_yaml_reader import DomainSpec
+
+logger = structlog.get_logger("meta_prompt_planner")
 
 
-@dataclass
-class SearchPlan:
-    """What the prompt builder should construct."""
-
-    mode: str  # "discovery" | "targeted" | "verification"
-    target_fields: list[str] = field(default_factory=list)
-    objective: str | None = None
-    strategy: str = "broad"  # "broad" | "surgical" | "confirm"
-    reasoning: str = ""
-    kb_context: str | None = None
-    variation_budget: int | None = None
-    information_gain_scores: dict[str, float] = field(default_factory=dict)
+# ═══════════════════════════════════════════════════════════════════════════
+# Planner Core
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 class MetaPromptPlanner:
     """
-    Analyzes entity state and inference rule catalog to produce
-    an optimal search plan for each convergence pass.
+    Adaptive prompt strategy planner for convergence loop.
+
+    Determines enrichment mode, field priorities, KB context, and variation
+    budget based on entity state and uncertainty metrics.
     """
 
-    def plan(
+    def __init__(
         self,
-        entity: dict[str, Any],
-        known_fields: dict[str, float],
-        inferred_fields: dict[str, Any],
-        domain_hints: dict[str, Any],
-        inference_rule_catalog: list[dict],
-        pass_number: int,
-        unlock_map: dict[str, float] | None = None,
-    ) -> SearchPlan:
+        domain_spec: DomainSpec,
+        rule_registry: Any = None,  # RuleRegistry from inference_rule_loader
+        unlock_index: dict[str, list[str]] | None = None,
+    ):
+        """
+        Args:
+            domain_spec: Domain YAML specification
+            rule_registry: Optional rule registry for unlock-aware targeting
+            unlock_index: Optional pre-built unlock index (output of build_unlock_index)
+        """
+        self.domain_spec = domain_spec
+        self.rule_registry = rule_registry
+        self.unlock_index = unlock_index
+
+    def plan_pass(
+        self,
+        entity_state: dict[str, Any],
+        pass_context: PassContext,
+        field_confidences: dict[str, float],
+        uncertainty_score: float,
+    ) -> PromptPlan:
+        """
+        Plan enrichment strategy for next convergence pass.
+
+        Args:
+            entity_state: Current entity field values
+            pass_context: Pass number, budget remaining, previous results
+            field_confidences: Per-field confidence scores (0.0-1.0)
+            uncertainty_score: Aggregate uncertainty metric
+
+        Returns:
+            PromptPlan with mode, priority fields, KB fragments, variation budget
+        """
+        mode = self._determine_mode(pass_context.pass_number, uncertainty_score)
+        missing_fields = self._identify_missing_fields(entity_state, field_confidences)
+        priority_fields = self._rank_fields(missing_fields, mode)
+        kb_fragments = self._select_kb_fragments(priority_fields, mode)
+        variation_budget = self._compute_variation_budget(
+            uncertainty_score, pass_context.budget_remaining
+        )
+
+        plan = PromptPlan(
+            mode=mode,
+            priority_fields=priority_fields[:10],  # Top 10 max
+            kb_fragment_ids=kb_fragments,
+            variation_count=variation_budget,
+            pass_number=pass_context.pass_number,
+            reasoning=self._generate_reasoning(mode, priority_fields, uncertainty_score),
+        )
+
+        logger.info(
+            "prompt_plan_generated",
+            mode=mode,
+            priority_fields=len(priority_fields),
+            variations=variation_budget,
+            uncertainty=round(uncertainty_score, 3),
+            pass_number=pass_context.pass_number,
+        )
+
+        return plan
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Internal Logic
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _determine_mode(
+        self, pass_number: int, uncertainty_score: float
+    ) -> Literal["discovery", "targeted", "verification"]:
+        """
+        Select enrichment mode based on pass number and uncertainty.
+
+        - Pass 1: Always discovery (broad research)
+        - Pass 2+: Targeted if uncertainty > 2.0, else verification
+        """
         if pass_number == 1:
-            return self._plan_discovery(entity, domain_hints)
+            return "discovery"
+        elif uncertainty_score > 2.0:
+            return "targeted"
+        else:
+            return "verification"
 
-        missing = self._find_high_value_gaps(
-            entity,
-            known_fields,
-            inferred_fields,
-            domain_hints,
-            inference_rule_catalog,
-            unlock_map=unlock_map,
-        )
+    def _identify_missing_fields(
+        self, entity_state: dict[str, Any], field_confidences: dict[str, float]
+    ) -> list[FieldGap]:
+        """
+        Identify fields that are NULL or low-confidence.
 
-        if len(missing) <= 2:
-            return self._plan_verification(missing, entity, domain_hints)
+        Returns list of FieldGap objects with field name, current value, confidence.
+        """
+        gaps: list[FieldGap] = []
+        for field_name, value in entity_state.items():
+            confidence = field_confidences.get(field_name, 0.0)
+            is_missing = value is None or value == "" or confidence < 0.7
 
-        return self._plan_targeted(missing, entity, known_fields, domain_hints)
-
-    def _plan_discovery(self, entity: dict[str, Any], hints: dict[str, Any]) -> SearchPlan:
-        priority = hints.get("priority_fields", [])
-        objective_template = hints.get(
-            "objective_template",
-            "Research this entity's capabilities, certifications, "
-            "equipment, material handling, and operational characteristics.",
-        )
-        entity_name = entity.get("name", entity.get("Name", "unknown"))
-        objective = objective_template.replace("{name}", str(entity_name))
-
-        return SearchPlan(
-            mode="discovery",
-            target_fields=priority if priority else [],
-            objective=objective,
-            strategy="broad",
-            reasoning=(
-                f"Pass 1: zero prior enrichment context. "
-                f"{'Prioritizing ' + str(len(priority)) + ' hint fields. ' if priority else ''}"
-                f"Maximize surface area for schema discovery."
-            ),
-            kb_context=hints.get("kb_context"),
-            variation_budget=hints.get("max_variations_discovery", 5),
-        )
-
-    def _plan_targeted(
-        self,
-        missing: list[dict],
-        entity: dict[str, Any],
-        known_fields: dict[str, float],
-        hints: dict[str, Any],
-    ) -> SearchPlan:
-        target_fields = [m["field"] for m in missing[:8]]
-        gain_scores = {m["field"]: m["gain"] for m in missing}
-
-        top_reason = missing[0] if missing else {}
-        entity_name = entity.get("name", entity.get("Name", "unknown"))
-
-        return SearchPlan(
-            mode="targeted",
-            target_fields=target_fields,
-            objective=(
-                f"For {entity_name}, research specifically: "
-                f"{', '.join(target_fields)}. "
-                f"Primary reason: {top_reason.get('reason', 'high information gain')}."
-            ),
-            strategy="surgical",
-            reasoning=(
-                f"Pass 2+: {len(known_fields)} fields known, "
-                f"{len(missing)} high-value gaps identified. "
-                f"Top target: {top_reason.get('field', '?')} "
-                f"(gain={top_reason.get('gain', 0):.2f}, "
-                f"reason={top_reason.get('reason', '')})."
-            ),
-            kb_context=hints.get("kb_context"),
-            variation_budget=min(3, hints.get("max_variations_targeted", 3)),
-            information_gain_scores=gain_scores,
-        )
-
-    def _plan_verification(
-        self,
-        missing: list[dict],
-        entity: dict[str, Any],
-        hints: dict[str, Any],
-    ) -> SearchPlan:
-        target_fields = [m["field"] for m in missing]
-        entity_name = entity.get("name", entity.get("Name", "unknown"))
-
-        return SearchPlan(
-            mode="verification",
-            target_fields=target_fields,
-            objective=(
-                f"Confirm for {entity_name}: {', '.join(target_fields)}. "
-                f"Low uncertainty remains — verify or fill these final fields."
-            ),
-            strategy="confirm",
-            reasoning=(
-                f"Verification pass: only {len(missing)} field(s) remaining. Minimal token budget."
-            ),
-            kb_context=hints.get("kb_context"),
-            variation_budget=2,
-        )
-
-    # ── gap-scoring helpers ───────────────────────────────────────────────────
-
-    def _gaps_from_rule_catalog(
-        self,
-        all_known: set[str],
-        rule_catalog: list[dict],
-    ) -> list[dict]:
-        """Score fields that would unlock inference rules."""
-        gaps: list[dict] = []
-        for rule in rule_catalog:
-            required = set(rule.get("requires", []))
-            produces = set(rule.get("produces", []))
-            missing_inputs = required - all_known
-            if missing_inputs and not produces.issubset(all_known):
-                unlock_value = len(produces - all_known)
-                for f in missing_inputs:
-                    gaps.append(
-                        {
-                            "field": f,
-                            "gain": 0.4 + (0.15 * unlock_value),
-                            "reason": (
-                                f"unlocks rule '{rule.get('name', '?')}' "
-                                f"→ {', '.join(produces - all_known)}"
-                            ),
-                        }
-                    )
-        return gaps
-
-    def _gaps_from_unlock_map(
-        self,
-        all_known: set[str],
-        unlock_map: dict[str, float],
-    ) -> list[dict]:
-        """Score fields from v2 derivation-graph unlock analysis."""
-        gaps: list[dict] = []
-        for field_name, unlock_value in unlock_map.items():
-            if field_name not in all_known:
+            if is_missing:
                 gaps.append(
-                    {
-                        "field": field_name,
-                        "gain": min(0.95, 0.5 + (0.1 * unlock_value)),
-                        "reason": (
-                            f"v2 unlock_map: finding this field unblocks "
-                            f"{unlock_value:.0f} downstream derivation(s)"
-                        ),
-                    }
+                    FieldGap(
+                        field_name=field_name,
+                        current_value=value,
+                        confidence=confidence,
+                        is_gate_critical=self._is_gate_critical(field_name),
+                        scoring_weight=self._get_scoring_weight(field_name),
+                    )
                 )
+
         return gaps
 
-    def _gaps_from_priority_fields(
-        self,
-        all_known: set[str],
-        priority: set[str],
-    ) -> list[dict]:
-        """Score domain priority fields not yet known."""
-        return [
-            {"field": f, "gain": 0.6, "reason": "domain priority field"}
-            for f in priority
-            if f not in all_known
-        ]
-
-    def _gaps_from_low_confidence(
-        self,
-        known_fields: dict[str, float],
-    ) -> list[dict]:
-        """Score known fields with confidence below 0.5 (worth re-researching)."""
-        return [
-            {
-                "field": f,
-                "gain": 0.3 + (0.5 - conf),
-                "reason": f"low confidence ({conf:.2f})",
-            }
-            for f, conf in known_fields.items()
-            if conf < 0.5
-        ]
-
-    def _find_high_value_gaps(
-        self,
-        entity: dict[str, Any],
-        known_fields: dict[str, float],
-        inferred_fields: dict[str, Any],
-        hints: dict[str, Any],
-        rule_catalog: list[dict],
-        unlock_map: dict[str, float] | None = None,
-    ) -> list[dict]:
+    def _rank_fields(self, missing_fields: list[FieldGap], mode: str) -> list[str]:
         """
-        Score every missing field by information gain:
-        - Fields that unlock inference rules score highest
-        - Priority fields from domain hints score high
-        - Fields with low confidence score medium
+        Rank missing fields by priority for enrichment.
+
+        ROI 4: Uses inference-unlock-aware ranking when rule_registry available.
+        Fallback: Gate-critical → scoring weight → alphabetical.
+
+        Args:
+            missing_fields: List of FieldGap objects
+            mode: Enrichment mode (discovery/targeted/verification)
+
+        Returns:
+            Ordered list of field names (highest priority first)
         """
-        all_known = set(entity.keys())
-        priority = set(hints.get("priority_fields", []))
+        if mode == "discovery":
+            # Discovery mode: research all gaps broadly
+            return [f.field_name for f in missing_fields]
 
-        gaps: list[dict] = []
-        gaps.extend(self._gaps_from_rule_catalog(all_known, rule_catalog))
-        if unlock_map:
-            gaps.extend(self._gaps_from_unlock_map(all_known, unlock_map))
-        gaps.extend(self._gaps_from_priority_fields(all_known, priority))
-        gaps.extend(self._gaps_from_low_confidence(known_fields))
+        # Targeted/verification: use unlock-aware ranking if available
+        if self.rule_registry and self.unlock_index:
+            try:
+                from ..engines.inference_rule_loader import rank_fields_by_unlock
 
-        # Deduplicate by field, keep highest gain
-        seen: dict[str, dict] = {}
-        for g in gaps:
-            fname = g["field"]
-            if fname not in seen or g["gain"] > seen[fname]["gain"]:
-                seen[fname] = g
+                ranked = rank_fields_by_unlock(
+                    missing_fields,
+                    self.unlock_index,
+                    self.rule_registry,
+                    self.domain_spec,
+                )
+                return [
+                    f.field_name if hasattr(f, "field_name") else f["field_name"] for f in ranked
+                ]
+            except Exception as exc:
+                logger.warning(
+                    "unlock_ranking_failed",
+                    error=str(exc),
+                    fallback="scoring_weight",
+                )
 
-        return sorted(seen.values(), key=lambda x: x["gain"], reverse=True)
+        # Fallback: traditional ranking by gate + weight
+        ranked = sorted(
+            missing_fields,
+            key=lambda f: (
+                1000 if f.is_gate_critical else 0,
+                f.scoring_weight,
+                f.field_name,
+            ),
+            reverse=True,
+        )
+        return [f.field_name for f in ranked]
+
+    def _select_kb_fragments(self, priority_fields: list[str], mode: str) -> list[str]:
+        """
+        Select KB fragment IDs relevant to priority fields.
+
+        Returns max 3 KB fragment IDs for context injection.
+        """
+        # Placeholder: Would query KB resolver with priority fields
+        # For now, return empty list (KB injection happens in enrichment_orchestrator)
+        return []
+
+    def _compute_variation_budget(self, uncertainty_score: float, budget_remaining: int) -> int:
+        """
+        Compute optimal Sonar variation count based on uncertainty and budget.
+
+        - High uncertainty (> 5.0): 5 variations
+        - Medium uncertainty (2.0-5.0): 3 variations
+        - Low uncertainty (< 2.0): 2 variations
+        - Budget exhausted: 1 variation minimum
+        """
+        if budget_remaining < 1000:
+            return 1
+
+        if uncertainty_score > 5.0:
+            return 5
+        elif uncertainty_score > 2.0:
+            return 3
+        else:
+            return 2
+
+    def _is_gate_critical(self, field_name: str) -> bool:
+        """Check if field is gate-critical in domain spec."""
+        if not hasattr(self.domain_spec, "ontology"):
+            return False
+
+        for node in self.domain_spec.ontology.nodes:
+            if not hasattr(node, "properties"):
+                continue
+            for prop in node.properties:
+                if (
+                    prop.name == field_name
+                    and hasattr(prop, "metadata")
+                    and isinstance(prop.metadata, dict)
+                ):
+                    return bool(prop.metadata.get("gate_critical", False))
+        return False
+
+    def _get_scoring_weight(self, field_name: str) -> float:
+        """Get scoring weight for field from domain spec."""
+        if not hasattr(self.domain_spec, "ontology"):
+            return 0.0
+
+        for node in self.domain_spec.ontology.nodes:
+            if not hasattr(node, "properties"):
+                continue
+            for prop in node.properties:
+                if (
+                    prop.name == field_name
+                    and hasattr(prop, "metadata")
+                    and isinstance(prop.metadata, dict)
+                ):
+                    return float(prop.metadata.get("scoring_weight", 0.0))
+        return 0.0
+
+    def _generate_reasoning(
+        self, mode: str, priority_fields: list[str], uncertainty_score: float
+    ) -> str:
+        """Generate human-readable reasoning for this plan."""
+        top_fields = ", ".join(priority_fields[:5])
+        return f"Mode: {mode} | Uncertainty: {uncertainty_score:.2f} | Top fields: {top_fields}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Plan Schema
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class FieldGap:
+    """Represents a missing or low-confidence field."""
+
+    def __init__(
+        self,
+        field_name: str,
+        current_value: Any,
+        confidence: float,
+        is_gate_critical: bool = False,
+        scoring_weight: float = 0.0,
+    ):
+        self.field_name = field_name
+        self.current_value = current_value
+        self.confidence = confidence
+        self.is_gate_critical = is_gate_critical
+        self.scoring_weight = scoring_weight
+
+
+class PromptPlan:
+    """
+    Enrichment strategy for a single convergence pass.
+
+    Specifies mode, priority fields, KB context, and variation budget.
+    """
+
+    def __init__(
+        self,
+        mode: Literal["discovery", "targeted", "verification"],
+        priority_fields: list[str],
+        kb_fragment_ids: list[str],
+        variation_count: int,
+        pass_number: int,
+        reasoning: str = "",
+    ):
+        self.mode = mode
+        self.priority_fields = priority_fields
+        self.kb_fragment_ids = kb_fragment_ids
+        self.variation_count = variation_count
+        self.pass_number = pass_number
+        self.reasoning = reasoning
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dict for logging/telemetry."""
+        return {
+            "mode": self.mode,
+            "priority_fields": self.priority_fields,
+            "kb_fragment_ids": self.kb_fragment_ids,
+            "variation_count": self.variation_count,
+            "pass_number": self.pass_number,
+            "reasoning": self.reasoning,
+        }

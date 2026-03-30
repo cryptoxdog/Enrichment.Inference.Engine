@@ -9,7 +9,7 @@ Source: 480 lines | Target coverage: 80%
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -19,17 +19,16 @@ from app.models.loop_schemas import (
     ApprovalMode,
     BatchConvergeRequest,
     BatchConvergeResponse,
-    ConvergeRequest,
-    ConvergeResponse,
     ConvergenceMode,
     ConvergenceReason,
     ConvergenceReport,
+    ConvergeRequest,
+    ConvergeResponse,
     CostSummary,
     PassResult,
     SchemaProposal,
     SchemaProposalSource,
 )
-
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -314,7 +313,7 @@ class TestConvergeResponse:
     def test_created_at_defaults_to_utc_now(self):
         resp = ConvergeResponse()
         assert resp.created_at.tzinfo is not None
-        assert (datetime.now(timezone.utc) - resp.created_at).total_seconds() < 5
+        assert (datetime.now(UTC) - resp.created_at).total_seconds() < 5
 
     def test_completed_at_optional(self):
         resp = ConvergeResponse()

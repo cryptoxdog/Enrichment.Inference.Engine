@@ -3,9 +3,10 @@ End-to-end test: Odoo → Enrichment API → verify response structure.
 Run with: pytest tests/test_e2e_odoo.py -v
 Requires: enrichment-api running on localhost:8000
 """
+
 import os
+
 import requests
-import pytest
 
 API_URL = os.getenv("ENRICHMENT_API_URL", "http://localhost:8000/api/v1")
 API_KEY = os.getenv("ENRICHMENT_CLIENT_KEY", "test-key")

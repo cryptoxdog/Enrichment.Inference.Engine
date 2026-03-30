@@ -22,8 +22,8 @@ import structlog
 import yaml
 
 from .quality_scorer import QualityScorer
-from .sources.base import BaseSource, EnrichmentResult, SourceConfig
 from .sources import SOURCE_REGISTRY
+from .sources.base import BaseSource, EnrichmentResult, SourceConfig
 from .sources.perplexity_adapter import PerplexitySonarSource
 
 logger = structlog.get_logger("waterfall_engine")
@@ -119,9 +119,7 @@ class WaterfallEngine:
             self.source_clients[name] = source_cls(config=config)
             logger.info("auto_registered_source", name=name)
 
-    def _register_perplexity(
-        self, api_key: str, breaker: Any | None
-    ) -> None:
+    def _register_perplexity(self, api_key: str, breaker: Any | None) -> None:
         """Register the Perplexity Sonar source."""
         config = SourceConfig(
             name="perplexity_sonar",
@@ -216,9 +214,7 @@ class WaterfallEngine:
             used_quality.append(result.quality_score)
 
             # Check if we already meet quality threshold
-            current = self.quality_scorer.score(
-                domain, merged, used_quality
-            )
+            current = self.quality_scorer.score(domain, merged, used_quality)
             if current >= min_quality:
                 logger.info(
                     "quality_threshold_met",
@@ -229,9 +225,7 @@ class WaterfallEngine:
                 break
 
         # Final quality score
-        final_quality = self.quality_scorer.score(
-            domain, merged, used_quality
-        )
+        final_quality = self.quality_scorer.score(domain, merged, used_quality)
 
         # Fallback signaling
         if final_quality < min_quality:
@@ -244,9 +238,7 @@ class WaterfallEngine:
                 )
 
         # Inject provenance
-        merged["enrichment_sources_used"] = [
-            r.source_name for r in results if not r.error
-        ]
+        merged["enrichment_sources_used"] = [r.source_name for r in results if not r.error]
         merged["enrichment_quality_score"] = final_quality
 
         return merged, final_quality, results

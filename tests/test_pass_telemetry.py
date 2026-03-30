@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from app.engines.convergence.pass_telemetry import PassTelemetryCollector
-from app.models.loop_schemas import PassResult, ConvergenceMode
+from app.models.loop_schemas import ConvergenceMode, PassResult
 
 
 class TestPassTelemetry:

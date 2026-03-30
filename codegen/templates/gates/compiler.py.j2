@@ -1,0 +1,84 @@
+"""
+Gate compiler for {{ schema.name }}.
+Translates gate definitions from spec.yaml → Cypher WHERE clauses.
+Auto-generated — DO NOT EDIT.
+Regenerate with: python -m codegen.cli generate --spec <spec.yaml>
+"""
+from __future__ import annotations
+from typing import Literal
+
+
+Direction = Literal["query_to_candidate", "candidate_to_query"]
+
+GATE_TEMPLATES = {
+    {% for gate in schema.gates %}
+    "{{ gate.id }}": {
+        "type":       "{{ gate.type }}",
+        "field":      "{{ gate.field }}",
+        "params":     {{ gate.params | tojson if gate.params else {} }},
+        "invertible": {{ "True" if gate.invertible else "False" }},
+        "null_bypass": True,
+    },
+    {% endfor %}
+}
+
+_SUPPORTED_GATE_TYPES = frozenset({
+    "range", "threshold", "exact_match", "set_overlap",
+    "boolean", "composite", "enum_map", "exclusion",
+    "self_range", "freshness", "temporal_range", "traversal",
+})
+
+
+def compile_gate(gate_id: str, direction: Direction = "query_to_candidate") -> str:
+    """
+    Return a Cypher WHERE clause fragment for the given gate.
+
+    Raises:
+        KeyError:     unknown gate_id
+        ValueError:   unsupported gate type (not in spec-defined set)
+    """
+    gate = GATE_TEMPLATES.get(gate_id)
+    if not gate:
+        msg = f"Unknown gate: {gate_id!r}. Known: {sorted(GATE_TEMPLATES)}"
+        raise KeyError(msg)
+
+    gtype  = gate["type"]
+    field  = gate["field"]
+    params = gate["params"]
+    src    = "query"     if direction == "query_to_candidate" else "candidate"
+    tgt    = "candidate" if direction == "query_to_candidate" else "query"
+
+    null_clause = f"{tgt}.{field} IS NULL OR "
+
+    if gtype == "range":
+        clause = (
+            f"{null_clause}"
+            f"{tgt}.{field} >= {params.get('min', 0)} AND "
+            f"{tgt}.{field} <= {params.get('max', 999_999)}"
+        )
+    elif gtype == "threshold":
+        clause = f"{null_clause}{tgt}.{field} <= {params.get('max', 1.0)}"
+    elif gtype == "exact_match":
+        clause = f"{null_clause}{tgt}.{field} = {src}.{field}"
+    elif gtype == "set_overlap":
+        clause = (
+            f"{null_clause}"
+            f"any(x IN {tgt}.{field} WHERE x IN {src}.{field})"
+        )
+    elif gtype == "boolean":
+        clause = f"{null_clause}{tgt}.{field} = {params.get('value', True)}"
+    elif gtype in ("composite", "enum_map", "exclusion",
+                   "self_range", "freshness", "temporal_range", "traversal"):
+        msg = f"Gate type {gtype!r} requires Cypher generation via a dedicated compiler method — not supported in the Jinja template path."
+        raise ValueError(msg)
+    else:
+        msg = f"Unsupported gate type: {gtype!r}. Supported: {sorted(_SUPPORTED_GATE_TYPES)}"
+        raise ValueError(msg)
+
+    return clause
+
+
+def compile_all_gates(direction: Direction = "query_to_candidate") -> str:
+    """Compile all spec gates into a single WHERE clause joined by AND."""
+    clauses = [compile_gate(gid, direction) for gid in GATE_TEMPLATES]
+    return "\nAND ".join(f"({c})" for c in clauses)

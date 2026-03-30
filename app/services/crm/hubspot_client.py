@@ -8,6 +8,7 @@ L9 Architecture Note:
     Chassis-agnostic. Implements CRMClientBase contract.
     Never imports FastAPI. Used by WriteBackOrchestrator.
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,9 +49,7 @@ class HubSpotClient(CRMClientBase):
             )
             resp.raise_for_status()
             info = resp.json()
-            logger.info(
-                "HubSpot connected: portal %s", info.get("portalId")
-            )
+            logger.info("HubSpot connected: portal %s", info.get("portalId"))
             return True
         except Exception as exc:
             logger.error("HubSpot connect failed: %s", exc)
@@ -68,9 +67,7 @@ class HubSpotClient(CRMClientBase):
         except Exception:
             return False
 
-    def get_record(
-        self, object_type: str, record_id: str
-    ) -> dict[str, Any] | None:
+    def get_record(self, object_type: str, record_id: str) -> dict[str, Any] | None:
         """Fetch a single HubSpot record by ID."""
         api_type = _OBJECT_TYPE_MAP.get(object_type, object_type)
         url = f"{self._base_url}/crm/v3/objects/{api_type}/{record_id}"
@@ -116,22 +113,15 @@ class HubSpotClient(CRMClientBase):
 
         self._respect_rate_limit()
         try:
-            resp = httpx.post(
-                url, json=body, headers=self._headers(), timeout=30
-            )
+            resp = httpx.post(url, json=body, headers=self._headers(), timeout=30)
             self._update_rate_limit(resp)
             resp.raise_for_status()
-            return [
-                r.get("properties", {})
-                for r in resp.json().get("results", [])
-            ]
+            return [r.get("properties", {}) for r in resp.json().get("results", [])]
         except Exception as exc:
             logger.error("HS query error: %s", exc)
             return []
 
-    def create_record(
-        self, object_type: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def create_record(self, object_type: str, data: dict[str, Any]) -> WriteResult:
         """Create a new HubSpot record."""
         api_type = _OBJECT_TYPE_MAP.get(object_type, object_type)
         url = f"{self._base_url}/crm/v3/objects/{api_type}"
@@ -155,9 +145,7 @@ class HubSpotClient(CRMClientBase):
         except Exception as exc:
             return WriteResult(success=False, error=str(exc))
 
-    def update_record(
-        self, object_type: str, record_id: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def update_record(self, object_type: str, record_id: str, data: dict[str, Any]) -> WriteResult:
         """Update an existing HubSpot record."""
         api_type = _OBJECT_TYPE_MAP.get(object_type, object_type)
         url = f"{self._base_url}/crm/v3/objects/{api_type}/{record_id}"
@@ -198,9 +186,7 @@ class HubSpotClient(CRMClientBase):
                 return self.update_record(object_type, record_id, data)
         return self.create_record(object_type, data)
 
-    def bulk_create(
-        self, object_type: str, records: list[dict[str, Any]]
-    ) -> list[WriteResult]:
+    def bulk_create(self, object_type: str, records: list[dict[str, Any]]) -> list[WriteResult]:
         """Create multiple records using HubSpot batch API."""
         api_type = _OBJECT_TYPE_MAP.get(object_type, object_type)
         url = f"{self._base_url}/crm/v3/objects/{api_type}/batch/create"
@@ -209,9 +195,7 @@ class HubSpotClient(CRMClientBase):
 
         self._respect_rate_limit()
         try:
-            resp = httpx.post(
-                url, json={"inputs": inputs}, headers=self._headers(), timeout=60
-            )
+            resp = httpx.post(url, json={"inputs": inputs}, headers=self._headers(), timeout=60)
             self._update_rate_limit(resp)
             resp.raise_for_status()
             results = resp.json().get("results", [])
@@ -226,22 +210,16 @@ class HubSpotClient(CRMClientBase):
         except Exception as exc:
             return [WriteResult(success=False, error=str(exc))] * len(records)
 
-    def bulk_update(
-        self, object_type: str, records: list[dict[str, Any]]
-    ) -> list[WriteResult]:
+    def bulk_update(self, object_type: str, records: list[dict[str, Any]]) -> list[WriteResult]:
         """Update multiple records using HubSpot batch API."""
         api_type = _OBJECT_TYPE_MAP.get(object_type, object_type)
         url = f"{self._base_url}/crm/v3/objects/{api_type}/batch/update"
 
-        inputs = [
-            {"id": rec.pop("id", ""), "properties": rec} for rec in records
-        ]
+        inputs = [{"id": rec.pop("id", ""), "properties": rec} for rec in records]
 
         self._respect_rate_limit()
         try:
-            resp = httpx.post(
-                url, json={"inputs": inputs}, headers=self._headers(), timeout=60
-            )
+            resp = httpx.post(url, json={"inputs": inputs}, headers=self._headers(), timeout=60)
             self._update_rate_limit(resp)
             resp.raise_for_status()
             results = resp.json().get("results", [])
@@ -256,9 +234,7 @@ class HubSpotClient(CRMClientBase):
         except Exception as exc:
             return [WriteResult(success=False, error=str(exc))] * len(records)
 
-    def get_field_metadata(
-        self, object_type: str
-    ) -> dict[str, Any]:
+    def get_field_metadata(self, object_type: str) -> dict[str, Any]:
         """Return field schema metadata for a HubSpot object."""
         api_type = _OBJECT_TYPE_MAP.get(object_type, object_type)
         url = f"{self._base_url}/crm/v3/properties/{api_type}"

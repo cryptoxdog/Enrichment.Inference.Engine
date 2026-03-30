@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Wizard to import polymer KB from uploaded YAML file."""
+
 import base64
 import logging
 

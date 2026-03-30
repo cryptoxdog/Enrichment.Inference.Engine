@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -109,25 +109,16 @@ class QualityScorer:
 
         return round(min(max(total, 0.0), 1.0), 3)
 
-    def _score_completeness(
-        self, domain: str, record: dict[str, Any]
-    ) -> float:
+    def _score_completeness(self, domain: str, record: dict[str, Any]) -> float:
         """Score based on how many required fields are populated."""
         required = self.required_fields.get(domain, [])
         if not required:
             # Fallback: count non-empty fields vs total
             total = max(len(record), 1)
-            filled = sum(
-                1 for v in record.values()
-                if v not in (None, "", [], {})
-            )
+            filled = sum(1 for v in record.values() if v not in (None, "", [], {}))
             return filled / total
 
-        filled = sum(
-            1
-            for f in required
-            if f in record and record[f] not in (None, "", [], {})
-        )
+        filled = sum(1 for f in required if f in record and record[f] not in (None, "", [], {}))
         return filled / max(len(required), 1)
 
     def _score_freshness(self, record: dict[str, Any]) -> float:
@@ -152,9 +143,7 @@ class QualityScorer:
             return 0.5
         return 0.2
 
-    def _score_accuracy(
-        self, domain: str, record: dict[str, Any]
-    ) -> float:
+    def _score_accuracy(self, domain: str, record: dict[str, Any]) -> float:
         """Score based on validation rule pass rate."""
         rules = self.validation_rules.get(domain, {})
         if not rules:
@@ -202,9 +191,7 @@ class QualityScorer:
             return 0.7  # neutral
         return passed / checks
 
-    def _score_confidence(
-        self, source_scores: list[float] | None
-    ) -> float:
+    def _score_confidence(self, source_scores: list[float] | None) -> float:
         """Score based on max source quality score."""
         if not source_scores:
             return 0.5
@@ -218,9 +205,7 @@ class QualityScorer:
                 re.match(r"^[a-z0-9.-]+\.[a-z]{2,}$", value.lower())
             )
         if rule_type == "phone_format":
-            return isinstance(value, str) and bool(
-                re.match(r"^[+\d\s()-]{7,}$", value)
-            )
+            return isinstance(value, str) and bool(re.match(r"^[+\d\s()-]{7,}$", value))
         if rule_type == "positive_integer":
             return isinstance(value, (int, float)) and value > 0
         if rule_type == "range_0_1":

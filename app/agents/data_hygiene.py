@@ -7,6 +7,7 @@ Identifies duplicates, stale records, and enrichment opportunities.
 L9 Architecture Note:
     Chassis-agnostic. Receives records, returns hygiene assessment.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HygieneAction:
     """A recommended hygiene action for a record."""
+
     record_id: str
     action_type: str  # enrich, deduplicate, archive, validate, merge
     priority: str  # low, medium, high, critical
@@ -29,6 +31,7 @@ class HygieneAction:
 @dataclass
 class HygieneReport:
     """Aggregate hygiene assessment for a batch of records."""
+
     total_records: int
     quality_score: float  # 0.0 - 1.0
     actions: list[HygieneAction] = field(default_factory=list)
@@ -61,20 +64,14 @@ class DataHygieneAgent:
 
         for record in records:
             record_id = record.get("id", record.get("record_id", "unknown"))
-            record_actions = self._assess_record(
-                record, record_id, domain, required_fields
-            )
+            record_actions = self._assess_record(record, record_id, domain, required_fields)
             actions.extend(record_actions)
 
             for action in record_actions:
-                action_counts[action.action_type] = (
-                    action_counts.get(action.action_type, 0) + 1
-                )
+                action_counts[action.action_type] = action_counts.get(action.action_type, 0) + 1
 
             # Completeness check
-            filled = sum(
-                1 for f in required_fields if record.get(f) not in (None, "")
-            )
+            filled = sum(1 for f in required_fields if record.get(f) not in (None, ""))
             if required_fields:
                 total_complete += filled / len(required_fields)
 
@@ -144,16 +141,23 @@ class DataHygieneAgent:
         """Return required fields for a domain."""
         domain_fields = {
             "company": [
-                "company_name", "company_domain", "company_industry",
-                "employee_count", "company_location_country",
+                "company_name",
+                "company_domain",
+                "company_industry",
+                "employee_count",
+                "company_location_country",
             ],
             "contact": [
-                "contact_email", "contact_first_name", "contact_last_name",
+                "contact_email",
+                "contact_first_name",
+                "contact_last_name",
                 "contact_title",
             ],
             "opportunity": [
-                "opportunity_name", "opportunity_stage",
-                "opportunity_close_date", "opportunity_amount",
+                "opportunity_name",
+                "opportunity_stage",
+                "opportunity_close_date",
+                "opportunity_amount",
             ],
         }
         return domain_fields.get(domain, [])

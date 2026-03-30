@@ -55,3 +55,6 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# Work in progress
+WIP/

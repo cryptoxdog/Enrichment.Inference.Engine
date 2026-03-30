@@ -9,18 +9,17 @@ health_field_analyzer, health_triggers, and the health API layer.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ─── Enums ────────────────────────────────────────────────────
 
 
-class HealthAction(str, Enum):
+class HealthAction(StrEnum):
     RE_ENRICH = "re_enrich"
     VERIFY_FIELD = "verify_field"
     RESOLVE_CONFLICT = "resolve_conflict"
@@ -29,7 +28,7 @@ class HealthAction(str, Enum):
     FLAG_OUTLIER = "flag_outlier"
 
 
-class TriggerReason(str, Enum):
+class TriggerReason(StrEnum):
     STALENESS = "staleness"
     LOW_CONFIDENCE = "low_confidence"
     LOW_COMPLETENESS = "low_completeness"
@@ -39,7 +38,7 @@ class TriggerReason(str, Enum):
     GATE_FIELD_MISSING = "gate_field_missing"
 
 
-class AssessmentScope(str, Enum):
+class AssessmentScope(StrEnum):
     FULL = "full"
     INCREMENTAL = "incremental"
     ENTITY = "entity"
@@ -102,7 +101,7 @@ class EntityHealth(BaseModel):
     consistency: float = Field(ge=0.0, le=1.0, description="Enriched vs CRM agreement ratio")
     composite_health: float = Field(ge=0.0, le=1.0)
     last_enriched_at: datetime | None = None
-    last_assessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_assessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     field_count_total: int = Field(ge=0, default=0)
     field_count_filled: int = Field(ge=0, default=0)
     field_count_stale: int = Field(ge=0, default=0)
@@ -142,7 +141,7 @@ class CRMHealth(BaseModel):
     graph_coverage: float = Field(ge=0.0, le=1.0, default=0.0)
     entities_below_threshold: int = Field(ge=0, default=0)
     entities_needing_enrichment: int = Field(ge=0, default=0)
-    assessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    assessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def is_ai_ready(self) -> bool:
@@ -166,7 +165,7 @@ class EnrichmentTrigger(BaseModel):
     current_health: float = Field(
         ge=0.0, le=1.0, description="Entity composite_health at trigger time"
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -217,7 +216,7 @@ class AssessmentResult(BaseModel):
     entity_health_summary: EntityHealthSummary
     triggers_generated: list[EnrichmentTrigger] = Field(default_factory=list)
     duration_ms: int = Field(ge=0, default=0)
-    assessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    assessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class EntityHealthSummary(BaseModel):
@@ -251,9 +250,9 @@ def compute_freshness(
     """
     if last_enriched_at is None:
         return 0.0
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if last_enriched_at.tzinfo is None:
-        last_enriched_at = last_enriched_at.replace(tzinfo=timezone.utc)
+        last_enriched_at = last_enriched_at.replace(tzinfo=UTC)
     age_days = max(0.0, (now - last_enriched_at).total_seconds() / 86400.0)
     if half_life_days <= 0:
         return 0.0

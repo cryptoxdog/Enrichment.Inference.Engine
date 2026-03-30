@@ -16,6 +16,8 @@ Usage:
   python tools/audit_engine.py --exclude app/legacy/
 """
 
+from __future__ import annotations
+
 import argparse
 import ast
 import json as json_mod
@@ -23,7 +25,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).parent.parent
 ENGINE_DIR = REPO_ROOT / "app"
@@ -38,7 +39,7 @@ class Finding:
     message: str
     file: str
     line: int
-    fix_hint: Optional[str] = None
+    fix_hint: str | None = None
 
 
 @dataclass

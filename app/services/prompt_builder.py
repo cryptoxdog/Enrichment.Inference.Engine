@@ -19,7 +19,6 @@ import hashlib
 import json
 from typing import Any
 
-
 SYSTEM_TEMPLATE = """You are a domain research analyst. Your task is to research
 the given entity and extract structured data matching the requested schema.
 

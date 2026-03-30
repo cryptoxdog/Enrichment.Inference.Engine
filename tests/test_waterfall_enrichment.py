@@ -10,14 +10,13 @@ from typing import Any
 
 import pytest
 
+from app.services.enrichment.quality_scorer import QualityScorer
 from app.services.enrichment.sources.base import (
     BaseSource,
     EnrichmentResult,
     SourceConfig,
 )
-from app.services.enrichment.quality_scorer import QualityScorer
 from app.services.enrichment.waterfall_engine import WaterfallEngine
-
 
 # ── Test Fixtures ─────────────────────────────────────────────
 
@@ -43,9 +42,7 @@ class MockSource(BaseSource):
         self._quality = quality
         self._error = error
 
-    async def enrich(
-        self, domain: str, payload: dict[str, Any]
-    ) -> EnrichmentResult:
+    async def enrich(self, domain: str, payload: dict[str, Any]) -> EnrichmentResult:
         return EnrichmentResult(
             data=self._data,
             quality_score=self._quality,
@@ -66,9 +63,7 @@ class FailingSource(BaseSource):
         )
         super().__init__(config)
 
-    async def enrich(
-        self, domain: str, payload: dict[str, Any]
-    ) -> EnrichmentResult:
+    async def enrich(self, domain: str, payload: dict[str, Any]) -> EnrichmentResult:
         return EnrichmentResult(
             data={},
             quality_score=0.0,
@@ -104,9 +99,7 @@ class TestQualityScorer:
     def test_score_with_source_quality(self):
         scorer = QualityScorer()
         score_without = scorer.score("company", {"company_name": "Acme"})
-        score_with = scorer.score(
-            "company", {"company_name": "Acme"}, [0.95]
-        )
+        score_with = scorer.score("company", {"company_name": "Acme"}, [0.95])
         # Confidence dimension should boost the score
         assert score_with >= score_without
 
@@ -181,9 +174,7 @@ class TestWaterfallEngine:
 
     @pytest.mark.asyncio()
     async def test_enrich_basic(self, engine):
-        merged, quality, results = await engine.enrich(
-            "company", {"entity_name": "Acme"}
-        )
+        merged, quality, results = await engine.enrich("company", {"entity_name": "Acme"})
         assert "company_name" in merged
         assert quality > 0.0
         assert len(results) > 0
@@ -208,9 +199,7 @@ class TestWaterfallEngine:
                 quality=0.8,
             ),
         )
-        merged, _, results = await engine.enrich(
-            "company", {"entity_name": "Acme"}
-        )
+        merged, _, results = await engine.enrich("company", {"entity_name": "Acme"})
         # Should have data from both sources since primary quality was low
         assert merged.get("company_name") == "Acme Corp"
         assert merged.get("employee_count") == 500
@@ -218,9 +207,7 @@ class TestWaterfallEngine:
 
     @pytest.mark.asyncio()
     async def test_enrich_provenance_injected(self, engine):
-        merged, _, _ = await engine.enrich(
-            "company", {"entity_name": "Acme"}
-        )
+        merged, _, _ = await engine.enrich("company", {"entity_name": "Acme"})
         assert "enrichment_sources_used" in merged
         assert "enrichment_quality_score" in merged
 
@@ -237,9 +224,7 @@ class TestWaterfallEngine:
             ),
         )
 
-        merged, _, results = await engine.enrich(
-            "company", {"entity_name": "Test"}
-        )
+        merged, _, results = await engine.enrich("company", {"entity_name": "Test"})
         # Should still get data from backup
         assert merged.get("company_name") == "Fallback Corp"
         # First result should have error
@@ -248,9 +233,7 @@ class TestWaterfallEngine:
     @pytest.mark.asyncio()
     async def test_enrich_empty_domain(self):
         engine = WaterfallEngine()
-        merged, quality, results = await engine.enrich(
-            "unknown_domain", {"entity_name": "Test"}
-        )
+        merged, quality, results = await engine.enrich("unknown_domain", {"entity_name": "Test"})
         assert quality == 0.0 or quality >= 0.0  # no sources = low quality
         assert "enrichment_sources_used" in merged
 

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Product-to-scrap bidirectional mappings."""
+
 from odoo import fields, models
 
 
@@ -9,7 +9,10 @@ class PlasticosPolymerKBProductMapping(models.Model):
     _order = "category, product"
 
     kb_id = fields.Many2one(
-        "plasticos.polymer.kb", required=True, ondelete="cascade", index=True,
+        "plasticos.polymer.kb",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     category = fields.Char(index=True, help="e.g. packaging_products")
     product = fields.Char()

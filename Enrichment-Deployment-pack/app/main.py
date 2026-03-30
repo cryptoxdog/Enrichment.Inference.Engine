@@ -5,15 +5,15 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import get_settings
-from .logging_config import setup_logging
 from .auth import verify_api_key
 from .circuit_breaker import CircuitBreaker
+from .config import get_settings
 from .kb_resolver import KBResolver
+from .logging_config import setup_logging
 from .pipeline import enrich_pipeline
 from .schemas import EnrichmentRequest, EnrichmentResponse, HealthResponse
 

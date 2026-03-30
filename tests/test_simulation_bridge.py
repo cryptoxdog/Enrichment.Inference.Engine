@@ -1,11 +1,12 @@
-import pytest
-
 """
 Tests for Simulation Bridge — validates gate/scoring/inference/community/leverage/brief.
 Run: pytest tests/test_simulation_bridge.py -v
 """
 
 from __future__ import annotations
+
+import pytest
+
 from app.services.simulation_bridge import (
     GateVerdict,
     LeverageType,
@@ -77,7 +78,7 @@ class TestSyntheticGeneration:
     def test_deterministic_with_seed(self):
         e1 = generate_synthetic_entities(CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, count=5, seed=99)
         e2 = generate_synthetic_entities(CUSTOMER_CRM_FIELDS, DOMAIN_SPEC, count=5, seed=99)
-        for a, b in zip(e1, e2):
+        for a, b in zip(e1, e2, strict=True):
             assert a["name"] == b["name"]
 
 

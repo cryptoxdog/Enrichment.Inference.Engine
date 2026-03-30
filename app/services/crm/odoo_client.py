@@ -39,21 +39,15 @@ class OdooClient(CRMClientBase):
         self.password: str = creds["password"]
         self._uid: int | None = None
 
-        self._common = xmlrpc.client.ServerProxy(
-            f"{self.url}/xmlrpc/2/common"
-        )
-        self._models = xmlrpc.client.ServerProxy(
-            f"{self.url}/xmlrpc/2/object"
-        )
+        self._common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
+        self._models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
 
     # ── Connection ────────────────────────────────────────────
 
     def connect(self) -> bool:
         """Authenticate with Odoo and cache the UID."""
         try:
-            self._uid = self._common.authenticate(
-                self.db, self.username, self.password, {}
-            )
+            self._uid = self._common.authenticate(self.db, self.username, self.password, {})
             if not self._uid:
                 logger.error("odoo_auth_failed", reason="falsy_uid")
                 return False
@@ -68,23 +62,17 @@ class OdooClient(CRMClientBase):
         if not self._uid:
             return self.connect()
         try:
-            result = self._execute(
-                "res.users", "search", [[["id", "=", self._uid]]]
-            )
+            result = self._execute("res.users", "search", [[["id", "=", self._uid]]])
             return bool(result)
         except Exception:
             return False
 
     # ── CRUD ──────────────────────────────────────────────────
 
-    def get_record(
-        self, object_type: str, record_id: str
-    ) -> dict[str, Any] | None:
+    def get_record(self, object_type: str, record_id: str) -> dict[str, Any] | None:
         """Fetch a single record by ID."""
         try:
-            results = self._execute(
-                object_type, "read", [[int(record_id)]]
-            )
+            results = self._execute(object_type, "read", [[int(record_id)]])
             return results[0] if results else None
         except Exception as exc:
             logger.error(
@@ -119,9 +107,7 @@ class OdooClient(CRMClientBase):
             )
             return []
 
-    def create_record(
-        self, object_type: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def create_record(self, object_type: str, data: dict[str, Any]) -> WriteResult:
         """Create a new record in Odoo."""
         try:
             record_id = self._execute(object_type, "create", [data])
@@ -144,14 +130,10 @@ class OdooClient(CRMClientBase):
             )
             return WriteResult(success=False, error=str(exc))
 
-    def update_record(
-        self, object_type: str, record_id: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def update_record(self, object_type: str, record_id: str, data: dict[str, Any]) -> WriteResult:
         """Update an existing record in Odoo."""
         try:
-            self._execute(
-                object_type, "write", [[int(record_id)], data]
-            )
+            self._execute(object_type, "write", [[int(record_id)], data])
             logger.info(
                 "odoo_record_updated",
                 object_type=object_type,
@@ -191,9 +173,7 @@ class OdooClient(CRMClientBase):
         data[external_id_field] = external_id_value
         return self.create_record(object_type, data)
 
-    def get_field_metadata(
-        self, object_type: str
-    ) -> dict[str, Any]:
+    def get_field_metadata(self, object_type: str) -> dict[str, Any]:
         """Return field schema metadata for an Odoo model."""
         try:
             fields = self._execute(
@@ -204,9 +184,7 @@ class OdooClient(CRMClientBase):
             )
             return {
                 "name": object_type,
-                "fields": [
-                    {"name": k, **v} for k, v in fields.items()
-                ],
+                "fields": [{"name": k, **v} for k, v in fields.items()],
             }
         except Exception as exc:
             logger.error(
@@ -222,21 +200,15 @@ class OdooClient(CRMClientBase):
         """Async wrapper for connect()."""
         return await asyncio.to_thread(self.connect)
 
-    async def async_create_record(
-        self, object_type: str, data: dict[str, Any]
-    ) -> WriteResult:
+    async def async_create_record(self, object_type: str, data: dict[str, Any]) -> WriteResult:
         """Async wrapper for create_record()."""
-        return await asyncio.to_thread(
-            self.create_record, object_type, data
-        )
+        return await asyncio.to_thread(self.create_record, object_type, data)
 
     async def async_update_record(
         self, object_type: str, record_id: str, data: dict[str, Any]
     ) -> WriteResult:
         """Async wrapper for update_record()."""
-        return await asyncio.to_thread(
-            self.update_record, object_type, record_id, data
-        )
+        return await asyncio.to_thread(self.update_record, object_type, record_id, data)
 
     async def async_upsert_record(
         self,

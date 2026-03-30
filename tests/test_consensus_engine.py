@@ -8,7 +8,6 @@ Source: ~220 lines | Target coverage: 85%
 
 from __future__ import annotations
 
-
 from app.services.consensus_engine import synthesize
 
 # Alias for test compatibility

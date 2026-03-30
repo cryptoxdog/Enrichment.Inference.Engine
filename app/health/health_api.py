@@ -12,18 +12,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .health_assessor import DomainSchema, EntityDataStore, HealthAssessor
+from .health_field_analyzer import run_field_diagnostic
 from .health_models import (
     AssessmentConfig,
     AssessmentScope,
     FieldHealth,
     HealthWeights,
 )
-from .health_assessor import HealthAssessor, EntityDataStore, DomainSchema
-from .health_field_analyzer import run_field_diagnostic
 from .health_triggers import (
     TriggerEngine,
 )
-
 
 # ─── Module-Level State (configured at startup) ──────────────
 
@@ -193,7 +192,7 @@ def get_field_diagnostic(request: FieldDiagnosticRequest) -> dict[str, Any]:
     Deep diagnostic for a single field: distribution, outliers, recommendations.
     """
     config = AssessmentConfig(domain=request.domain)
-    assessor = _get_assessor(request.domain, config)
+    _get_assessor(request.domain, config)
 
     if _data_store is None:
         raise RuntimeError("Data store not configured")

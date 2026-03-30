@@ -12,10 +12,10 @@ import sys
 sys.path.insert(0, ".")
 
 from app.services.simulation_bridge import (
-    simulate,
     analyze_leverage,
-    generate_executive_brief,
     brief_to_dict,
+    generate_executive_brief,
+    simulate,
 )
 
 DOMAIN_SPEC = {

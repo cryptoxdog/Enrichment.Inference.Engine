@@ -8,9 +8,8 @@ Source: ~160 lines | Target coverage: 85%
 
 from __future__ import annotations
 
-
+from app.models.field_confidence import FieldConfidence, FieldConfidenceMap, FieldSource
 from app.services.uncertainty_engine import compute_uncertainty
-from app.models.field_confidence import FieldConfidenceMap, FieldConfidence, FieldSource
 
 
 class TestUncertaintyEngine:
@@ -45,7 +44,7 @@ class TestUncertaintyEngine:
                     source=FieldSource.ENRICHMENT,
                 )
             )
-        entity = {k: "test" for k in sample_schema}
+        entity = dict.fromkeys(sample_schema, "test")
         score = compute_uncertainty(entity=entity, field_confidence_map=fcm, schema=sample_schema)
         # Low confidence should produce higher uncertainty
         assert score > 3.0
@@ -61,7 +60,7 @@ class TestUncertaintyEngine:
                     source=FieldSource.ENRICHMENT,
                 )
             )
-        entity = {k: "test" for k in sample_schema}
+        entity = dict.fromkeys(sample_schema, "test")
         score = compute_uncertainty(entity=entity, field_confidence_map=fcm, schema=sample_schema)
         assert score < 4.0
 

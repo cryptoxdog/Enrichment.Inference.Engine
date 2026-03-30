@@ -15,11 +15,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class CRMType(str, Enum):
+class CRMType(StrEnum):
     """Supported CRM platforms."""
 
     ODOO = "odoo"
@@ -70,9 +70,7 @@ class CRMClientBase(ABC):
         ...
 
     @abstractmethod
-    def get_record(
-        self, object_type: str, record_id: str
-    ) -> dict[str, Any] | None:
+    def get_record(self, object_type: str, record_id: str) -> dict[str, Any] | None:
         """Fetch a single record by ID."""
         ...
 
@@ -87,16 +85,12 @@ class CRMClientBase(ABC):
         ...
 
     @abstractmethod
-    def create_record(
-        self, object_type: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def create_record(self, object_type: str, data: dict[str, Any]) -> WriteResult:
         """Create a new record."""
         ...
 
     @abstractmethod
-    def update_record(
-        self, object_type: str, record_id: str, data: dict[str, Any]
-    ) -> WriteResult:
+    def update_record(self, object_type: str, record_id: str, data: dict[str, Any]) -> WriteResult:
         """Update an existing record."""
         ...
 
@@ -112,8 +106,6 @@ class CRMClientBase(ABC):
         ...
 
     @abstractmethod
-    def get_field_metadata(
-        self, object_type: str
-    ) -> dict[str, Any]:
+    def get_field_metadata(self, object_type: str) -> dict[str, Any]:
         """Return field schema metadata for a CRM object."""
         ...

@@ -11,15 +11,15 @@ import time
 
 import structlog
 
-from .config import Settings
 from .circuit_breaker import CircuitBreaker
+from .config import Settings
+from .consensus_engine import synthesize
 from .kb_resolver import KBResolver
 from .perplexity_client import query_perplexity
 from .prompt_builder import build_variation_prompts
-from .validation_engine import validate_response
-from .consensus_engine import synthesize
-from .uncertainty_engine import apply_uncertainty
 from .schemas import EnrichmentRequest, EnrichmentResponse
+from .uncertainty_engine import apply_uncertainty
+from .validation_engine import validate_response
 
 logger = structlog.get_logger("pipeline")
 

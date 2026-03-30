@@ -20,6 +20,10 @@ from pydantic import BaseModel, Field
 
 from ...core.auth import verify_api_key
 from ...engines.convergence.cost_tracker import CostTracker
+from ...engines.convergence.enrichment_profile import (
+    EnrichmentProfile,
+    ProfileRegistry,
+)
 from ...engines.convergence.loop_state import (
     LoopState,
     LoopStateStore,
@@ -28,20 +32,19 @@ from ...engines.convergence.loop_state import (
 from ...engines.convergence.pass_telemetry import PassTelemetryCollector
 from ...engines.convergence.schema_proposer import (
     ApprovalDecision,
+)
+from ...engines.convergence.schema_proposer import (
     apply as apply_proposals,
+)
+from ...engines.convergence.schema_proposer import (
     propose as propose_schema,
 )
-from ...models.field_confidence import FieldConfidenceMap
 from ...models.loop_schemas import PassResult
 from ...services.crm_field_scanner import (
     CRMField,
     DiscoveryReport,
     generate_discovery_report,
     scan_crm_fields,
-)
-from ...engines.convergence.enrichment_profile import (
-    EnrichmentProfile,
-    ProfileRegistry,
 )
 
 logger = logging.getLogger(__name__)
@@ -163,7 +166,7 @@ async def converge_single(body: ConvergeRequestBody) -> ConvergeSingleResponse:
             mode="discovery" if pass_num == 1 else "targeted",
             fields_enriched=[],
             fields_inferred=[],
-            field_confidences=FieldConfidenceMap(),
+            field_confidences={},
             uncertainty_before=0.0,
             uncertainty_after=0.0,
             tokens_used=pass_tokens,
@@ -352,5 +355,5 @@ async def scan_crm(body: ScanRequestBody) -> DiscoveryReport:
         )
 
     scan_result = scan_crm_fields(body.fields, domain_spec)
-    report = generate_discovery_report(scan_result)
+    report = generate_discovery_report(scan_result, domain_spec)
     return report

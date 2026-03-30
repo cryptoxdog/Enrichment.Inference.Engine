@@ -10,17 +10,18 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any, Protocol, Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from .health_models import (
     AssessmentConfig,
     AssessmentResult,
     AssessmentScope,
     CRMHealth,
+    EnrichmentTrigger,
     EntityHealth,
     EntityHealthSummary,
-    EnrichmentTrigger,
     FieldHealth,
     HealthAction,
     HealthWeights,
@@ -30,7 +31,6 @@ from .health_models import (
     compute_composite_health,
     compute_freshness,
 )
-
 
 # ─── Data Source Protocols ────────────────────────────────────
 
@@ -101,9 +101,9 @@ class HealthAssessor:
     def assess_entity(self, record: EntityRecord) -> EntityHealth:
         """Compute full health assessment for a single entity."""
         expected = set(self._schema.expected_fields)
-        _filled = {k for k, v in record.fields.items() if v is not None and k in expected}
+        filled = {k for k, v in record.fields.items() if v is not None and k in expected}
         total_expected = len(expected)
-        completeness = len(_filled) / total_expected if total_expected > 0 else 0.0
+        completeness = len(filled) / total_expected if total_expected > 0 else 0.0
 
         freshness = compute_freshness(
             record.last_enriched_at,
@@ -125,13 +125,13 @@ class HealthAssessor:
 
         stale_count = 0
         low_conf_count = 0
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stale_threshold_secs = self._config.staleness_days * 86400
         for fname in filled:
             updated = record.field_updated_at.get(fname)
             if updated is not None:
                 if updated.tzinfo is None:
-                    updated = updated.replace(tzinfo=timezone.utc)
+                    updated = updated.replace(tzinfo=UTC)
                 if (now - updated).total_seconds() > stale_threshold_secs:
                     stale_count += 1
             conf = confidences.get(fname, 0.0)
@@ -158,7 +158,7 @@ class HealthAssessor:
             composite_health=round(composite, 4),
             last_enriched_at=record.last_enriched_at,
             field_count_total=total_expected,
-            field_count_filled=len(_filled),
+            field_count_filled=len(filled),
             field_count_stale=stale_count,
             field_count_low_confidence=low_conf_count,
             gate_fields_missing=gate_missing,
@@ -234,7 +234,7 @@ class HealthAssessor:
             denom = max(abs(crm_val), abs(enriched_val))
             return abs(crm_val - enriched_val) / denom < 0.05
         if isinstance(crm_val, list) and isinstance(enriched_val, list):
-            return set(str(v).lower() for v in crm_val) == set(str(v).lower() for v in enriched_val)
+            return {str(v).lower() for v in crm_val} == {str(v).lower() for v in enriched_val}
         return str(crm_val).strip().lower() == str(enriched_val).strip().lower()
 
     # ─── Internal: Recommendations ───────────────────────────
@@ -341,7 +341,7 @@ class HealthAssessor:
                 "value_counts": defaultdict(int),
             }
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for rec in records:
             for fname in expected:
                 s = stats[fname]
@@ -355,7 +355,7 @@ class HealthAssessor:
                     updated = rec.field_updated_at.get(fname)
                     if updated is not None:
                         if updated.tzinfo is None:
-                            updated = updated.replace(tzinfo=timezone.utc)
+                            updated = updated.replace(tzinfo=UTC)
                         age = (now - updated).total_seconds() / 86400.0
                         s["ages"].append(age)
                     vkey = str(val)[:100]

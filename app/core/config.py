@@ -58,6 +58,28 @@ class Settings(BaseSettings):
     # ── Cognitive Engine Graphs (sibling node) ───────
     ceg_base_url: str = "http://localhost:8001"
 
+    # ── Constellation nodes (inter-node PacketEnvelope traffic) ──
+    graph_node_url: str = "http://localhost:8001"
+    score_node_url: str = "http://localhost:8002"
+    route_node_url: str = "http://localhost:8003"
+    inter_node_secret: str = "dev-inter-node-secret"
+
+    # ── Graph persistence ─────────────────────────────
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "changeme"
+
+    # ── Relational persistence ────────────────────────
+    database_url: str = "postgresql+asyncpg://enrich:changeme@localhost:5432/enrich"
+
+    # ── Domain configuration ──────────────────────────
+    domains_dir: str = "./domains"
+    default_domain: str = "plasticos"
+
+    # ── Token budget ──────────────────────────────────
+    max_budget_tokens_default: int = 50_000
+    token_rate_usd_per_1k: float = 0.005
+
     # ── Circuit Breaker ──────────────────────────────
     cb_failure_threshold: int = 5
     cb_cooldown_seconds: int = 60

@@ -1,126 +1,181 @@
 """
-Multi-variation weighted consensus synthesis.
+Consensus Engine — Weighted multi-variation synthesis.
 
-Algorithm:
-  For each field across N validated responses:
-    weighted_score = (agreement_ratio) × (mean_confidence_of_agreeing_responses)
-    Keep signal if weighted_score ≥ threshold.
+Synthesizes N variations into single consensus output:
+  - Agreement-based weighting (5/5 agree = high confidence)
+  - Per-field confidence scoring (NEW)
+  - Consensus threshold gating
+  - Type-aware value selection (mode for strings, median for numbers)
 
-  For list fields: each LIST ITEM is scored independently.
-  For scalar fields: the value with highest weighted score wins.
+Input: list[dict[str, Any]] — validated responses from N Sonar variations
+Output: dict with "fields", "confidence", "per_field_confidence"
 
-Audit fixes applied:
-  - M7: Single-payload penalty — if only 1/N valid, confidence is halved.
-  - LOW: Case-normalizes strings before counting agreement.
+Called by: enrichment_orchestrator.py after variation validation
 """
 
 from __future__ import annotations
 
-import statistics
-from collections import defaultdict
+from collections import Counter
 from typing import Any
 
 import structlog
 
-logger = structlog.get_logger("consensus_engine")
+logger = structlog.get_logger("consensus")
 
 
 def synthesize(
-    payloads: list[dict[str, Any]],
-    threshold: float,
-    total_attempted: int | None = None,
+    variations: list[dict[str, Any]],
+    threshold: float = 0.6,
+    total_attempted: int = 5,
 ) -> dict[str, Any]:
     """
-    Synthesize N validated responses into one consensus result.
+    Synthesize consensus from multiple enrichment variations.
 
-    Args:
-        payloads: Validated response dicts (each has 'confidence' key).
-        threshold: Minimum weighted score to accept a signal.
-        total_attempted: Original variation count (for quorum penalty).
+    Parameters
+    ----------
+    variations : list[dict]
+        Validated responses from N Sonar API calls
+    threshold : float
+        Minimum agreement ratio to include field (default 0.6)
+    total_attempted : int
+        Total variations attempted (for confidence calculation)
 
-    Returns:
-        {"fields": {..}, "confidence": float}
+    Returns
+    -------
+    dict with:
+        - fields: dict[str, Any] — consensus values
+        - confidence: float — aggregate confidence (0.0-1.0)
+        - per_field_confidence: dict[str, float] — confidence per field (NEW)
     """
-    n = len(payloads)
-    attempted = total_attempted or n
+    if not variations:
+        return {
+            "fields": {},
+            "confidence": 0.0,
+            "per_field_confidence": {},
+        }
 
-    if n == 0:
-        return {"fields": {}, "confidence": 0.0}
+    all_fields = _get_all_fields(variations)
+    consensus_fields: dict[str, Any] = {}
+    per_field_confidence: dict[str, float] = {}
 
-    # ── Single-payload penalty ───────────────────────
-    if n == 1:
-        p = payloads[0].copy()
-        conf = p.pop("confidence", 0.5)
-        # If we attempted multiple but only 1 validated, penalize
-        if attempted > 1:
-            conf *= 0.5
-            logger.info("single_payload_penalty", original_conf=conf * 2, penalized=conf)
-        return {"fields": p, "confidence": conf}
+    for field in all_fields:
+        values = [v.get(field) for v in variations if field in v]
 
-    # ── Separate confidence from fields ──────────────
-    confidences: list[float] = []
-    field_payloads: list[dict] = []
-    for p in payloads:
-        p = p.copy()
-        confidences.append(p.pop("confidence", 0.5))
-        field_payloads.append(p)
+        if not values:
+            continue
 
-    # ── Count agreement ──────────────────────────────
-    list_counter: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
-    scalar_counter: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+        # Calculate field-level agreement
+        field_confidence = _calculate_field_confidence(values, total_attempted)
 
-    for i, payload in enumerate(field_payloads):
-        conf = confidences[i]
-        for field_name, value in payload.items():
-            if isinstance(value, list):
-                for item in value:
-                    key = str(item).strip().lower()
-                    if key:
-                        list_counter[field_name][key].append(conf)
-            else:
-                key = str(value).strip().lower()
-                if key:
-                    scalar_counter[field_name][(key, str(value).strip())].append(conf)
+        # Apply threshold gate
+        if field_confidence < threshold:
+            logger.debug(
+                "field_below_threshold",
+                field=field,
+                confidence=field_confidence,
+                threshold=threshold,
+            )
+            continue
 
-    final_fields: dict[str, Any] = {}
-    weights: list[float] = []
+        # Select winning value
+        winning_value = _select_value(values)
+        consensus_fields[field] = winning_value
+        per_field_confidence[field] = field_confidence
 
-    # ── Synthesize list fields ───────────────────────
-    for field_name, items in list_counter.items():
-        accepted = []
-        for item_key, item_confs in items.items():
-            agreement = len(item_confs) / n
-            avg_conf = statistics.mean(item_confs)
-            weighted = agreement * avg_conf
-            if weighted >= threshold:
-                accepted.append(item_key)
-                weights.append(weighted)
-        if accepted:
-            final_fields[field_name] = accepted
-
-    # ── Synthesize scalar fields ─────────────────────
-    for field_name, values in scalar_counter.items():
-        best_display: str | None = None
-        best_weight = 0.0
-        for (norm_key, display_val), value_confs in values.items():
-            agreement = len(value_confs) / n
-            avg_conf = statistics.mean(value_confs)
-            weighted = agreement * avg_conf
-            if weighted > best_weight:
-                best_weight = weighted
-                best_display = display_val
-        if best_display is not None and best_weight >= threshold:
-            final_fields[field_name] = best_display
-            weights.append(best_weight)
-
-    final_confidence = statistics.mean(weights) if weights else 0.0
+    # Calculate aggregate confidence
+    aggregate_confidence = (
+        sum(per_field_confidence.values()) / len(per_field_confidence)
+        if per_field_confidence
+        else 0.0
+    )
 
     logger.info(
         "consensus_synthesized",
-        variations_valid=n,
-        variations_attempted=attempted,
-        fields_accepted=len(final_fields),
-        confidence=round(final_confidence, 4),
+        fields=len(consensus_fields),
+        variations=len(variations),
+        aggregate_confidence=round(aggregate_confidence, 3),
     )
 
-    return {"fields": final_fields, "confidence": final_confidence}
+    return {
+        "fields": consensus_fields,
+        "confidence": aggregate_confidence,
+        "per_field_confidence": per_field_confidence,
+    }
+
+
+def _calculate_field_confidence(values: list[Any], total_attempted: int) -> float:
+    """
+    Calculate confidence score for a single field based on variation agreement.
+
+    Logic:
+      - 5/5 agree → 1.0
+      - 4/5 agree → 0.8
+      - 3/5 agree → 0.6
+      - 2/5 agree → 0.4
+      - All different → 0.2 (floor)
+    """
+    if not values:
+        return 0.0
+
+    # Normalize values for comparison
+    value_counts: dict[str, int] = {}
+    for v in values:
+        v_normalized = str(v).strip().lower()
+        value_counts[v_normalized] = value_counts.get(v_normalized, 0) + 1
+
+    max_agreement = max(value_counts.values())
+
+    # Agreement ratio
+    confidence = max_agreement / total_attempted
+
+    # Floor at 0.2 (some data is better than none)
+    return max(0.2, confidence)
+
+
+def _get_all_fields(variations: list[dict[str, Any]]) -> set[str]:
+    """Extract unique field names across all variations."""
+    fields: set[str] = set()
+    for v in variations:
+        fields.update(v.keys())
+    return fields
+
+
+def _select_value(values: list[Any]) -> Any:
+    """
+    Select winning value from variations.
+
+    Strategy:
+      - Strings: mode (most common)
+      - Numbers: median
+      - Booleans: mode
+      - Mixed: mode
+    """
+    if not values:
+        return None
+
+    # Try numeric median
+    try:
+        numeric_values = [float(v) for v in values]
+        return _median(numeric_values)
+    except (ValueError, TypeError):
+        pass
+
+    # Fall back to mode (most common)
+    counter = Counter(str(v) for v in values)
+    most_common = counter.most_common(1)[0][0]
+
+    # Return original type if possible
+    for v in values:
+        if str(v) == most_common:
+            return v
+
+    return most_common
+
+
+def _median(numbers: list[float]) -> float:
+    """Calculate median of numeric list."""
+    sorted_nums = sorted(numbers)
+    n = len(sorted_nums)
+    if n % 2 == 0:
+        return (sorted_nums[n // 2 - 1] + sorted_nums[n // 2]) / 2
+    return sorted_nums[n // 2]

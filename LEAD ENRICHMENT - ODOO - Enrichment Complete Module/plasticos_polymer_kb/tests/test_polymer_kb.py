@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Unit tests for plasticos_polymer_kb module."""
+
 from odoo.tests.common import TransactionCase
 
 
@@ -138,6 +138,7 @@ product_scrap_mapping:
         from odoo.addons.plasticos_polymer_kb.services.kb_inference import (
             KBInferenceEngine,
         )
+
         kb = self.KB.load_from_yaml(self._make_minimal_yaml())
         engine = KBInferenceEngine(self.env)
         self.assertEqual(engine.infer_quality_tier("PP", 0.3), 1)
@@ -149,6 +150,7 @@ product_scrap_mapping:
         from odoo.addons.plasticos_polymer_kb.services.kb_inference import (
             KBInferenceEngine,
         )
+
         engine = KBInferenceEngine(self.env)
         self.assertEqual(engine.infer_quality_tier("NONEXISTENT", 5.0), 0)
         self.assertEqual(engine.infer_mfi_application("NONEXISTENT", 10.0), "")

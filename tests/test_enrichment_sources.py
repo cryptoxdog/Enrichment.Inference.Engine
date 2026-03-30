@@ -8,21 +8,22 @@ Validates that each source adapter:
 4. Handles unsupported domains
 5. Maps response fields to canonical names
 """
+
 from __future__ import annotations
 
 import pytest
 
+from app.services.enrichment.sources import SOURCE_REGISTRY
+from app.services.enrichment.sources.apollo import ApolloSource
 from app.services.enrichment.sources.base import BaseSource, SourceConfig
 from app.services.enrichment.sources.clearbit import ClearbitSource
-from app.services.enrichment.sources.zoominfo import ZoomInfoSource
-from app.services.enrichment.sources.apollo import ApolloSource
 from app.services.enrichment.sources.hunter import HunterSource
-from app.services.enrichment.sources import SOURCE_REGISTRY
-
+from app.services.enrichment.sources.zoominfo import ZoomInfoSource
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_config(name: str, enabled: bool = True, api_key: str = "test-key") -> SourceConfig:
     return SourceConfig(
@@ -42,6 +43,7 @@ def _make_config(name: str, enabled: bool = True, api_key: str = "test-key") -> 
 # Registry Tests
 # ---------------------------------------------------------------------------
 
+
 class TestSourceRegistry:
     """Verify all sources are registered."""
 
@@ -58,12 +60,16 @@ class TestSourceRegistry:
 # Contract Tests — every adapter must handle these edge cases
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("source_cls,name", [
-    (ClearbitSource, "clearbit"),
-    (ZoomInfoSource, "zoominfo"),
-    (ApolloSource, "apollo"),
-    (HunterSource, "hunter"),
-])
+
+@pytest.mark.parametrize(
+    "source_cls,name",
+    [
+        (ClearbitSource, "clearbit"),
+        (ZoomInfoSource, "zoominfo"),
+        (ApolloSource, "apollo"),
+        (HunterSource, "hunter"),
+    ],
+)
 class TestSourceContract:
     """Contract tests that every source adapter must pass."""
 
@@ -103,6 +109,7 @@ class TestSourceContract:
 # Hunter-specific: contact-only domain
 # ---------------------------------------------------------------------------
 
+
 class TestHunterDomainRestriction:
     """Hunter only supports contact domain."""
 
@@ -124,6 +131,7 @@ class TestHunterDomainRestriction:
 # ---------------------------------------------------------------------------
 # Apollo-specific: missing identifier
 # ---------------------------------------------------------------------------
+
 
 class TestApolloMissingIdentifier:
     """Apollo needs company_domain for company enrichment."""

@@ -7,10 +7,9 @@ Source: 175 lines | Target coverage: 85%
 
 from __future__ import annotations
 
-
 from app.engines.inference.rule_loader import (
-    load_rules,
     RuleDefinition,
+    load_rules,
 )
 
 

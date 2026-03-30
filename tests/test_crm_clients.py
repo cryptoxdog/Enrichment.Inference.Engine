@@ -6,14 +6,13 @@ Validates that Salesforce and HubSpot clients:
 2. Are registered in CLIENT_REGISTRY
 3. Handle initialization correctly
 """
+
 from __future__ import annotations
 
-import pytest
-
-from app.services.crm.base import CRMClientBase, CRMCredentials, CRMType
-from app.services.crm.salesforce_client import SalesforceClient
-from app.services.crm.hubspot_client import HubSpotClient
 from app.services.crm import CLIENT_REGISTRY
+from app.services.crm.base import CRMClientBase, CRMCredentials, CRMType
+from app.services.crm.hubspot_client import HubSpotClient
+from app.services.crm.salesforce_client import SalesforceClient
 
 
 class TestClientRegistry:

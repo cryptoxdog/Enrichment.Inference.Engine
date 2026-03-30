@@ -3,21 +3,21 @@ Tests for agent modules.
 
 Validates MCP server, lead router, deal risk, data hygiene, and handoff agents.
 """
+
 from __future__ import annotations
 
 import json
-import pytest
 
-from app.agents.mcp_server import MCPServer, TOOL_REGISTRY, RESOURCE_REGISTRY
-from app.agents.lead_router import LeadRouterAgent, RoutingDecision
-from app.agents.deal_risk import DealRiskAgent, RiskAssessment
-from app.agents.data_hygiene import DataHygieneAgent, HygieneReport
-from app.agents.handoff import HandoffAgent, HandoffDocument
-
+from app.agents.data_hygiene import DataHygieneAgent
+from app.agents.deal_risk import DealRiskAgent
+from app.agents.handoff import HandoffAgent
+from app.agents.lead_router import LeadRouterAgent
+from app.agents.mcp_server import MCPServer
 
 # ---------------------------------------------------------------------------
 # MCP Server Tests
 # ---------------------------------------------------------------------------
+
 
 class TestMCPServer:
     """MCP protocol handler tests."""
@@ -64,10 +64,13 @@ class TestMCPServer:
             return {"action": action, "tenant": tenant, "status": "ok"}
 
         server = MCPServer(chassis_dispatch=mock_dispatch)
-        result = server.handle_request("tools/call", {
-            "name": "enrich_contact",
-            "arguments": {"domain": "company", "entity_name": "Test"},
-        })
+        result = server.handle_request(
+            "tools/call",
+            {
+                "name": "enrich_contact",
+                "arguments": {"domain": "company", "entity_name": "Test"},
+            },
+        )
         assert "content" in result
         data = json.loads(result["content"][0]["text"])
         assert data["action"] == "enrich"
@@ -97,6 +100,7 @@ class TestMCPServer:
 # ---------------------------------------------------------------------------
 # Lead Router Tests
 # ---------------------------------------------------------------------------
+
 
 class TestLeadRouter:
     """Lead routing agent tests."""
@@ -147,6 +151,7 @@ class TestLeadRouter:
 # Deal Risk Tests
 # ---------------------------------------------------------------------------
 
+
 class TestDealRisk:
     """Deal risk assessment agent tests."""
 
@@ -159,9 +164,7 @@ class TestDealRisk:
                 "opportunity_amount": 100000,
                 "opportunity_close_date": "2026-06-01",
                 "opportunity_account_id": "acc-123",
-                "opportunity_stakeholders": [
-                    {"name": "CEO", "role": "decision_maker"}
-                ],
+                "opportunity_stakeholders": [{"name": "CEO", "role": "decision_maker"}],
             },
             enrichment_quality=0.9,
         )
@@ -187,6 +190,7 @@ class TestDealRisk:
 # ---------------------------------------------------------------------------
 # Data Hygiene Tests
 # ---------------------------------------------------------------------------
+
 
 class TestDataHygiene:
     """Data hygiene agent tests."""
@@ -232,6 +236,7 @@ class TestDataHygiene:
 # Handoff Tests
 # ---------------------------------------------------------------------------
 
+
 class TestHandoff:
     """Sales-to-CS handoff agent tests."""
 
@@ -266,11 +271,13 @@ class TestHandoff:
 
     def test_location_builder(self) -> None:
         agent = HandoffAgent()
-        loc = agent._build_location({
-            "company_location_city": "Austin",
-            "company_location_state": "TX",
-            "company_location_country": "US",
-        })
+        loc = agent._build_location(
+            {
+                "company_location_city": "Austin",
+                "company_location_state": "TX",
+                "company_location_country": "US",
+            }
+        )
         assert "Austin" in loc
         assert "TX" in loc
         assert "US" in loc

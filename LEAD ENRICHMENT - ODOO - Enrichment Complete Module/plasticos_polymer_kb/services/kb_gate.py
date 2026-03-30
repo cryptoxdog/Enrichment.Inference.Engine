@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """KB-aware hard gates for Stage 1 Python matcher.
 
 Plug into ``PlasticosMatcher`` to apply polymer-specific safety rules
 and contamination constraints that the generic gates miss.
 """
+
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class KBGate:
     def __init__(self, env):
         self.env = env
         from .kb_inference import KBInferenceEngine
+
         self.inference = KBInferenceEngine(env)
 
     def evaluate(self, intake, facility, material) -> tuple:
@@ -55,14 +56,18 @@ class KBGate:
 
         # Gate B: Cross-polymer contamination routing
         passed, reason = self._check_cross_polymer_contamination(
-            kb, material, facility,
+            kb,
+            material,
+            facility,
         )
         if not passed:
             return False, reason
 
         # Gate C: Food/medical contact restrictions
         passed, reason = self._check_food_medical_restrictions(
-            kb, material, facility,
+            kb,
+            material,
+            facility,
         )
         if not passed:
             return False, reason
@@ -106,8 +111,7 @@ class KBGate:
 
         return True, "safety_passed"
 
-    def _check_cross_polymer_contamination(self, kb, material,
-                                            facility) -> tuple:
+    def _check_cross_polymer_contamination(self, kb, material, facility) -> tuple:
         """Check cross-polymer contamination limits from KB tiers."""
         polymer_type = kb.polymer_type.upper()
         contam_pct = 0.0
@@ -131,15 +135,16 @@ class KBGate:
         # Check if ALL buyer profile archetypes reject this level
         if kb.buyer_profile_ids:
             any_accepts = any(
-                bp.cross_polymer_contam_max_pct
-                and contam_pct <= bp.cross_polymer_contam_max_pct
+                bp.cross_polymer_contam_max_pct and contam_pct <= bp.cross_polymer_contam_max_pct
                 for bp in kb.buyer_profile_ids
             )
             if not any_accepts:
                 max_limit = max(
-                    (bp.cross_polymer_contam_max_pct
-                     for bp in kb.buyer_profile_ids
-                     if bp.cross_polymer_contam_max_pct),
+                    (
+                        bp.cross_polymer_contam_max_pct
+                        for bp in kb.buyer_profile_ids
+                        if bp.cross_polymer_contam_max_pct
+                    ),
                     default=0,
                 )
                 if max_limit and contam_pct > max_limit:
@@ -151,8 +156,7 @@ class KBGate:
 
         return True, "cross_polymer_passed"
 
-    def _check_food_medical_restrictions(self, kb, material,
-                                          facility) -> tuple:
+    def _check_food_medical_restrictions(self, kb, material, facility) -> tuple:
         """Enforce KB food-contact / medical PCR restrictions."""
         for rule in kb.rule_ids:
             rule_id_lower = (rule.rule_id or "").lower()

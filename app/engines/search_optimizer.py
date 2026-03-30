@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 
-class SonarModel(str, Enum):
+class SonarModel(StrEnum):
     SONAR = "sonar"
     SONAR_PRO = "sonar-pro"
     SONAR_REASONING = "sonar-reasoning"
@@ -36,19 +36,19 @@ class SonarModel(str, Enum):
     SONAR_DEEP_RESEARCH = "sonar-deep-research"
 
 
-class SearchContextSize(str, Enum):
+class SearchContextSize(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
 
-class SearchMode(str, Enum):
+class SearchMode(StrEnum):
     WEB = "web"
     ACADEMIC = "academic"
     SEC = "sec"
 
 
-class RecencyFilter(str, Enum):
+class RecencyFilter(StrEnum):
     HOUR = "hour"
     DAY = "day"
     WEEK = "week"
@@ -57,12 +57,12 @@ class RecencyFilter(str, Enum):
     NONE = "none"
 
 
-class MessageStrategy(str, Enum):
+class MessageStrategy(StrEnum):
     SYSTEM_USER = "system_user"
     SYSTEM_USER_ASSISTANT = "system_user_asst"
 
 
-class FieldDifficulty(str, Enum):
+class FieldDifficulty(StrEnum):
     TRIVIAL = "trivial"
     PUBLIC = "public"
     FINDABLE = "findable"
@@ -199,7 +199,7 @@ class EntitySignals:
         gate_fields: set[str] | None = None,
         pass_number: int = 1,
         allocated_tokens: int = 5000,
-    ) -> "EntitySignals":
+    ) -> EntitySignals:
         non_null = {k: v for k, v in entity.items() if v is not None}
         total_fields = len(field_map)
         conf_map = confidence_map or {}

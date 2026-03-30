@@ -21,18 +21,21 @@ from typing import Any
 
 import structlog
 
-from ..models.schemas import EnrichRequest, EnrichResponse
 from ..core.config import Settings
+from ..models.loop_schemas import PassContext
+from ..models.schemas import EnrichRequest, EnrichResponse
 from ..services.idempotency import IdempotencyStore
-from .meta_prompt_planner import MetaPromptPlanner, SearchPlan
+from .convergence.confidence_tracker import ConfidenceTracker  # NEW
+from .convergence.convergence_config import ConvergenceConfig  # NEW
+from .convergence.cost_tracker import CostTracker
+from .field_classifier import DomainClassification, auto_classify_domain
 from .inference_bridge_adapter import InferenceBridge
-from .field_classifier import auto_classify_domain, DomainClassification
+from .meta_prompt_planner import MetaPromptPlanner, PromptPlan
 from .search_optimizer import (
     EntitySignals,
     SonarConfig,
     resolve_from_classification,
 )
-from .convergence.cost_tracker import CostTracker
 
 logger = structlog.get_logger("convergence_controller")
 
@@ -83,9 +86,10 @@ class PassResult:
     inferred_fields: dict[str, Any] = field(default_factory=dict)
     confidence: float = 0.0
     tokens_used: int = 0
-    search_plan: SearchPlan | None = None
+    search_plan: PromptPlan | None = None
     sonar_config: SonarConfig | None = None
     inference_fired: int = 0
+    per_field_confidence: dict[str, float] = field(default_factory=dict)  # NEW
 
 
 @dataclass
@@ -100,6 +104,7 @@ class ConvergenceState:
     converged: bool = False
     convergence_reason: str = ""
     unlock_map: dict[str, float] = field(default_factory=dict)
+    uncertainty_score: float = 1.0
 
 
 async def run_convergence_loop(
@@ -111,6 +116,7 @@ async def run_convergence_loop(
     inference_rules: list[dict] | None = None,
     domain_hints: dict[str, Any] | None = None,
     domain_spec: dict[str, Any] | None = None,
+    convergence_config: ConvergenceConfig | None = None,  # NEW
 ) -> EnrichResponse:
     """
     Multi-pass convergence loop.
@@ -133,14 +139,20 @@ async def run_convergence_loop(
         enrichment_hints from domain YAML (priority_fields, objective_template, etc.)
     domain_spec : dict | None
         Full domain YAML for field classification and search optimization.
+    convergence_config : ConvergenceConfig | None
+        Convergence behavior settings (thresholds, pass limits).
     """
     start = time.monotonic()
     state = ConvergenceState()
-    planner = MetaPromptPlanner()
+    planner = MetaPromptPlanner(domain_spec=domain_spec)
     bridge = InferenceBridge(
         rules=inference_rules or [],
         domain_spec=domain_spec,
     )
+
+    # ── Convergence config ─────────────────────────────────
+    config = convergence_config or ConvergenceConfig()
+    confidence_tracker = ConfidenceTracker(confidence_threshold=config.confidence_threshold)  # NEW
 
     # ── Domain classification (cached per domain) ──────────
     domain_classification: DomainClassification | None = None
@@ -160,7 +172,7 @@ async def run_convergence_loop(
     # Seed known_fields from the entity's existing data
     state.known_fields = {k: v for k, v in request.entity.items() if v is not None}
 
-    for pass_num in range(1, MAX_PASSES + 1):
+    for pass_num in range(1, config.max_passes + 1):
         logger.info(
             "pass_started",
             pass_number=pass_num,
@@ -176,14 +188,16 @@ async def run_convergence_loop(
             break
 
         # --- META-PROMPT PLANNING ---
-        search_plan = planner.plan(
-            entity=state.known_fields,
-            known_fields=state.confidence_map,
-            inferred_fields=state.inferred_fields,
-            domain_hints=domain_hints or {},
-            inference_rule_catalog=bridge.get_rule_catalog(),
+        pass_context = PassContext(
             pass_number=pass_num,
-            unlock_map=state.unlock_map,
+            budget_remaining=cost_tracker.budget_remaining(),
+            previous_uncertainty=state.uncertainty_score,
+        )
+        search_plan: PromptPlan = planner.plan_pass(
+            entity_state=state.known_fields,
+            pass_context=pass_context,
+            field_confidences=confidence_tracker.get_all_confidences(),
+            uncertainty_score=state.uncertainty_score,
         )
 
         # ── Resolve optimal Sonar config for this pass ────
@@ -207,7 +221,7 @@ async def run_convergence_loop(
             )
             sonar_config = resolve_from_classification(
                 search_plan_mode=search_plan.mode,
-                target_fields=search_plan.target_fields or [],
+                target_fields=search_plan.priority_fields or [],
                 signals=signals,
                 classification=domain_classification,
                 budget_tokens=cost_tracker.budget_remaining(),
@@ -254,10 +268,26 @@ async def run_convergence_loop(
             sonar_config=sonar_config,
         )
 
-        # Merge into accumulated state
+        # NEW: Extract per-field confidence from consensus engine
+        per_field_conf = {}
+        if pass_response.feature_vector:
+            per_field_conf = pass_response.feature_vector.get("per_field_confidence", {})
+        pass_result.per_field_confidence = per_field_conf
+
+        # Merge into accumulated state with per-field confidence
         for field_name, value in pass_result.enriched_fields.items():
+            field_conf = per_field_conf.get(field_name, pass_response.confidence)
             state.known_fields[field_name] = value
-            state.confidence_map[field_name] = pass_response.confidence
+            state.confidence_map[field_name] = field_conf
+
+            # NEW: Update confidence tracker
+            confidence_tracker.update_field(
+                name=field_name,
+                value=value,
+                confidence=field_conf,
+                pass_num=pass_num,
+                source="consensus",
+            )
 
         state.total_tokens += pass_result.tokens_used
         cost_tracker.record_pass(pass_num, pass_result.tokens_used)
@@ -273,7 +303,17 @@ async def run_convergence_loop(
         for field_name, value in inference_result.derived_fields.items():
             state.inferred_fields[field_name] = value
             state.known_fields[field_name] = value
-            state.confidence_map[field_name] = inference_result.confidence_map.get(field_name, 0.7)
+            inferred_conf = inference_result.confidence_map.get(field_name, 0.7)
+            state.confidence_map[field_name] = inferred_conf
+
+            # NEW: Update confidence tracker for inferred fields
+            confidence_tracker.update_field(
+                name=field_name,
+                value=value,
+                confidence=inferred_conf,
+                pass_num=pass_num,
+                source="inference",
+            )
 
         if hasattr(inference_result, "unlock_map"):
             state.unlock_map = inference_result.unlock_map
@@ -282,11 +322,29 @@ async def run_convergence_loop(
 
         # --- CONVERGENCE CHECK ---
         if pass_num >= 2:
-            converged, reason = _check_pass_convergence(pass_result, state.pass_results[-2])
-            if converged:
+            # Use confidence tracker convergence logic
+            if confidence_tracker.has_converged():
                 state.converged = True
-                state.convergence_reason = reason
-                logger.info("converged", reason=reason)
+                state.convergence_reason = (
+                    f"all_fields_above_threshold_{config.confidence_threshold}"
+                )
+                logger.info(
+                    "converged_confidence_threshold",
+                    threshold=config.confidence_threshold,
+                    summary=confidence_tracker.get_pass_summary(),
+                )
+                break
+
+            # Check improvement delta
+            if not confidence_tracker.had_meaningful_improvement(config.min_improvement_delta):
+                state.converged = True
+                state.convergence_reason = (
+                    f"insufficient_improvement_delta_{config.min_improvement_delta}"
+                )
+                logger.info(
+                    "converged_insufficient_improvement",
+                    min_delta=config.min_improvement_delta,
+                )
                 break
 
         if search_plan.mode == "verification":
@@ -296,40 +354,27 @@ async def run_convergence_loop(
 
     elapsed = int((time.monotonic() - start) * 1000)
     return _assemble_convergence_response(
-        state, request, elapsed, domain_classification, cost_tracker
+        state, request, elapsed, domain_classification, cost_tracker, confidence_tracker
     )
 
 
 def _rate_from_sonar_config(config: SonarConfig) -> float:
     """Extract cost rate from sonar config for the cost tracker."""
-    from .search_optimizer import MODEL_COST_PER_1K, CONTEXT_COST_MULTIPLIER
+    from .search_optimizer import CONTEXT_COST_MULTIPLIER, MODEL_COST_PER_1K
 
     base = MODEL_COST_PER_1K.get(config.model, 0.005)
     mult = CONTEXT_COST_MULTIPLIER.get(config.search_context_size, 1.0)
     return base * mult
 
 
-def _check_pass_convergence(
-    current: PassResult,
-    prev: PassResult,
-) -> tuple[bool, str]:
-    """Return (converged, reason) by comparing consecutive pass results."""
-    delta = abs(current.confidence - prev.confidence)
-    new_fields = len(current.enriched_fields) + len(current.inferred_fields)
-    prev_fields = len(prev.enriched_fields) + len(prev.inferred_fields)
-    if delta < MIN_DELTA and new_fields <= prev_fields:
-        reason = f"delta={delta:.3f} < {MIN_DELTA}, new_fields={new_fields} <= prev={prev_fields}"
-        return True, reason
-    return False, ""
-
-
 def _assemble_convergence_response(
     state: ConvergenceState,
-    request: "EnrichRequest",
+    request: EnrichRequest,
     elapsed: int,
     domain_classification: DomainClassification | None = None,
     cost_tracker: CostTracker | None = None,
-) -> "EnrichResponse":
+    confidence_tracker: ConfidenceTracker | None = None,  # NEW
+) -> EnrichResponse:
     """Build the final EnrichResponse from accumulated convergence state."""
     enriched_or_inferred: set[str] = set()
     for pr in state.pass_results:
@@ -350,6 +395,7 @@ def _assemble_convergence_response(
             "inferred": list(pr.inferred_fields.keys()),
             "confidence": pr.confidence,
             "rules_fired": pr.inference_fired,
+            "per_field_confidence": pr.per_field_confidence,  # NEW
         }
         if pr.sonar_config:
             entry["sonar_model"] = pr.sonar_config.model.value
@@ -357,7 +403,7 @@ def _assemble_convergence_response(
             entry["sonar_cost"] = pr.sonar_config.estimated_cost_per_call
         pass_inferences.append(entry)
 
-    # Build feature_vector with classification + cost metadata
+    # Build feature_vector with classification + cost + confidence metadata
     feature_vector: dict[str, Any] = {}
     if domain_classification:
         feature_vector["domain_classification"] = domain_classification.to_dict()
@@ -365,6 +411,8 @@ def _assemble_convergence_response(
         feature_vector["cost_summary"] = cost_tracker.to_summary(
             total_fields_discovered=len(final_fields)
         ).model_dump()
+    if confidence_tracker:  # NEW
+        feature_vector["confidence_tracking"] = confidence_tracker.to_dict()
 
     return EnrichResponse(
         fields=final_fields,
@@ -382,17 +430,17 @@ def _assemble_convergence_response(
 
 def _build_pass_request(
     original: EnrichRequest,
-    plan: SearchPlan,
+    plan: PromptPlan,
     state: ConvergenceState,
     pass_num: int = 1,
 ) -> EnrichRequest:
     """Build a pass-specific EnrichRequest from the search plan."""
     enriched_entity = {**original.entity, **state.known_fields, **state.inferred_fields}
 
-    pass_objective = plan.objective or original.objective
+    pass_objective = original.objective
     pass_schema = None
-    if plan.target_fields:
-        pass_schema = {f: "string" for f in plan.target_fields}
+    if plan.priority_fields:
+        pass_schema = dict.fromkeys(plan.priority_fields, "string")
     elif original.schema_:
         pass_schema = original.schema_
 
@@ -401,8 +449,8 @@ def _build_pass_request(
         object_type=original.object_type,
         schema=pass_schema,
         objective=pass_objective,
-        kb_context=plan.kb_context or original.kb_context,
+        kb_context=original.kb_context,
         consensus_threshold=original.consensus_threshold,
-        max_variations=plan.variation_budget or original.max_variations,
+        max_variations=plan.variation_count or original.max_variations,
         idempotency_key=None,
     )

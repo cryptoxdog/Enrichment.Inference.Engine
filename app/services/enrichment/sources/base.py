@@ -58,9 +58,7 @@ class BaseSource(ABC):
         self.config = config
 
     @abstractmethod
-    async def enrich(
-        self, domain: str, payload: dict[str, Any]
-    ) -> EnrichmentResult:
+    async def enrich(self, domain: str, payload: dict[str, Any]) -> EnrichmentResult:
         """
         Perform enrichment for a given domain and payload.
 

@@ -29,7 +29,6 @@ Usage:
 
 import logging
 import os
-from typing import Optional
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
@@ -46,7 +45,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 logger = logging.getLogger(__name__)
 
 
-def setup_telemetry(app, service_name: Optional[str] = None) -> None:
+def setup_telemetry(app, service_name: str | None = None) -> None:
     """
     Configure OpenTelemetry auto-instrumentation for FastAPI.
 

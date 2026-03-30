@@ -10,7 +10,7 @@ which were missing, and the confidence of each input.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from score_models import (
@@ -18,7 +18,6 @@ from score_models import (
     MissingField,
     ScoreRecord,
 )
-
 
 # ── Explanation Models ────────────────────────────────────────
 
@@ -104,7 +103,7 @@ class ScoreExplanation:
     recommendations: list[str] = field(default_factory=list)
     gate_penalty_applied: bool = False
     narrative: str = ""
-    scored_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    scored_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -417,12 +416,12 @@ class ScoreExplainer:
                 "delta": round(dim_after.score - before_score, 4),
             }
 
-        resolved_fields = set(m.field_name for m in before.missing_fields) - set(
+        resolved_fields = {m.field_name for m in before.missing_fields} - {
             m.field_name for m in after.missing_fields
-        )
-        new_missing = set(m.field_name for m in after.missing_fields) - set(
+        }
+        new_missing = {m.field_name for m in after.missing_fields} - {
             m.field_name for m in before.missing_fields
-        )
+        }
 
         return {
             "entity_id": after.entity_id,

@@ -1,17 +1,14 @@
 """
 Tests for WaterfallEngine auto-registration from provider config.
 """
+
 from __future__ import annotations
 
-import os
-import tempfile
-
-import pytest
 import yaml
 
-from app.services.enrichment.waterfall_engine import WaterfallEngine
-from app.services.enrichment.sources.clearbit import ClearbitSource
 from app.services.enrichment.sources.apollo import ApolloSource
+from app.services.enrichment.sources.clearbit import ClearbitSource
+from app.services.enrichment.waterfall_engine import WaterfallEngine
 
 
 class TestAutoRegisterSources:
@@ -124,10 +121,17 @@ class TestAutoRegisterSources:
         engine = WaterfallEngine()
         # Pre-register with old key
         from app.services.enrichment.sources.base import SourceConfig
+
         old_config = SourceConfig(
-            name="clearbit", enabled=True, api_endpoint="https://old.clearbit.com",
-            auth_type="bearer", api_key="old-key", timeout=10, retry_count=1,
-            supported_domains=["company"], quality_tier="standard",
+            name="clearbit",
+            enabled=True,
+            api_endpoint="https://old.clearbit.com",
+            auth_type="bearer",
+            api_key="old-key",
+            timeout=10,
+            retry_count=1,
+            supported_domains=["company"],
+            quality_tier="standard",
         )
         engine.source_clients["clearbit"] = ClearbitSource(config=old_config)
 

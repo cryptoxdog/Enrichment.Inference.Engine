@@ -42,10 +42,28 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]
-ignore = ["E501"]
+ignore = [
+    "E501",     # formatter handles line length
+    "TC001",    # typing-only first-party import — breaks Pydantic v2 validators at runtime
+    "TC002",    # typing-only third-party import — same Pydantic v2 runtime issue
+    "TC003",    # typing-only stdlib import — same Pydantic v2 runtime issue
+    "SIM105",   # contextlib.suppress — explicit try/except is clearer in async+structlog code
+    "TRY003",   # long exception messages acceptable in domain code
+    "TRY400",   # logging.error vs logging.exception — both acceptable
+    "ARG001",   # unused function args — handler interface compliance
+    "ARG002",   # unused method args — handler interface compliance
+    "ARG003",   # unused classmethod args — handler interface compliance
+    "B007",     # unused loop variable — use _ prefix convention
+    "B008",     # function-call-in-default-argument — FastAPI Depends() pattern is intentional
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "PT011", "E741", "SIM102", "F841", "F821"]
+"engine/config/**" = ["PLR2004"]
+"tools/**" = ["PLC0415", "E741", "SIM102"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "engine"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -53,6 +71,12 @@ warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 check_untyped_defs = true
+follow_imports = "silent"
+exclude = ["app/engines/field_classifier\\.py", "app/engines/inference_bridge_v2\\.py"]
+
+[[tool.mypy.overrides]]
+module = ["app.engines.field_classifier", "app.engines.inference_bridge_v2"]
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

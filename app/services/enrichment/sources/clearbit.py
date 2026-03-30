@@ -7,15 +7,15 @@ Maps Clearbit response fields to L9 canonical field names.
 L9 Architecture Note:
     Chassis-agnostic. Implements BaseSource contract.
 """
+
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 import httpx
 
-from .base import BaseSource, EnrichmentResult, SourceConfig
+from .base import BaseSource, EnrichmentResult
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 class ClearbitSource(BaseSource):
     """Clearbit enrichment source for company and contact domains."""
 
-    async def enrich(
-        self, domain: str, payload: dict[str, Any]
-    ) -> EnrichmentResult:
+    async def enrich(self, domain: str, payload: dict[str, Any]) -> EnrichmentResult:
         start = self._now_ms()
 
         if not self.config.enabled:
@@ -59,9 +57,7 @@ class ClearbitSource(BaseSource):
             error="unsupported_domain",
         )
 
-    async def _enrich_company(
-        self, payload: dict[str, Any], start: int
-    ) -> EnrichmentResult:
+    async def _enrich_company(self, payload: dict[str, Any], start: int) -> EnrichmentResult:
         company_domain = payload.get("company_domain", "")
         if not company_domain:
             return EnrichmentResult(
@@ -77,9 +73,7 @@ class ClearbitSource(BaseSource):
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
 
         try:
-            async with httpx.AsyncClient(
-                timeout=self.config.timeout
-            ) as client:
+            async with httpx.AsyncClient(timeout=self.config.timeout) as client:
                 resp = await client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
@@ -104,9 +98,7 @@ class ClearbitSource(BaseSource):
             latency_ms=self._now_ms() - start,
         )
 
-    async def _enrich_contact(
-        self, payload: dict[str, Any], start: int
-    ) -> EnrichmentResult:
+    async def _enrich_contact(self, payload: dict[str, Any], start: int) -> EnrichmentResult:
         email = payload.get("contact_email", "")
         if not email:
             return EnrichmentResult(
@@ -122,9 +114,7 @@ class ClearbitSource(BaseSource):
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
 
         try:
-            async with httpx.AsyncClient(
-                timeout=self.config.timeout
-            ) as client:
+            async with httpx.AsyncClient(timeout=self.config.timeout) as client:
                 resp = await client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()

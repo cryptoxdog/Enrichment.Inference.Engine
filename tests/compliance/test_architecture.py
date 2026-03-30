@@ -7,6 +7,7 @@ Rules enforced:
 - Enum classes use str mixin
 - Every subsystem has a models file
 """
+
 from pathlib import Path
 
 import pytest

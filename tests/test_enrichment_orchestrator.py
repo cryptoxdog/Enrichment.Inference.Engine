@@ -8,8 +8,9 @@ Source: ~350 lines | Target coverage: 70%
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.engines.enrichment_orchestrator import enrich_entity
 from app.models.schemas import EnrichRequest, EnrichResponse

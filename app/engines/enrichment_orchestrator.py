@@ -200,6 +200,9 @@ async def enrich_entity(
 
         schema_hash = build_schema_hash(target_schema)
 
+        # NEW: Extract per-field confidence from synthesis
+        per_field_confidence = synthesis.get("per_field_confidence", {})
+
         resp = EnrichResponse(
             fields=synthesis["fields"],
             confidence=round(synthesis["confidence"], 4),
@@ -216,6 +219,7 @@ async def enrich_entity(
             feature_vector={
                 "schema_hash": schema_hash,
                 "fields_enriched": list(synthesis["fields"].keys()),
+                "per_field_confidence": per_field_confidence,  # NEW
             },
             state="completed",
         )

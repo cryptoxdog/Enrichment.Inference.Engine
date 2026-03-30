@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "feature/**"]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ─── Linting & Static Analysis ────────────────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles("**/pyproject.toml") }}
+
+      - name: Install dev dependencies
+        run: |
+          pip install --upgrade pip
+          pip install poetry
+          poetry install --with dev --no-interaction
+
+      - name: Ruff lint
+        run: poetry run ruff check app/ tests/
+
+      - name: Ruff format check
+        run: poetry run ruff format --check app/ tests/
+
+      - name: mypy type check
+        run: poetry run mypy app/ --ignore-missing-imports
+
+  # ─── Unit Tests ───────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install --no-interaction
+
+      - name: Run unit tests
+        run: |
+          poetry run pytest tests/unit/ -v --tb=short             --cov=app --cov-report=xml --cov-report=term-missing
+        env:
+          ENRICH_API_KEY: test-key
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: testpassword
+          PERPLEXITY_API_KEY: test-key
+          DATABASE_URL: "postgresql+asyncpg://test:test@localhost/test"
+          REDIS_URL: "redis://localhost:6379"
+          LOG_LEVEL: DEBUG
+          DOMAINS_DIR: ./domains
+          INTER_NODE_SECRET: test-secret
+          GRAPH_NODE_URL: http://localhost:8001
+          SCORE_NODE_URL: http://localhost:8002
+          ROUTE_NODE_URL: http://localhost:8003
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: coverage.xml
+
+  # ─── Integration Tests ────────────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -q http://localhost:7474 -O /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install --no-interaction
+
+      - name: Wait for Neo4j
+        run: |
+          until curl -s http://localhost:7474 > /dev/null; do sleep 2; done
+
+      - name: Run integration tests
+        run: |
+          poetry run pytest tests/integration/ -v --tb=short -x
+        env:
+          ENRICH_API_KEY: test-key
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: testpassword
+          PERPLEXITY_API_KEY: test-key
+          DATABASE_URL: "postgresql+asyncpg://test:test@localhost/test"
+          REDIS_URL: "redis://localhost:6379"
+          LOG_LEVEL: DEBUG
+          DOMAINS_DIR: ./domains
+          INTER_NODE_SECRET: test-secret
+          GRAPH_NODE_URL: http://localhost:8001
+          SCORE_NODE_URL: http://localhost:8002
+          ROUTE_NODE_URL: http://localhost:8003
+
+  # ─── Security Scan ────────────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: |
+          semgrep --config=auto app/             --severity=ERROR             --output=semgrep_results.json             --json || true
+
+      - name: Check for hardcoded secrets
+        run: |
+          grep -rn "api_key\s*=\s*['"]sk-" app/ && exit 1 || true
+          grep -rn "password\s*=\s*['"][^{]" app/ && exit 1 || true
+
+  # ─── Build Docker Image ───────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: l9-enrich:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

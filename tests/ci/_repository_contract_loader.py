@@ -5,14 +5,14 @@ and returns typed in-memory models for the AST-scanning test engine.
 
 Adapted for Enrichment.Inference.Engine from L9 10X CI pack.
 """
+
 from __future__ import annotations
 
 import dataclasses
+import logging
 import pathlib
 
 import yaml
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -87,13 +87,15 @@ class CatalogValidationError(Exception):
 
 # ── Loader ───────────────────────────────────────────────────
 
-_REQUIRED_TOP_KEYS = frozenset({
-    "schema_version",
-    "scan",
-    "pairs",
-    "dynamic_sources",
-    "baseline",
-})
+_REQUIRED_TOP_KEYS = frozenset(
+    {
+        "schema_version",
+        "scan",
+        "pairs",
+        "dynamic_sources",
+        "baseline",
+    }
+)
 
 
 def _validate_raw(raw: dict) -> None:
@@ -225,9 +227,7 @@ def load_catalog(catalog_path: pathlib.Path | None = None) -> ContractCatalog:
     if catalog_path is None:
         from tests.ci._scan_utils import get_repo_root
 
-        catalog_path = (
-            get_repo_root() / "config" / "contracts" / "repository_contract_pairs.yaml"
-        )
+        catalog_path = get_repo_root() / "config" / "contracts" / "repository_contract_pairs.yaml"
 
     if not catalog_path.is_file():
         msg = f"Catalog file not found: {catalog_path}"

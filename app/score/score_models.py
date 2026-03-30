@@ -10,17 +10,16 @@ from __future__ import annotations
 
 import math
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ── Enums ─────────────────────────────────────────────────────
 
 
-class ScoreDimension(str, Enum):
+class ScoreDimension(StrEnum):
     FIT = "fit"
     INTENT = "intent"
     ENGAGEMENT = "engagement"
@@ -28,7 +27,7 @@ class ScoreDimension(str, Enum):
     GRAPH_AFFINITY = "graph_affinity"
 
 
-class ScoreSource(str, Enum):
+class ScoreSource(StrEnum):
     ENRICHMENT = "enrichment"
     GRAPH = "graph"
     SIGNAL = "signal"
@@ -36,7 +35,7 @@ class ScoreSource(str, Enum):
     INFERENCE = "inference"
 
 
-class ScoreTier(str, Enum):
+class ScoreTier(StrEnum):
     HOT = "hot"
     WARM = "warm"
     COOL = "cool"
@@ -44,7 +43,7 @@ class ScoreTier(str, Enum):
     DISQUALIFIED = "disqualified"
 
 
-class ICPFieldType(str, Enum):
+class ICPFieldType(StrEnum):
     EXACT_MATCH = "exact_match"
     RANGE = "range"
     CONTAINS = "contains"
@@ -52,7 +51,7 @@ class ICPFieldType(str, Enum):
     WEIGHTED_SET = "weighted_set"
 
 
-class RecommendationType(str, Enum):
+class RecommendationType(StrEnum):
     ENRICH_FIELD = "enrich_field"
     VERIFY_FIELD = "verify_field"
     CAPTURE_SIGNAL = "capture_signal"
@@ -136,7 +135,7 @@ class ScoreRecord(BaseModel):
     tier: ScoreTier = ScoreTier.COLD
     field_contributions: list[FieldContribution] = Field(default_factory=list)
     missing_fields: list[MissingField] = Field(default_factory=list)
-    scored_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    scored_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     decayed_composite: float | None = None
     decay_applied_at: datetime | None = None
     provenance: ScoreProvenance = Field(default_factory=ScoreProvenance)
@@ -181,7 +180,7 @@ class ICPDefinition(BaseModel):
     description: str = ""
     criteria: list[ICPFieldCriterion] = Field(default_factory=list)
     version: str = "1.0.0"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def gate_criteria(self) -> list[ICPFieldCriterion]:
@@ -266,8 +265,8 @@ class ScoringProfile(BaseModel):
         ge=1, default=3, description="Minimum present fields to produce a score (else disqualified)"
     )
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def get_weight(self, dimension: ScoreDimension) -> float:
         return self.dimension_weights.get(dimension, 0.0)

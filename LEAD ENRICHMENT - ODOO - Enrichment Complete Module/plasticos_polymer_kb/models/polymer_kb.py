@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """Master polymer knowledge-base record.
 
 One record per polymer type (PP, HDPE, ...).  Owns all sub-records via
 One2many relations.  Provides ``load_from_yaml()`` for import and
 ``action_sync_to_graph()`` for Neo4j push.
 """
+
 import logging
 
 from odoo import api, fields, models
@@ -23,11 +23,13 @@ class PlasticosPolymerKB(models.Model):
     # Fields
     # ------------------------------------------------------------------
     polymer_type = fields.Char(
-        required=True, index=True,
+        required=True,
+        index=True,
         help="Short code: PP, HDPE, LDPE, PET ...",
     )
     polymer_id = fields.Many2one(
-        "plasticos.polymer", string="Polymer Registry",
+        "plasticos.polymer",
+        string="Polymer Registry",
         help="Link to plasticos.polymer master record.",
     )
     full_name = fields.Char()
@@ -49,28 +51,38 @@ class PlasticosPolymerKB(models.Model):
 
     # Sub-records
     grade_ids = fields.One2many(
-        "plasticos.polymer.kb.grade", "kb_id", string="Material Grades",
+        "plasticos.polymer.kb.grade",
+        "kb_id",
+        string="Material Grades",
     )
     tier_ids = fields.One2many(
-        "plasticos.polymer.kb.tier", "kb_id", string="Quality Tiers",
+        "plasticos.polymer.kb.tier",
+        "kb_id",
+        string="Quality Tiers",
     )
     rule_ids = fields.One2many(
-        "plasticos.polymer.kb.rule", "kb_id", string="Recycling Rules",
+        "plasticos.polymer.kb.rule",
+        "kb_id",
+        string="Recycling Rules",
     )
     buyer_profile_ids = fields.One2many(
-        "plasticos.polymer.kb.buyer.profile", "kb_id",
+        "plasticos.polymer.kb.buyer.profile",
+        "kb_id",
         string="KB Buyer Profiles",
     )
     inference_rule_ids = fields.One2many(
-        "plasticos.polymer.kb.inference.rule", "kb_id",
+        "plasticos.polymer.kb.inference.rule",
+        "kb_id",
         string="Inference Rules",
     )
     contamination_profile_ids = fields.One2many(
-        "plasticos.polymer.kb.contamination.profile", "kb_id",
+        "plasticos.polymer.kb.contamination.profile",
+        "kb_id",
         string="Contamination Profiles",
     )
     product_mapping_ids = fields.One2many(
-        "plasticos.polymer.kb.product.mapping", "kb_id",
+        "plasticos.polymer.kb.product.mapping",
+        "kb_id",
         string="Product-Scrap Mappings",
     )
 
@@ -80,9 +92,7 @@ class PlasticosPolymerKB(models.Model):
     @api.depends("polymer_type", "version")
     def _compute_display_name(self):
         for rec in self:
-            rec.display_name = (
-                f"{rec.polymer_type or '?'} KB v{rec.version or '0'}"
-            )
+            rec.display_name = f"{rec.polymer_type or '?'} KB v{rec.version or '0'}"
 
     # ------------------------------------------------------------------
     # YAML Import
@@ -144,15 +154,17 @@ class PlasticosPolymerKB(models.Model):
     # Private sync helpers
     # ------------------------------------------------------------------
     def _sync_metadata(self, meta):
-        self.write({
-            "full_name": meta.get("full_name", ""),
-            "resin_id_code": meta.get("resin_id_code", 0),
-            "polymer_family": meta.get("polymer_family", ""),
-            "structure": meta.get("structure", ""),
-            "source_tier": meta.get("source_tier", ""),
-            "note": meta.get("note", ""),
-            "last_updated": meta.get("last_updated") or False,
-        })
+        self.write(
+            {
+                "full_name": meta.get("full_name", ""),
+                "resin_id_code": meta.get("resin_id_code", 0),
+                "polymer_family": meta.get("polymer_family", ""),
+                "structure": meta.get("structure", ""),
+                "source_tier": meta.get("source_tier", ""),
+                "note": meta.get("note", ""),
+                "last_updated": meta.get("last_updated") or False,
+            }
+        )
 
     def _sync_grades(self, grades_list):
         Grade = self.env["plasticos.polymer.kb.grade"]
@@ -165,112 +177,118 @@ class PlasticosPolymerKB(models.Model):
             pcr = g.get("pcr_compatibility") or {}
             mi_min, mi_max = self._extract_range(mfr)
             d_min, d_max = self._extract_range(dens, key="value_g_cm3")
-            Grade.create({
-                "kb_id": self.id,
-                "grade_id": g.get("grade_id", ""),
-                "grade_name": g.get("grade_name", ""),
-                "description": g.get("description", ""),
-                "grade_type": g.get("type", "virgin"),
-                "polymer_structure": g.get("polymer_structure", ""),
-                "mi_min": mi_min,
-                "mi_max": mi_max,
-                "density_min": d_min,
-                "density_max": d_max,
-                "tensile_strength_min": (
-                    mech.get("tensile_strength_mpa", [None])[0]
-                    if isinstance(mech.get("tensile_strength_mpa"), list)
-                    else mech.get("tensile_strength_mpa")
-                ) or 0.0,
-                "impact_strength_min": (
-                    mech.get("impact_strength_j_m", [None])[0]
-                    if isinstance(mech.get("impact_strength_j_m"), list)
-                    else mech.get("impact_strength_j_m")
-                ) or 0.0,
-                "processing_temp_min": (
-                    therm.get("processing_temp_c", [None])[0]
-                    if isinstance(therm.get("processing_temp_c"), list)
-                    else therm.get("processing_temp_c")
-                ) or 0.0,
-                "processing_temp_max": (
-                    therm.get("processing_temp_c", [None, None])[-1]
-                    if isinstance(therm.get("processing_temp_c"), list)
-                    else therm.get("processing_temp_c")
-                ) or 0.0,
-                "max_pcr_pct": pcr.get("max_pcr_pct", 0.0) or 0.0,
-            })
+            Grade.create(
+                {
+                    "kb_id": self.id,
+                    "grade_id": g.get("grade_id", ""),
+                    "grade_name": g.get("grade_name", ""),
+                    "description": g.get("description", ""),
+                    "grade_type": g.get("type", "virgin"),
+                    "polymer_structure": g.get("polymer_structure", ""),
+                    "mi_min": mi_min,
+                    "mi_max": mi_max,
+                    "density_min": d_min,
+                    "density_max": d_max,
+                    "tensile_strength_min": (
+                        mech.get("tensile_strength_mpa", [None])[0]
+                        if isinstance(mech.get("tensile_strength_mpa"), list)
+                        else mech.get("tensile_strength_mpa")
+                    )
+                    or 0.0,
+                    "impact_strength_min": (
+                        mech.get("impact_strength_j_m", [None])[0]
+                        if isinstance(mech.get("impact_strength_j_m"), list)
+                        else mech.get("impact_strength_j_m")
+                    )
+                    or 0.0,
+                    "processing_temp_min": (
+                        therm.get("processing_temp_c", [None])[0]
+                        if isinstance(therm.get("processing_temp_c"), list)
+                        else therm.get("processing_temp_c")
+                    )
+                    or 0.0,
+                    "processing_temp_max": (
+                        therm.get("processing_temp_c", [None, None])[-1]
+                        if isinstance(therm.get("processing_temp_c"), list)
+                        else therm.get("processing_temp_c")
+                    )
+                    or 0.0,
+                    "max_pcr_pct": pcr.get("max_pcr_pct", 0.0) or 0.0,
+                }
+            )
 
     def _sync_tiers(self, tiers_dict):
         Tier = self.env["plasticos.polymer.kb.tier"]
         Tier.search([("kb_id", "=", self.id)]).unlink()
         for key, t in tiers_dict.items():
-            Tier.create({
-                "kb_id": self.id,
-                "tier_key": key,
-                "definition": t.get("definition", ""),
-                "contamination_max_pct": t.get("contamination_max_pct", 0),
-                "cross_polymer_contam_max_pct": (
-                    t.get("pp_contamination_max_pct")
-                    or t.get("pe_contamination_max_pct")
-                    or 0.0
-                ),
-                "moisture_max_pct": t.get("moisture_max_pct", 0),
-                "moisture_max_ppm": t.get("moisture_max_ppm", 0),
-                "ash_max_pct": t.get("ash_max_pct", 0),
-                "property_retention_min_pct": t.get("property_retention_min_pct", 0),
-                "sorting_purity_min_pct": t.get("sorting_purity_min_pct", 0),
-                "processing_history": t.get("processing_history", ""),
-                "mi_change_max_pct": (
-                    t.get("mi_change_max_pct")
-                    or t.get("mfr_increase_max_pct")
-                    or 0.0
-                ),
-            })
+            Tier.create(
+                {
+                    "kb_id": self.id,
+                    "tier_key": key,
+                    "definition": t.get("definition", ""),
+                    "contamination_max_pct": t.get("contamination_max_pct", 0),
+                    "cross_polymer_contam_max_pct": (
+                        t.get("pp_contamination_max_pct")
+                        or t.get("pe_contamination_max_pct")
+                        or 0.0
+                    ),
+                    "moisture_max_pct": t.get("moisture_max_pct", 0),
+                    "moisture_max_ppm": t.get("moisture_max_ppm", 0),
+                    "ash_max_pct": t.get("ash_max_pct", 0),
+                    "property_retention_min_pct": t.get("property_retention_min_pct", 0),
+                    "sorting_purity_min_pct": t.get("sorting_purity_min_pct", 0),
+                    "processing_history": t.get("processing_history", ""),
+                    "mi_change_max_pct": (
+                        t.get("mi_change_max_pct") or t.get("mfr_increase_max_pct") or 0.0
+                    ),
+                }
+            )
 
     def _sync_rules(self, rules_list):
         Rule = self.env["plasticos.polymer.kb.rule"]
         Rule.search([("kb_id", "=", self.id)]).unlink()
         for r in rules_list:
-            Rule.create({
-                "kb_id": self.id,
-                "rule_id": r.get("rule_id", ""),
-                "material_type": r.get("material_type", ""),
-                "rule_text": r.get("rule", ""),
-                "reasoning": r.get("reasoning", ""),
-                "confidence": r.get("confidence", 0.0),
-                "safety_critical": r.get("safety_critical", False),
-                "action": r.get("action", ""),
-                "threshold_value": (
-                    r.get("pvc_contamination_max_ppm")
-                    or r.get("pp_contamination_max_pct")
-                    or r.get("pe_contamination_max_pct")
-                    or r.get("moisture_max_ppm")
-                    or 0.0
-                ),
-                "threshold_unit": (
-                    "ppm" if r.get("pvc_contamination_max_ppm")
-                    or r.get("moisture_max_ppm")
-                    else "pct"
-                ),
-            })
+            Rule.create(
+                {
+                    "kb_id": self.id,
+                    "rule_id": r.get("rule_id", ""),
+                    "material_type": r.get("material_type", ""),
+                    "rule_text": r.get("rule", ""),
+                    "reasoning": r.get("reasoning", ""),
+                    "confidence": r.get("confidence", 0.0),
+                    "safety_critical": r.get("safety_critical", False),
+                    "action": r.get("action", ""),
+                    "threshold_value": (
+                        r.get("pvc_contamination_max_ppm")
+                        or r.get("pp_contamination_max_pct")
+                        or r.get("pe_contamination_max_pct")
+                        or r.get("moisture_max_ppm")
+                        or 0.0
+                    ),
+                    "threshold_unit": (
+                        "ppm"
+                        if r.get("pvc_contamination_max_ppm") or r.get("moisture_max_ppm")
+                        else "pct"
+                    ),
+                }
+            )
 
     def _sync_contamination_profiles(self, profiles_list):
         CP = self.env["plasticos.polymer.kb.contamination.profile"]
         CP.search([("kb_id", "=", self.id)]).unlink()
         for p in profiles_list:
-            CP.create({
-                "kb_id": self.id,
-                "profile_id": p.get("profile_id", ""),
-                "source": p.get("source", ""),
-                "contamination_level": p.get("contamination_level", ""),
-                "quality_tier": p.get("quality_tier", 0),
-                "sorting_purity_pct": p.get("sorting_purity_pct", 0),
-                "typical_contaminants": "\n".join(
-                    p.get("typical_contaminants", [])
-                ),
-                "suitable_applications": "\n".join(
-                    p.get("suitable_applications", [])
-                ),
-            })
+            CP.create(
+                {
+                    "kb_id": self.id,
+                    "profile_id": p.get("profile_id", ""),
+                    "source": p.get("source", ""),
+                    "contamination_level": p.get("contamination_level", ""),
+                    "quality_tier": p.get("quality_tier", 0),
+                    "sorting_purity_pct": p.get("sorting_purity_pct", 0),
+                    "typical_contaminants": "\n".join(p.get("typical_contaminants", [])),
+                    "suitable_applications": "\n".join(p.get("suitable_applications", [])),
+                }
+            )
 
     def _sync_buyer_profiles(self, profiles_list):
         BP = self.env["plasticos.polymer.kb.buyer.profile"]
@@ -283,50 +301,54 @@ class PlasticosPolymerKB(models.Model):
             mi_max = mi_range[-1] if isinstance(mi_range, list) else 0.0
             vol = bp.get("volume_range_tons_month", [0, 0])
             tiers = reqs.get("quality_tier_required", [])
-            BP.create({
-                "kb_id": self.id,
-                "buyer_id": bp.get("buyer_id", ""),
-                "buyer_type": bp.get("buyer_type", ""),
-                "industry_segment": bp.get("industry_segment", ""),
-                "polymer_types": ",".join(reqs.get("polymer_types", [])),
-                "purity_min_pct": reqs.get("purity_min_pct", 0),
-                "max_pcr_pct": reqs.get("max_pcr_pct", 0),
-                "quality_tiers_required": ",".join(str(t) for t in tiers),
-                "cross_polymer_contam_max_pct": (
-                    reqs.get("pp_contamination_max_pct")
-                    or reqs.get("pe_contamination_max_pct")
-                    or 0.0
-                ),
-                "pvc_contamination_max_ppm": reqs.get("pvc_contamination_max_ppm", 0),
-                "color_preference": reqs.get("color_preference", ""),
-                "form_preference": reqs.get("form_preference", ""),
-                "mi_min": mi_min or 0.0,
-                "mi_max": mi_max or 0.0,
-                "contamination_max_pct": specs.get("contamination_max_pct", 0),
-                "density_min": specs.get("density_min_g_cm3", 0),
-                "volume_min_tons": vol[0] if isinstance(vol, list) else 0,
-                "volume_max_tons": vol[-1] if isinstance(vol, list) else 0,
-                "applications": "\n".join(bp.get("applications", [])),
-                "certifications_required": "\n".join(
-                    bp.get("certifications_required")
-                    or reqs.get("certifications_required", [])
-                    or specs.get("certifications_required", [])
-                    or []
-                ),
-            })
+            BP.create(
+                {
+                    "kb_id": self.id,
+                    "buyer_id": bp.get("buyer_id", ""),
+                    "buyer_type": bp.get("buyer_type", ""),
+                    "industry_segment": bp.get("industry_segment", ""),
+                    "polymer_types": ",".join(reqs.get("polymer_types", [])),
+                    "purity_min_pct": reqs.get("purity_min_pct", 0),
+                    "max_pcr_pct": reqs.get("max_pcr_pct", 0),
+                    "quality_tiers_required": ",".join(str(t) for t in tiers),
+                    "cross_polymer_contam_max_pct": (
+                        reqs.get("pp_contamination_max_pct")
+                        or reqs.get("pe_contamination_max_pct")
+                        or 0.0
+                    ),
+                    "pvc_contamination_max_ppm": reqs.get("pvc_contamination_max_ppm", 0),
+                    "color_preference": reqs.get("color_preference", ""),
+                    "form_preference": reqs.get("form_preference", ""),
+                    "mi_min": mi_min or 0.0,
+                    "mi_max": mi_max or 0.0,
+                    "contamination_max_pct": specs.get("contamination_max_pct", 0),
+                    "density_min": specs.get("density_min_g_cm3", 0),
+                    "volume_min_tons": vol[0] if isinstance(vol, list) else 0,
+                    "volume_max_tons": vol[-1] if isinstance(vol, list) else 0,
+                    "applications": "\n".join(bp.get("applications", [])),
+                    "certifications_required": "\n".join(
+                        bp.get("certifications_required")
+                        or reqs.get("certifications_required", [])
+                        or specs.get("certifications_required", [])
+                        or []
+                    ),
+                }
+            )
 
     def _sync_inference_rules(self, rules_list):
         IR = self.env["plasticos.polymer.kb.inference.rule"]
         IR.search([("kb_id", "=", self.id)]).unlink()
         for r in rules_list:
-            IR.create({
-                "kb_id": self.id,
-                "rule_id": r.get("rule_id", ""),
-                "inference_type": r.get("inference_type", ""),
-                "logic": r.get("logic", ""),
-                "reasoning": r.get("reasoning", ""),
-                "confidence": r.get("confidence", 0.0),
-            })
+            IR.create(
+                {
+                    "kb_id": self.id,
+                    "rule_id": r.get("rule_id", ""),
+                    "inference_type": r.get("inference_type", ""),
+                    "logic": r.get("logic", ""),
+                    "reasoning": r.get("reasoning", ""),
+                    "confidence": r.get("confidence", 0.0),
+                }
+            )
 
     def _sync_product_mappings(self, mapping_dict):
         PM = self.env["plasticos.polymer.kb.product.mapping"]
@@ -337,28 +359,22 @@ class PlasticosPolymerKB(models.Model):
             for item in items:
                 tiers = item.get("scrap_quality_tier", [])
                 contam = item.get("typical_contamination_pct", [0, 0])
-                PM.create({
-                    "kb_id": self.id,
-                    "category": category,
-                    "product": item.get("product", ""),
-                    "scrap_grade": item.get("scrap_grade", ""),
-                    "quality_tier_min": tiers[0] if tiers else 0,
-                    "quality_tier_max": tiers[-1] if tiers else 0,
-                    "contamination_min_pct": (
-                        contam[0] if isinstance(contam, list) else 0
-                    ),
-                    "contamination_max_pct": (
-                        contam[-1] if isinstance(contam, list) else 0
-                    ),
-                    "typical_contaminants": "\n".join(
-                        item.get("typical_contaminants", [])
-                    ),
-                    "suitable_buyers": ",".join(
-                        item.get("suitable_buyers", [])
-                    ),
-                    "reverse_reasoning": item.get("reverse_reasoning", ""),
-                    "note": item.get("note", ""),
-                })
+                PM.create(
+                    {
+                        "kb_id": self.id,
+                        "category": category,
+                        "product": item.get("product", ""),
+                        "scrap_grade": item.get("scrap_grade", ""),
+                        "quality_tier_min": tiers[0] if tiers else 0,
+                        "quality_tier_max": tiers[-1] if tiers else 0,
+                        "contamination_min_pct": (contam[0] if isinstance(contam, list) else 0),
+                        "contamination_max_pct": (contam[-1] if isinstance(contam, list) else 0),
+                        "typical_contaminants": "\n".join(item.get("typical_contaminants", [])),
+                        "suitable_buyers": ",".join(item.get("suitable_buyers", [])),
+                        "reverse_reasoning": item.get("reverse_reasoning", ""),
+                        "note": item.get("note", ""),
+                    }
+                )
 
     # ------------------------------------------------------------------
     # Neo4j sync
@@ -369,6 +385,7 @@ class PlasticosPolymerKB(models.Model):
         graph = self.env["plasticos.graph.service"]
         try:
             from ..services.kb_graph_sync import sync_kb_to_graph
+
             sync_kb_to_graph(graph, self)
         except Exception as e:
             raise UserError(f"Neo4j KB sync failed: {e}")

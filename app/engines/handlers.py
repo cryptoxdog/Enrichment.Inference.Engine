@@ -25,14 +25,15 @@ import aiofiles
 import structlog
 
 from ..core.config import get_settings
+from ..engines.convergence.convergence_config import ConvergenceConfig  # NEW
 from ..engines.convergence_controller import run_convergence_loop
 from ..engines.enrichment_orchestrator import enrich_batch, enrich_entity
 from ..engines.schema_discovery import SchemaDiscoveryEngine
 from ..models.schemas import BatchEnrichRequest, EnrichRequest
-from ..services.domain_yaml_reader import DomainYamlReader
-from ..services.idempotency import IdempotencyStore
 from ..services.crm.base import CRMType
 from ..services.crm.writeback import WriteBackOrchestrator
+from ..services.domain_yaml_reader import DomainYamlReader
+from ..services.idempotency import IdempotencyStore
 from ..services.kbresolver import KBResolver
 
 logger = structlog.get_logger("handlers")
@@ -84,20 +85,31 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
 
     domain_hints: dict[str, Any] = {}
     inference_rules: list[dict] = []
+    domain_spec: dict[str, Any] = {}
 
     domain_id = payload.get("domain_id")
     node_label = payload.get("node_label")
     if domain_id and node_label and _domain_reader:
         domain_hints = _domain_reader.get_enrichment_hints(domain_id, node_label)
         config = _domain_reader.load(domain_id)
+        domain_spec = config.to_dict() if hasattr(config, "to_dict") else {}
         if config.inference_rules_path:
-            import yaml
             from pathlib import Path
+
+            import yaml
 
             rules_path = Path(config.inference_rules_path)
             if rules_path.exists():
-                with aiofiles.open(rules_path) as f:
-                    inference_rules = yaml.safe_load(f) or []
+                async with aiofiles.open(rules_path) as f:
+                    content = await f.read()
+                    inference_rules = yaml.safe_load(content) or []
+
+    # NEW: Extract convergence_config from payload
+    convergence_config = None
+    if "convergence_config" in payload:
+        convergence_config = ConvergenceConfig.from_dict(payload["convergence_config"])
+    elif domain_id:
+        convergence_config = ConvergenceConfig.from_domain_yaml(domain_id)
 
     response = await run_convergence_loop(
         request=request,
@@ -106,6 +118,8 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
         idem_store=_idem,
         inference_rules=inference_rules,
         domain_hints=domain_hints,
+        domain_spec=domain_spec,
+        convergence_config=convergence_config,  # NEW
     )
     return response.model_dump()
 
@@ -124,7 +138,7 @@ async def handle_discover(tenant: str, payload: dict[str, Any]) -> dict[str, Any
     proposal = engine.analyze(
         enriched_fields=response.fields or {},
         inferred_fields={},
-        confidence_map={f: response.confidence for f in (response.fields or {})},
+        confidence_map=dict.fromkeys(response.fields or {}, response.confidence),
     )
 
     return {
@@ -162,15 +176,16 @@ async def handle_writeback(tenant: str, payload: dict[str, Any]) -> dict[str, An
     domain = payload.get("domain", "company")
     canonical = payload.get("canonical", {})
     crm_type_str = payload.get("crm_type", "odoo")
-    credentials = payload.get("credentials", {
-        "url": settings.odoo_url,
-        "db": settings.odoo_db,
-        "username": settings.odoo_username,
-        "password": settings.odoo_password,
-    })
-    mapping_path = payload.get(
-        "mapping_path", "config/crm/odoo_mapping.yaml"
+    credentials = payload.get(
+        "credentials",
+        {
+            "url": settings.odoo_url,
+            "db": settings.odoo_db,
+            "username": settings.odoo_username,
+            "password": settings.odoo_password,
+        },
     )
+    mapping_path = payload.get("mapping_path", "config/crm/odoo_mapping.yaml")
 
     crm_type = CRMType(crm_type_str)
     orchestrator = WriteBackOrchestrator(

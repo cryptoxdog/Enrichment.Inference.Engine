@@ -1,10 +1,10 @@
 """Pydantic request/response schemas."""
 
 from .schemas import (
-    EnrichRequest,
-    EnrichResponse,
     BatchEnrichRequest,
     BatchEnrichResponse,
+    EnrichRequest,
+    EnrichResponse,
     HealthCheckResponse,
 )
 

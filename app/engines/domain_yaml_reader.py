@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
 import structlog
+import yaml
 
 logger = structlog.get_logger("domain_yaml_reader")
 

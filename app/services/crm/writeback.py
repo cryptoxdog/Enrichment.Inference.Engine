@@ -82,9 +82,8 @@ class WriteBackOrchestrator:
         elif domain == "contact":
             if "email" in crm_payload:
                 filters["email"] = crm_payload["email"]
-        elif domain == "opportunity":
-            if "id" in crm_payload:
-                return str(crm_payload["id"])
+        elif domain == "opportunity" and "id" in crm_payload:
+            return str(crm_payload["id"])
 
         if not filters:
             return None
@@ -96,9 +95,7 @@ class WriteBackOrchestrator:
                 if len(clause) == 3:
                     filters[clause[0]] = clause[2]
 
-        recs = self.client.query_records(
-            crm_object, filters, fields=["id"]
-        )
+        recs = self.client.query_records(crm_object, filters, fields=["id"])
         if not recs:
             return None
         return str(recs[0].get("id", ""))
@@ -126,13 +123,9 @@ class WriteBackOrchestrator:
                 domain=domain,
                 crm_type=self.crm_type.value,
             )
-            return WriteResult(
-                success=False, error="empty_payload_after_mapping"
-            )
+            return WriteResult(success=False, error="empty_payload_after_mapping")
 
-        existing_id = self._detect_existing_record(
-            domain, crm_object, crm_payload
-        )
+        existing_id = self._detect_existing_record(domain, crm_object, crm_payload)
 
         if existing_id:
             logger.info(
@@ -142,9 +135,7 @@ class WriteBackOrchestrator:
                 record_id=existing_id,
                 field_count=len(crm_payload),
             )
-            return self.client.update_record(
-                crm_object, existing_id, crm_payload
-            )
+            return self.client.update_record(crm_object, existing_id, crm_payload)
 
         logger.info(
             "writeback_create",

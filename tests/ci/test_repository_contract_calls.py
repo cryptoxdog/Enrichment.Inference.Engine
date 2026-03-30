@@ -12,6 +12,7 @@ Features:
 - Per-pair drift tracking with baseline_callsites.
 - Dynamic pattern matching against catalog allow_patterns.
 """
+
 from __future__ import annotations
 
 import ast
@@ -20,7 +21,6 @@ import json
 import logging
 import pathlib
 from collections import defaultdict
-from datetime import datetime, timezone
 
 import pytest
 
@@ -363,13 +363,21 @@ def contract_scan_results(
 
     logger.info(
         "contract_scan_snapshot total=%d valid=%d invalid=%d proven=%d unproven=%d files=%d",
-        total, len(all_valid), len(all_invalid), len(all_proven), len(all_unproven), len(py_files),
+        total,
+        len(all_valid),
+        len(all_invalid),
+        len(all_proven),
+        len(all_unproven),
+        len(py_files),
     )
 
     for dyn in all_unproven:
         logger.warning(
             "contract_dynamic_unproven file=%s line=%s method=%s param=%s",
-            dyn["file"], dyn["line"], dyn["method"], dyn["param"],
+            dyn["file"],
+            dyn["line"],
+            dyn["method"],
+            dyn["param"],
         )
 
     return {
@@ -415,9 +423,9 @@ class TestRepositoryContractCalls:
     ) -> None:
         """Every pair has at least one allowed literal value."""
         for pair in contract_catalog.pairs:
-            assert (
-                len(pair.allowed_literals) > 0
-            ), f"{pair.method}.{pair.param} has empty allowed_literals"
+            assert len(pair.allowed_literals) > 0, (
+                f"{pair.method}.{pair.param} has empty allowed_literals"
+            )
 
     def test_no_invalid_literal_calls(
         self,
@@ -429,8 +437,7 @@ class TestRepositoryContractCalls:
             lines = ["Literal contract violations found:"]
             for v in invalid:
                 lines.append(
-                    f"  {v['file']}:{v['line']} — "
-                    f"{v['method']}({v['param']}={v['value']!r})"
+                    f"  {v['file']}:{v['line']} — {v['method']}({v['param']}={v['value']!r})"
                 )
             pytest.fail("\n".join(lines))
 
@@ -490,5 +497,8 @@ class TestRepositoryContractCalls:
         if drift_pct > threshold:
             logger.warning(
                 "contract_baseline_drift_global previous=%d current=%d drift=%.2f%% threshold=%d",
-                total_prev, total_now, drift_pct, threshold,
+                total_prev,
+                total_now,
+                drift_pct,
+                threshold,
             )

@@ -10,7 +10,7 @@ re-enriched or re-engaged.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 from score_models import (
@@ -22,7 +22,6 @@ from score_models import (
     compute_composite,
     compute_decay_factor,
 )
-
 
 # ── Protocols ─────────────────────────────────────────────────
 
@@ -201,7 +200,7 @@ class DecayEngine:
         now: datetime | None = None,
     ) -> DecayReport:
         """Apply decay to all dimensions of a score record."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         dimension_results: list[DimensionDecayResult] = []
 
         for dim, ds in record.dimension_scores.items():
@@ -266,7 +265,7 @@ class DecayEngine:
         now: datetime | None = None,
     ) -> list[DecayReport]:
         """Apply decay to a batch of scores older than max_age_hours since last decay."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         records = self._score_store.list_scores_needing_decay(domain, max_age_hours, limit)
         reports: list[DecayReport] = []
 

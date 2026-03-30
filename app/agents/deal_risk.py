@@ -7,6 +7,7 @@ enrichment completeness, engagement signals, and historical patterns.
 L9 Architecture Note:
     Chassis-agnostic. Receives deal data, returns risk assessment.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RiskAssessment:
     """Result of deal risk analysis."""
+
     risk_score: float  # 0.0 = no risk, 1.0 = critical risk
     risk_level: str  # low, medium, high, critical
     risk_factors: list[str] = field(default_factory=list)
@@ -52,8 +54,11 @@ class DealRiskAgent:
 
         # 1. Data completeness risk
         required_fields = [
-            "opportunity_name", "opportunity_stage", "opportunity_amount",
-            "opportunity_close_date", "opportunity_account_id",
+            "opportunity_name",
+            "opportunity_stage",
+            "opportunity_amount",
+            "opportunity_close_date",
+            "opportunity_account_id",
         ]
         missing = [f for f in required_fields if not deal_data.get(f)]
         completeness_risk = len(missing) / len(required_fields)
@@ -117,9 +122,7 @@ class DealRiskAgent:
             "stakeholder_coverage": 0.20,
             "competitive_pressure": 0.15,
         }
-        risk_score = sum(
-            dimension_scores.get(k, 0.0) * w for k, w in weights.items()
-        )
+        risk_score = sum(dimension_scores.get(k, 0.0) * w for k, w in weights.items())
         risk_score = min(risk_score, 1.0)
 
         if risk_score < 0.25:

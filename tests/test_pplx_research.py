@@ -8,8 +8,9 @@ Source: ~180 lines | Target coverage: 75%
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.services.perplexity_client import (
     SonarResponse as PerplexityResponse,

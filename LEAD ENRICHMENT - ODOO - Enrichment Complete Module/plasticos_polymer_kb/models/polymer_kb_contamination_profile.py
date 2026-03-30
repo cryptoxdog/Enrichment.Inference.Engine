@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Contamination profiles for common scrap sources."""
+
 from odoo import fields, models
 
 
@@ -9,7 +9,10 @@ class PlasticosPolymerKBContaminationProfile(models.Model):
     _order = "profile_id"
 
     kb_id = fields.Many2one(
-        "plasticos.polymer.kb", required=True, ondelete="cascade", index=True,
+        "plasticos.polymer.kb",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     profile_id = fields.Char(required=True, index=True)
     source = fields.Char()

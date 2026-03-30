@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Material grade definitions from polymer KB (e.g. PP Homopolymer Injection)."""
+
 from odoo import fields, models
 
 
@@ -9,7 +9,10 @@ class PlasticosPolymerKBGrade(models.Model):
     _order = "grade_id"
 
     kb_id = fields.Many2one(
-        "plasticos.polymer.kb", required=True, ondelete="cascade", index=True,
+        "plasticos.polymer.kb",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     grade_id = fields.Char(required=True, index=True)
     grade_name = fields.Char()

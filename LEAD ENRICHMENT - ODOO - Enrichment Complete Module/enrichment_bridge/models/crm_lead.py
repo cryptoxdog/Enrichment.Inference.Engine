@@ -3,7 +3,6 @@ import logging
 import uuid
 
 import requests
-
 from odoo import api, fields, models
 
 _logger = logging.getLogger(__name__)
@@ -72,11 +71,15 @@ class CrmLead(models.Model):
             _logger.warning("Enrichment API key not configured, skipping cron")
             return
 
-        leads = self.search([
-            ("enrichment_state", "=", "not_enriched"),
-            ("type", "=", "lead"),
-            ("active", "=", True),
-        ], limit=batch_size, order="create_date desc")
+        leads = self.search(
+            [
+                ("enrichment_state", "=", "not_enriched"),
+                ("type", "=", "lead"),
+                ("active", "=", True),
+            ],
+            limit=batch_size,
+            order="create_date desc",
+        )
 
         if not leads:
             _logger.info("No leads to enrich")
@@ -86,14 +89,16 @@ class CrmLead(models.Model):
 
         entities = []
         for lead in leads:
-            entities.append({
-                "entity": lead._prepare_enrichment_entity(),
-                "object_type": lead._get_enrichment_object_type(),
-                "objective": lead._get_enrichment_objective(),
-                "schema": lead._get_enrichment_schema(),
-                "idempotency_key": str(uuid.uuid4()),
-                "max_variations": 3,
-            })
+            entities.append(
+                {
+                    "entity": lead._prepare_enrichment_entity(),
+                    "object_type": lead._get_enrichment_object_type(),
+                    "objective": lead._get_enrichment_objective(),
+                    "schema": lead._get_enrichment_schema(),
+                    "idempotency_key": str(uuid.uuid4()),
+                    "max_variations": 3,
+                }
+            )
 
         try:
             resp = requests.post(
@@ -110,27 +115,31 @@ class CrmLead(models.Model):
 
             results = data.get("results", [])
             for lead, result in zip(leads, results):
-                run = self.env["enrichment.run"].create({
-                    "res_model": "crm.lead",
-                    "res_id": lead.id,
-                    "state": result.get("state", "failed"),
-                    "confidence": result.get("confidence", 0),
-                    "fields_enriched": len(result.get("fields", {})),
-                    "enriched_data": json.dumps(result.get("fields", {}), indent=2),
-                    "failure_reason": result.get("failure_reason"),
-                    "variation_count": result.get("variation_count", 0),
-                    "tokens_used": result.get("tokens_used", 0),
-                    "processing_time_ms": result.get("processing_time_ms", 0),
-                    "raw_response": json.dumps(result, indent=2),
-                })
+                run = self.env["enrichment.run"].create(
+                    {
+                        "res_model": "crm.lead",
+                        "res_id": lead.id,
+                        "state": result.get("state", "failed"),
+                        "confidence": result.get("confidence", 0),
+                        "fields_enriched": len(result.get("fields", {})),
+                        "enriched_data": json.dumps(result.get("fields", {}), indent=2),
+                        "failure_reason": result.get("failure_reason"),
+                        "variation_count": result.get("variation_count", 0),
+                        "tokens_used": result.get("tokens_used", 0),
+                        "processing_time_ms": result.get("processing_time_ms", 0),
+                        "raw_response": json.dumps(result, indent=2),
+                    }
+                )
 
                 if result.get("state") == "completed" and result.get("fields"):
                     lead._apply_enrichment(result["fields"])
-                    lead.write({
-                        "enrichment_state": "enriched",
-                        "last_enrichment_date": fields.Datetime.now(),
-                        "last_enrichment_confidence": result.get("confidence", 0),
-                    })
+                    lead.write(
+                        {
+                            "enrichment_state": "enriched",
+                            "last_enrichment_date": fields.Datetime.now(),
+                            "last_enrichment_confidence": result.get("confidence", 0),
+                        }
+                    )
                 elif result.get("state") == "failed":
                     lead.write({"enrichment_state": "failed"})
 

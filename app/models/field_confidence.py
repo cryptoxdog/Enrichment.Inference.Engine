@@ -16,18 +16,18 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
 
-class FieldSource(str, Enum):
+class FieldSource(StrEnum):
     """Origin of a field value inside the convergence loop."""
 
     CRM = "crm"
@@ -60,9 +60,9 @@ class FieldConfidence(BaseModel):
     value: Any = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     source: FieldSource = FieldSource.ENRICHMENT
-    variation_agreement: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    variation_agreement: float | None = Field(default=None, ge=0.0, le=1.0)
     pass_discovered: int = Field(default=1, ge=1)
-    kb_fragment_ids: List[str] = Field(default_factory=list)
+    kb_fragment_ids: list[str] = Field(default_factory=list)
 
     @field_validator("confidence", mode="before")
     @classmethod
@@ -83,7 +83,7 @@ class FieldConfidenceMap(BaseModel):
     this directly from the PacketEnvelope payload.
     """
 
-    fields: Dict[str, FieldConfidence] = Field(default_factory=dict)
+    fields: dict[str, FieldConfidence] = Field(default_factory=dict)
 
     # -- Mutators -----------------------------------------------------------
 
@@ -91,7 +91,7 @@ class FieldConfidenceMap(BaseModel):
         """Insert or replace a field confidence record."""
         self.fields[fc.field_name] = fc
 
-    def merge(self, other: "FieldConfidenceMap") -> None:
+    def merge(self, other: FieldConfidenceMap) -> None:
         """Merge *other* into self.  Higher-confidence wins per field."""
         for name, fc in other.fields.items():
             existing = self.fields.get(name)
@@ -100,18 +100,18 @@ class FieldConfidenceMap(BaseModel):
 
     # -- Queries ------------------------------------------------------------
 
-    def get(self, field_name: str) -> Optional[FieldConfidence]:
+    def get(self, field_name: str) -> FieldConfidence | None:
         return self.fields.get(field_name)
 
-    def weakest_fields(self, n: int = 5) -> List[FieldConfidence]:
+    def weakest_fields(self, n: int = 5) -> list[FieldConfidence]:
         """Return the *n* fields with the lowest confidence, sorted ascending."""
         return sorted(self.fields.values(), key=lambda f: f.confidence)[:n]
 
-    def fields_below_threshold(self, threshold: float = 0.65) -> List[FieldConfidence]:
+    def fields_below_threshold(self, threshold: float = 0.65) -> list[FieldConfidence]:
         """All fields whose confidence is strictly below *threshold*."""
         return [f for f in self.fields.values() if f.confidence < threshold]
 
-    def fields_above_threshold(self, threshold: float = 0.65) -> List[FieldConfidence]:
+    def fields_above_threshold(self, threshold: float = 0.65) -> list[FieldConfidence]:
         return [f for f in self.fields.values() if f.confidence >= threshold]
 
     def avg_confidence(self) -> float:
@@ -126,28 +126,28 @@ class FieldConfidenceMap(BaseModel):
         filled = sum(1 for f in self.fields.values() if f.value is not None)
         return filled / total_expected
 
-    def field_names(self) -> List[str]:
+    def field_names(self) -> list[str]:
         return list(self.fields.keys())
 
-    def confident_fields(self, threshold: float = 0.65) -> Dict[str, Any]:
+    def confident_fields(self, threshold: float = 0.65) -> dict[str, Any]:
         """Return ``{field_name: value}`` for fields meeting *threshold*."""
         return {name: fc.value for name, fc in self.fields.items() if fc.confidence >= threshold}
 
-    def source_breakdown(self) -> Dict[FieldSource, int]:
+    def source_breakdown(self) -> dict[FieldSource, int]:
         """Count of fields per :class:`FieldSource`."""
-        counts: Dict[FieldSource, int] = defaultdict(int)
+        counts: dict[FieldSource, int] = defaultdict(int)
         for fc in self.fields.values():
             counts[fc.source] += 1
         return dict(counts)
 
     # -- Serialisation ------------------------------------------------------
 
-    def to_flat_dict(self) -> Dict[str, Dict[str, Any]]:
+    def to_flat_dict(self) -> dict[str, dict[str, Any]]:
         """PacketEnvelope-friendly serialisation (no Pydantic wrapping)."""
         return {name: fc.model_dump(mode="json") for name, fc in self.fields.items()}
 
     @classmethod
-    def from_flat_dict(cls, data: Dict[str, Dict[str, Any]]) -> "FieldConfidenceMap":
+    def from_flat_dict(cls, data: dict[str, dict[str, Any]]) -> FieldConfidenceMap:
         return cls(fields={k: FieldConfidence(**v) for k, v in data.items()})
 
     def __len__(self) -> int:
@@ -166,12 +166,12 @@ class FieldConfidenceMap(BaseModel):
 
 
 def compute_field_confidences(
-    validated_payloads: Sequence[Dict[str, Any]],
-    target_schema: Optional[Dict[str, str]] = None,
+    validated_payloads: Sequence[dict[str, Any]],
+    target_schema: dict[str, str] | None = None,
     *,
     total_attempted: int = 0,
     pass_number: int = 1,
-    kb_fragment_ids: Optional[List[str]] = None,
+    kb_fragment_ids: list[str] | None = None,
 ) -> FieldConfidenceMap:
     """Compute per-field confidence from validated consensus payloads.
 
@@ -202,8 +202,8 @@ def compute_field_confidences(
     kb_ids = kb_fragment_ids or []
 
     # Collect per-field observations
-    field_values: Dict[str, List[Any]] = defaultdict(list)
-    field_confs: Dict[str, List[float]] = defaultdict(list)
+    field_values: dict[str, list[Any]] = defaultdict(list)
+    field_confs: dict[str, list[float]] = defaultdict(list)
 
     reserved = {"confidence", "tokens_used", "processing_time_ms"}
 
@@ -223,7 +223,7 @@ def compute_field_confidences(
         agreement = len(values) / total_valid
 
         # Value consensus: pick the most common value
-        value_counts: Dict[str, int] = defaultdict(int)
+        value_counts: dict[str, int] = defaultdict(int)
         for v in values:
             value_counts[_hashable(v)] += 1
         winner_key = max(value_counts, key=value_counts.get)  # type: ignore[arg-type]

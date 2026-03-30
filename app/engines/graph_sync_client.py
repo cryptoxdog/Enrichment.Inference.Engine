@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -117,7 +117,7 @@ class GraphSyncClient:
         intent: str = "",
     ) -> dict[str, Any]:
         packet_id = str(uuid.uuid4())
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         hash_input = json.dumps(
             {

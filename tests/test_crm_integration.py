@@ -9,12 +9,12 @@ No real Odoo instance is required.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
-from app.services.crm.base import CRMClientBase, CRMCredentials, CRMType, WriteResult
-from app.services.crm.field_mapper import FieldMapper, ObjectMapping
+from app.services.crm.base import CRMCredentials, CRMType, WriteResult
+from app.services.crm.field_mapper import FieldMapper
 from app.services.crm.odoo_client import OdooClient
-
 
 # ── CRM Base ──────────────────────────────────────────────────
 
@@ -118,9 +118,7 @@ class TestOdooClient:
 
         client = OdooClient(odoo_creds)
         client.connect()
-        result = client.update_record(
-            "res.partner", "42", {"name": "Updated Co"}
-        )
+        result = client.update_record("res.partner", "42", {"name": "Updated Co"})
 
         assert result.success is True
         assert result.record_id == "42"
@@ -131,9 +129,7 @@ class TestOdooClient:
         mock_models = MagicMock()
         mock_proxy.side_effect = [mock_common, mock_models]
         mock_common.authenticate.return_value = 1
-        mock_models.execute_kw.return_value = [
-            {"id": 42, "name": "Test Co"}
-        ]
+        mock_models.execute_kw.return_value = [{"id": 42, "name": "Test Co"}]
 
         client = OdooClient(odoo_creds)
         client.connect()

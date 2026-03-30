@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Recycling rules & safety constraints from polymer KB."""
+
 from odoo import fields, models
 
 
@@ -9,7 +9,10 @@ class PlasticosPolymerKBRule(models.Model):
     _order = "rule_id"
 
     kb_id = fields.Many2one(
-        "plasticos.polymer.kb", required=True, ondelete="cascade", index=True,
+        "plasticos.polymer.kb",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     rule_id = fields.Char(required=True, index=True)
     material_type = fields.Char()

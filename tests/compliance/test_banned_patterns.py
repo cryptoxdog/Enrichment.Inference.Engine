@@ -7,6 +7,7 @@ Rules enforced:
 - No hardcoded API keys/secrets
 - No print() in engine code (use structlog)
 """
+
 import ast
 import re
 from pathlib import Path
@@ -33,8 +34,7 @@ def test_no_eval_exec_compile():
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id in ("eval", "exec", "compile"):
                     violations.append(
-                        f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} "
-                        f"{node.func.id}() call"
+                        f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} {node.func.id}() call"
                     )
     assert not violations, "Banned function calls:\n" + "\n".join(violations)
 
@@ -49,10 +49,7 @@ def test_no_bare_except():
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler) and node.type is None:
-                violations.append(
-                    f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} "
-                    f"bare except:"
-                )
+                violations.append(f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} bare except:")
     assert not violations, "Bare except handlers:\n" + "\n".join(violations)
 
 
@@ -78,10 +75,7 @@ def test_no_fastapi_in_engine():
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
                 if node.module.startswith("fastapi"):
-                    violations.append(
-                        f"{rel}:{node.lineno} "
-                        f"FastAPI import in engine module"
-                    )
+                    violations.append(f"{rel}:{node.lineno} FastAPI import in engine module")
     assert not violations, "FastAPI imports in engine:\n" + "\n".join(violations)
 
 
@@ -90,8 +84,8 @@ def test_no_hardcoded_api_keys():
     violations = []
     patterns = [
         r'(?:api_key|apikey|secret_key)\s*=\s*["\'][a-zA-Z0-9\-._]{20,}["\']',
-        r'pplx-[a-zA-Z0-9]{20,}',
-        r'sk-[a-zA-Z0-9]{20,}',
+        r"pplx-[a-zA-Z0-9]{20,}",
+        r"sk-[a-zA-Z0-9]{20,}",
     ]
     for py_file in _get_engine_py_files():
         lines = py_file.read_text().split("\n")
@@ -102,8 +96,7 @@ def test_no_hardcoded_api_keys():
             for pattern in patterns:
                 if re.search(pattern, line, re.IGNORECASE):
                     violations.append(
-                        f"{py_file.relative_to(REPO_ROOT)}:{i} "
-                        f"potential hardcoded secret"
+                        f"{py_file.relative_to(REPO_ROOT)}:{i} potential hardcoded secret"
                     )
     assert not violations, "Hardcoded secrets:\n" + "\n".join(violations)
 
@@ -120,8 +113,7 @@ def test_no_print_in_engine():
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id == "print":
                     violations.append(
-                        f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} "
-                        f"print() call"
+                        f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} print() call"
                     )
     assert not violations, "print() calls in engine (use structlog):\n" + "\n".join(violations)
 
@@ -136,11 +128,9 @@ def test_no_silent_exception_swallowing():
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
-                if (node.type and isinstance(node.type, ast.Name) and
-                        node.type.id == "Exception"):
+                if node.type and isinstance(node.type, ast.Name) and node.type.id == "Exception":
                     if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
                         violations.append(
-                            f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} "
-                            f"except Exception: pass"
+                            f"{py_file.relative_to(REPO_ROOT)}:{node.lineno} except Exception: pass"
                         )
     assert not violations, "Silent exception swallowing:\n" + "\n".join(violations)

@@ -6,6 +6,7 @@ Provides:
 - get_python_files()     — simple list-returning variant for anti-pattern tests
 - parse_python_file()    — AST parse with graceful error handling
 """
+
 from __future__ import annotations
 
 import ast

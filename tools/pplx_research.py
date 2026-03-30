@@ -5,11 +5,10 @@ Location: ~/repos/tools/pplx-research.py
 Requires: pip install perplexityai
 """
 
-import os
 import json
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 from perplexity import Perplexity
 
@@ -195,16 +194,16 @@ if __name__ == "__main__":
 
     elif args.command == "followup":
         result = targeted_research(args.question, args.domains, args.project)
-        print(f"\n✅ Follow-up complete.")
+        print("\n✅ Follow-up complete.")
         print(f"📁 Cached to: research-cache/{args.project}/")
 
     elif args.command == "github":
         result = github_research(args.query, args.project)
-        print(f"\n✅ GitHub research complete.")
+        print("\n✅ GitHub research complete.")
 
     elif args.command == "market":
         result = market_research(args.query, args.project)
-        print(f"\n✅ Market research complete.")
+        print("\n✅ Market research complete.")
 
     else:
         parser.print_help()

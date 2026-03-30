@@ -1,5 +1,3 @@
-import pytest
-
 """
 Tests for CRM Field Scanner — validates scan, seed YAML, and discovery report.
 Run: pytest tests/test_crm_field_scanner.py -v
@@ -7,6 +5,7 @@ Run: pytest tests/test_crm_field_scanner.py -v
 
 from __future__ import annotations
 
+import pytest
 
 from app.services.crm_field_scanner import (
     CRMField,
@@ -17,7 +16,6 @@ from app.services.crm_field_scanner import (
     scan_crm_fields,
     scan_result_to_dict,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────
 

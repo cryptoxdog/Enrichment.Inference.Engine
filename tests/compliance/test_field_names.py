@@ -6,6 +6,7 @@ Rules enforced:
 - No Field(alias=...) usage
 - No populate_by_name in model_config
 """
+
 import ast
 import re
 from pathlib import Path
@@ -31,9 +32,7 @@ def test_no_camelcase_pydantic_fields():
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 for item in node.body:
-                    if isinstance(item, ast.AnnAssign) and isinstance(
-                        item.target, ast.Name
-                    ):
+                    if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                         name = item.target.id
                         if re.match(r"^[a-z]+[A-Z]", name):
                             violations.append(
@@ -54,9 +53,7 @@ def test_no_flatcase_pydantic_fields():
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 for item in node.body:
-                    if isinstance(item, ast.AnnAssign) and isinstance(
-                        item.target, ast.Name
-                    ):
+                    if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                         name = item.target.id
                         if len(name) > 12 and "_" not in name and name.islower():
                             violations.append(

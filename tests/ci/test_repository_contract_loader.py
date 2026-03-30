@@ -1,4 +1,5 @@
 """Unit tests for the YAML contract catalog loader."""
+
 from __future__ import annotations
 
 import pathlib
@@ -8,8 +9,6 @@ import pytest
 
 from tests.ci._repository_contract_loader import (
     CatalogValidationError,
-    ContractCatalog,
-    ContractPair,
     load_catalog,
 )
 

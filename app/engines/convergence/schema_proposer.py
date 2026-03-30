@@ -152,7 +152,7 @@ def _build_confidence_map(confidences_raw: Any) -> dict[str, float]:
 def _process_result_fields(
     result: dict[str, Any],
     existing_fields: set[str],
-    field_stats: dict[str, "_FieldAcc"],
+    field_stats: dict[str, _FieldAcc],
 ) -> None:
     """Accumulate field stats from a single batch result into field_stats."""
     final_fields = result.get("final_fields", {})
@@ -177,7 +177,7 @@ def _process_result_fields(
 
 
 def _build_field_proposals(
-    field_stats: dict[str, "_FieldAcc"],
+    field_stats: dict[str, _FieldAcc],
     entity_count: int,
 ) -> list[FieldProposal]:
     """Filter and build FieldProposal objects from accumulated field stats."""
@@ -360,7 +360,7 @@ def _bump_version(current: str) -> str:
     base = current.split("-")[0]
     parts = base.split(".")
     try:
-        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0
+        major, minor, _patch = int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0
     except (ValueError, IndexError):
         return "0.2.0-discovered"
     return f"{major}.{minor + 1}.0-discovered"

@@ -262,7 +262,7 @@ jobs:
             ! -name "main.py" \
             ! -name "handlers.py" \
             -exec grep -l "from fastapi import\|import fastapi" {} \; 2>/dev/null || true)
-          
+
           if [ -n "$VIOLATIONS" ]; then
             echo "❌ FastAPI imports found in engine modules:"
             echo "$VIOLATIONS"
@@ -276,7 +276,7 @@ jobs:
         run: |
           echo "Checking for banned patterns (print, Optional[], List[], Dict[])..."
           VIOLATIONS=0
-          
+
           for pattern in "print(" "Optional\[" "List\[" "Dict\["; do
             FOUND=$(grep -r -l "$pattern" app/ tests/ 2>/dev/null | grep -v __pycache__ | grep -v ".pyc" || true)
             if [ -n "$FOUND" ]; then
@@ -285,7 +285,7 @@ jobs:
               VIOLATIONS=$((VIOLATIONS+1))
             fi
           done
-          
+
           if [ $VIOLATIONS -gt 0 ]; then
             echo ""
             echo "❌ Use: structlog (not print), list[T] (not List[T]), T | None (not Optional[T])"
