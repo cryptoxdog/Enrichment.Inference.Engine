@@ -143,3 +143,110 @@ def build_schema_hash(target_schema: dict[str, str] | None) -> str:
     """Deterministic hash of the target schema for caching/dedup."""
     schema_str = json.dumps(sorted((target_schema or {}).items()), sort_keys=True)
     return hashlib.sha256(schema_str.encode()).hexdigest()[:16]
+
+
+# ── Variation prompt strategies for consensus enrichment ──────────────────────
+
+VARIATION_STRATEGIES = [
+    {
+        "name": "direct",
+        "prefix": "",
+        "suffix": "",
+        "temperature": 0.7,
+    },
+    {
+        "name": "verification",
+        "prefix": "Verify and cross-check the following entity information. ",
+        "suffix": " Double-check all facts against multiple sources.",
+        "temperature": 0.5,
+    },
+    {
+        "name": "comprehensive",
+        "prefix": "Conduct a comprehensive research analysis of this entity. ",
+        "suffix": " Include all available details and context.",
+        "temperature": 0.8,
+    },
+    {
+        "name": "focused",
+        "prefix": "Focus specifically on the core business attributes. ",
+        "suffix": " Prioritize accuracy over completeness.",
+        "temperature": 0.4,
+    },
+    {
+        "name": "industry_context",
+        "prefix": "Research this entity within its industry context. ",
+        "suffix": " Consider market position and competitive landscape.",
+        "temperature": 0.7,
+    },
+]
+
+
+def build_variation_prompts(
+    entity: dict[str, Any],
+    object_type: str,
+    objective: str = "enrich",
+    target_schema: dict[str, str] | None = None,
+    kb_context_text: str = "",
+    model: str = "sonar-reasoning",
+    n: int = 3,
+    sonar_config=None,
+) -> list[dict]:
+    """
+    Build N variation prompts for consensus-based enrichment.
+
+    Each variation uses a different prompting strategy to elicit diverse
+    responses that can be synthesized into a consensus result.
+
+    Parameters
+    ----------
+    entity : dict
+        Entity data to enrich
+    object_type : str
+        Type of entity (company, contact, etc.)
+    objective : str
+        Enrichment objective (default: "enrich")
+    target_schema : dict | None
+        Target schema for structured output
+    kb_context_text : str
+        Knowledge base context to inject
+    model : str
+        Perplexity model to use
+    n : int
+        Number of variations to generate (max 5)
+    sonar_config : SonarConfig | None
+        Optional Sonar configuration for message strategy
+
+    Returns
+    -------
+    list[dict]
+        List of N Perplexity chat completion payloads
+    """
+    n = min(max(n, 1), len(VARIATION_STRATEGIES))
+    strategies = VARIATION_STRATEGIES[:n]
+
+    prompts = []
+    for strategy in strategies:
+        modified_objective = f"{strategy['prefix']}{objective}{strategy['suffix']}"
+
+        payload = build_prompt(
+            entity=entity,
+            object_type=object_type,
+            objective=modified_objective.strip(),
+            target_schema=target_schema,
+            kb_context_text=kb_context_text,
+            model=model,
+            sonar_config=sonar_config,
+        )
+
+        payload["temperature"] = strategy["temperature"]
+
+        payload["_variation_name"] = strategy["name"]
+
+        prompts.append(payload)
+
+    return prompts
+
+
+def get_variation_strategy_names() -> list[str]:
+    """Return list of available variation strategy names."""
+    return [str(s["name"]) for s in VARIATION_STRATEGIES]

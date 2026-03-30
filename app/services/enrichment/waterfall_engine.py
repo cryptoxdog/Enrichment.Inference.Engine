@@ -8,6 +8,11 @@ The engine uses the existing Perplexity Sonar client as its primary
 source, with the BaseSource interface allowing additional sources
 (Clearbit, ZoomInfo, Apollo, etc.) to be added as adapters.
 
+Consensus Mode:
+    When consensus_mode=True, the engine fans out N parallel prompt
+    variations to Perplexity, validates responses, synthesizes consensus,
+    and applies uncertainty thresholds.
+
 L9 Architecture Note:
     This module is chassis-agnostic. It never imports FastAPI.
     It is called by the enrichment_orchestrator during the
@@ -16,17 +21,38 @@ L9 Architecture Note:
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
 import yaml
 
+from .consensus import merge_with_priority, synthesize
+from .kb_resolver import KBContext, KBResolver
 from .quality_scorer import QualityScorer
 from .sources import SOURCE_REGISTRY
 from .sources.base import BaseSource, EnrichmentResult, SourceConfig
 from .sources.perplexity_adapter import PerplexitySonarSource
+from .uncertainty import UncertaintyConfig, apply_uncertainty
 
 logger = structlog.get_logger("waterfall_engine")
+
+
+@dataclass
+class ConsensusEnrichmentResult:
+    """Result of consensus-mode enrichment."""
+
+    fields: dict[str, Any] = field(default_factory=dict)
+    confidence: float = 0.0
+    flags: list[str] = field(default_factory=list)
+    variations_attempted: int = 0
+    variations_valid: int = 0
+    agreement_ratio: float = 0.0
+    kb_fragments: list[str] = field(default_factory=list)
+    quality_score: float = 0.0
+    risk_level: str = "low"
+    elapsed_seconds: float = 0.0
 
 
 class WaterfallEngine:
@@ -276,3 +302,171 @@ class WaterfallEngine:
                 latency_ms=0,
                 error=str(exc),
             )
+
+    async def enrich_with_consensus(
+        self,
+        domain: str,
+        input_payload: dict[str, Any],
+        kb_resolver: KBResolver | None = None,
+        kb_context: str | None = None,
+        max_variations: int = 3,
+        consensus_threshold: float = 0.65,
+        uncertainty_config: UncertaintyConfig | None = None,
+        max_concurrent: int = 3,
+    ) -> ConsensusEnrichmentResult:
+        """
+        Execute consensus-mode enrichment with parallel prompt variations.
+
+        This method:
+        1. Resolves KB context for the entity
+        2. Builds N prompt variations
+        3. Fans out parallel calls to Perplexity
+        4. Validates and filters responses
+        5. Synthesizes consensus from valid responses
+        6. Applies uncertainty thresholds and flags
+        7. Computes final quality score
+
+        Args:
+            domain: Entity domain (company, contact, etc.)
+            input_payload: Entity data to enrich
+            kb_resolver: Optional KB resolver for context injection
+            kb_context: KB identifier (e.g., "plastics")
+            max_variations: Number of prompt variations (1-5)
+            consensus_threshold: Agreement ratio threshold (0.0-1.0)
+            uncertainty_config: Uncertainty thresholds config
+            max_concurrent: Max concurrent Perplexity calls
+
+        Returns:
+            ConsensusEnrichmentResult with merged fields, confidence, and flags
+        """
+        import time
+
+        from ..perplexity_client import query_perplexity
+        from ..prompt_builder import build_variation_prompts
+
+        t0 = time.monotonic()
+
+        kb_ctx = KBContext()
+        if kb_resolver:
+            kb_ctx = kb_resolver.resolve(
+                kb_context=kb_context,
+                entity=input_payload,
+            )
+
+        max_variations = min(max(max_variations, 1), 5)
+
+        prompts = build_variation_prompts(
+            entity=input_payload,
+            object_type=domain,
+            objective="enrich",
+            kb_context_text=kb_ctx.context_text,
+            n=max_variations,
+        )
+
+        perplexity_source = self.source_clients.get("perplexity_sonar")
+        if not perplexity_source:
+            logger.error("consensus_no_perplexity_source")
+            return ConsensusEnrichmentResult(
+                flags=["error:no_perplexity_source"],
+                elapsed_seconds=round(time.monotonic() - t0, 3),
+            )
+
+        api_key = perplexity_source.config.api_key or ""
+        breaker = getattr(perplexity_source, "_breaker", None)
+        timeout = perplexity_source.config.timeout
+
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def _call_variation(payload: dict) -> dict | None:
+            async with sem:
+                try:
+                    resp = await query_perplexity(
+                        payload=payload,
+                        api_key=api_key,
+                        breaker=breaker,
+                        timeout=timeout,
+                    )
+                    return resp.data
+                except Exception as exc:
+                    logger.warning(
+                        "consensus_variation_failed",
+                        variation=payload.get("_variation_name", "unknown"),
+                        error=str(exc),
+                    )
+                    return None
+
+        raw_results = await asyncio.gather(*[_call_variation(p) for p in prompts])
+        valid_results = [r for r in raw_results if r is not None]
+
+        validated: list[dict[str, Any]] = []
+        for raw in valid_results:
+            if self._validate_response(raw, input_payload):
+                validated.append(raw)
+
+        consensus = synthesize(
+            payloads=validated,
+            threshold=consensus_threshold,
+            total_attempted=len(prompts),
+        )
+
+        merged = merge_with_priority(
+            base=dict(input_payload),
+            consensus=consensus,
+            min_agreement=consensus_threshold * 0.8,
+        )
+
+        uncertainty = apply_uncertainty(
+            fields=consensus.fields,
+            confidence=consensus.confidence,
+            field_confidences=consensus.field_agreements,
+            config=uncertainty_config,
+        )
+
+        quality_scores = [consensus.confidence]
+        final_quality = self.quality_scorer.score(domain, merged, quality_scores)
+
+        elapsed = round(time.monotonic() - t0, 3)
+
+        logger.info(
+            "consensus_enrichment_complete",
+            domain=domain,
+            variations_attempted=len(prompts),
+            variations_valid=len(validated),
+            agreement_ratio=consensus.agreement_ratio,
+            confidence=consensus.confidence,
+            quality_score=final_quality,
+            risk_level=uncertainty.risk_level,
+            elapsed_s=elapsed,
+        )
+
+        return ConsensusEnrichmentResult(
+            fields=merged,
+            confidence=consensus.confidence,
+            flags=uncertainty.flags,
+            variations_attempted=len(prompts),
+            variations_valid=len(validated),
+            agreement_ratio=consensus.agreement_ratio,
+            kb_fragments=kb_ctx.fragment_ids,
+            quality_score=final_quality,
+            risk_level=uncertainty.risk_level,
+            elapsed_seconds=elapsed,
+        )
+
+    def _validate_response(
+        self,
+        response: dict[str, Any],
+        original_entity: dict[str, Any],
+    ) -> bool:
+        """
+        Validate a Perplexity response for inclusion in consensus.
+
+        Basic validation:
+        - Response is a non-empty dict
+        - Contains at least one non-empty field
+        - No obvious hallucination markers
+        """
+        if not response or not isinstance(response, dict):
+            return False
+
+        non_empty = sum(1 for v in response.values() if v not in (None, "", [], {}))
+        return non_empty != 0

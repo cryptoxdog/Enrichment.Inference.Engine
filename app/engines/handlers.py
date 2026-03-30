@@ -69,6 +69,91 @@ async def handle_enrich(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
     return response.model_dump()
 
 
+async def handle_enrich_consensus(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Consensus-based enrichment with parallel prompt variations.
+
+    Payload:
+        entity        : dict  — Entity data to enrich (required)
+        domain        : str   — Entity domain (default: "company")
+        kb_context    : str   — KB identifier for context injection (optional)
+        max_variations: int   — Number of prompt variations (default: 3, max: 5)
+        consensus_threshold: float — Agreement threshold (default: 0.65)
+        uncertainty_thresholds: dict — Optional {low, high, critical} thresholds
+
+    Returns:
+        fields            : dict  — Consensus-merged enriched fields
+        confidence        : float — Overall confidence score
+        flags             : list  — Uncertainty flags
+        variations_attempted: int — Total variations attempted
+        variations_valid  : int   — Variations with valid responses
+        agreement_ratio   : float — Average field agreement
+        kb_fragments      : list  — KB fragments used
+        quality_score     : float — Final quality score
+        risk_level        : str   — "low", "medium", "high", or "critical"
+        elapsed_seconds   : float — Processing time
+    """
+    from ..services.enrichment import KBResolver, UncertaintyConfig, WaterfallEngine
+
+    settings = get_settings()
+
+    entity = payload.get("entity", {})
+    domain = payload.get("domain", "company")
+    kb_context = payload.get("kb_context")
+    max_variations = int(payload.get("max_variations", 3))
+    consensus_threshold = float(payload.get("consensus_threshold", 0.65))
+
+    uncertainty_cfg = None
+    if "uncertainty_thresholds" in payload:
+        thresholds = payload["uncertainty_thresholds"]
+        uncertainty_cfg = UncertaintyConfig(
+            low_threshold=thresholds.get("low", 0.5),
+            high_threshold=thresholds.get("high", 0.85),
+            critical_threshold=thresholds.get("critical", 0.3),
+        )
+
+    kb_resolver = None
+    kb_dir = payload.get("kb_dir", "config/kb")
+    if kb_context:
+        kb_resolver = KBResolver(kb_dir=kb_dir)
+
+    engine = WaterfallEngine(
+        perplexity_api_key=settings.perplexity_api_key,
+    )
+
+    result = await engine.enrich_with_consensus(
+        domain=domain,
+        input_payload=entity,
+        kb_resolver=kb_resolver,
+        kb_context=kb_context,
+        max_variations=max_variations,
+        consensus_threshold=consensus_threshold,
+        uncertainty_config=uncertainty_cfg,
+    )
+
+    logger.info(
+        "handle_enrich_consensus_complete",
+        tenant=tenant,
+        domain=domain,
+        confidence=result.confidence,
+        quality_score=result.quality_score,
+        risk_level=result.risk_level,
+    )
+
+    return {
+        "fields": result.fields,
+        "confidence": result.confidence,
+        "flags": result.flags,
+        "variations_attempted": result.variations_attempted,
+        "variations_valid": result.variations_valid,
+        "agreement_ratio": result.agreement_ratio,
+        "kb_fragments": result.kb_fragments,
+        "quality_score": result.quality_score,
+        "risk_level": result.risk_level,
+        "elapsed_seconds": result.elapsed_seconds,
+    }
+
+
 async def handle_enrichbatch(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Batch enrichment — up to 50 entities."""
     settings = get_settings()
@@ -294,6 +379,7 @@ def get_handler_map() -> dict[str, Any]:
     """Return all handlers for chassis registration."""
     return {
         "enrich": handle_enrich,
+        "enrich_consensus": handle_enrich_consensus,
         "enrichbatch": handle_enrichbatch,
         "converge": handle_converge,
         "discover": handle_discover,

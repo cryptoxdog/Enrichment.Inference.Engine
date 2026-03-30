@@ -1,0 +1,154 @@
+# Plastics domain knowledge base for testing
+domain: plastics
+
+preamble: |
+  This knowledge base covers the plastics and polymer recycling industry.
+  Key areas include polymer types, grades, processing methods, and applications.
+
+terminology:
+  HDPE: High-Density Polyethylene
+  LDPE: Low-Density Polyethylene
+  PP: Polypropylene
+  PET: Polyethylene Terephthalate
+  PS: Polystyrene
+  PVC: Polyvinyl Chloride
+  ABS: Acrylonitrile Butadiene Styrene
+  PCR: Post-Consumer Recycled
+  PIR: Post-Industrial Recycled
+  MFI: Melt Flow Index
+  regrind: Recycled plastic ground into small particles
+  pellets: Processed plastic in pellet form ready for manufacturing
+  flakes: Shredded plastic material
+
+entity_hints:
+  company:
+    typical_fields:
+      - company_name
+      - polymer_types_handled
+      - processing_capabilities
+      - certifications
+      - annual_capacity_tons
+    validation_focus:
+      - polymer_expertise
+      - geographic_coverage
+  contact:
+    typical_fields:
+      - name
+      - title
+      - email
+      - phone
+      - department
+    validation_focus:
+      - decision_maker_level
+      - technical_expertise
+
+default_hints:
+  industry: plastics_recycling
+  market_segment: industrial
+
+validation_rules:
+  polymer_type:
+    pattern: "^(HDPE|LDPE|PP|PET|PS|PVC|ABS|OTHER)$"
+    case_insensitive: true
+  capacity_tons:
+    type: positive_integer
+    min: 0
+    max: 1000000
+  mfi_range:
+    type: range
+    min: 0.1
+    max: 100.0
+
+fragments:
+  - id: plastics_polymers
+    content: |
+      Common polymer types in recycling:
+      - HDPE (High-Density Polyethylene): Bottles, containers, pipes
+      - LDPE (Low-Density Polyethylene): Films, bags, flexible packaging
+      - PP (Polypropylene): Automotive parts, containers, textiles
+      - PET (Polyethylene Terephthalate): Bottles, fibers, food packaging
+      - PS (Polystyrene): Packaging, insulation, disposables
+      - PVC (Polyvinyl Chloride): Pipes, cables, flooring
+      - ABS (Acrylonitrile Butadiene Styrene): Electronics, automotive
+    keywords:
+      - polymer
+      - plastic
+      - recycling
+      - HDPE
+      - LDPE
+      - PP
+      - PET
+    entity_types:
+      - company
+      - product
+    priority: 10
+
+  - id: plastics_grades
+    content: |
+      Plastic grades and quality tiers:
+      - Virgin: New, unused material
+      - PCR (Post-Consumer Recycled): From consumer waste streams
+      - PIR (Post-Industrial Recycled): From manufacturing scrap
+      - Regrind: Mechanically recycled material
+      - Compounded: Blended with additives for specific properties
+
+      Quality indicators:
+      - MFI (Melt Flow Index): Flow characteristics
+      - Color consistency
+      - Contamination levels
+      - Mechanical properties (tensile, impact)
+    keywords:
+      - grade
+      - quality
+      - PCR
+      - PIR
+      - virgin
+      - regrind
+    entity_types:
+      - company
+      - product
+    priority: 8
+
+  - id: plastics_processing
+    content: |
+      Processing capabilities in plastics recycling:
+      - Sorting: Manual, optical, density-based
+      - Washing: Hot wash, cold wash, friction wash
+      - Grinding: Shredding, granulating
+      - Extrusion: Pelletizing, compounding
+      - Injection molding: End-product manufacturing
+
+      Certifications:
+      - ISO 9001: Quality management
+      - ISO 14001: Environmental management
+      - APR (Association of Plastic Recyclers)
+      - SCS Recycled Content
+    keywords:
+      - processing
+      - sorting
+      - washing
+      - extrusion
+      - certification
+    entity_types:
+      - company
+    priority: 7
+
+  - id: plastics_applications
+    content: |
+      End-use applications for recycled plastics:
+      - Packaging: Bottles, containers, films
+      - Construction: Pipes, lumber, insulation
+      - Automotive: Bumpers, interior parts, under-hood components
+      - Textiles: Fibers, fabrics, carpets
+      - Consumer goods: Furniture, toys, household items
+      - Industrial: Pallets, crates, drums
+    keywords:
+      - application
+      - packaging
+      - automotive
+      - construction
+      - consumer
+    entity_types:
+      - company
+      - product
+    priority: 5
