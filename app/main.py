@@ -21,6 +21,7 @@ from .api.v1.chassis_endpoint import router as chassis_router
 from .core.auth import verify_api_key
 from .core.config import Settings, get_settings
 from .core.logging_config import setup_logging
+from .core.telemetry import setup_telemetry
 from .engines.enrichment_orchestrator import breaker, enrich_batch, enrich_entity
 from .engines.orchestration_layer import register as register_orchestration
 from .middleware.rate_limiter import RateLimitMiddleware
@@ -88,6 +89,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
+setup_telemetry(app)
 
 # ── Chassis router (node-to-node PacketEnvelope traffic) ──────────
 app.include_router(chassis_router)

@@ -1,0 +1,91 @@
+# OpenTelemetry Collector — tail-based sampling
+# Keeps 100% of error traces, 100% of slow traces (>2s),
+# 10% probabilistic sample of healthy traffic, rate-limited to 100 spans/s.
+# Image: otel/opentelemetry-collector-contrib:0.120.0
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 50000
+    expected_new_traces_per_sec: 200
+    policies:
+      - name: errors-always
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: slow-traces
+        type: latency
+        latency:
+          threshold_ms: 2000
+      - name: important-operations
+        type: string_attribute
+        string_attribute:
+          key: http.route
+          values:
+            - /v1/execute
+            - /v1/converge
+            - /v1/admin
+      - name: probabilistic-sample
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+      - name: rate-limit
+        type: rate_limiting
+        rate_limiting:
+          spans_per_second: 100
+
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+    send_batch_max_size: 1024
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  resource:
+    attributes:
+      - key: service.name
+        value: enrichment-engine
+        action: upsert
+      - key: deployment.environment
+        from_attribute: ENVIRONMENT
+        action: upsert
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    metric_expiration: 5m
+
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch, resource]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
