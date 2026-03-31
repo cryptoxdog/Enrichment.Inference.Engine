@@ -1,15 +1,15 @@
+# app/services/event_emitter.py
 """
-app/services/event_emitter.py
-
 Event emitter — publishes enrichment lifecycle events to downstream nodes.
 
 Backends:
     RedisStreamsBackend — XADD to tenant-scoped Redis Streams (default)
-    NATSBackend — publish to NATS subject (optional, requires nats-py)
+    NATSBackend         — publish to NATS subject (optional, requires nats-py)
 
 All emit calls are fire-and-forget via asyncio.create_task.
 The hot enrichment path is never blocked by event delivery.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -59,10 +59,16 @@ class EnrichmentEvent(BaseModel):
 
 
 class RedisStreamsBackend:
-    """Publishes events to Redis Streams. Stream key: enrich:events:{tenant_id}"""
+    """
+    Publishes events to Redis Streams.
+
+    Stream key: enrich:events:{tenant_id}
+    MAXLEN ~ 10000 (approximate trimming for memory safety)
+    """
 
     def __init__(self, redis_url: str) -> None:
         import redis.asyncio as aioredis
+
         self._client = aioredis.from_url(redis_url, decode_responses=True)
 
     async def publish(self, event: EnrichmentEvent) -> None:
@@ -85,7 +91,12 @@ class RedisStreamsBackend:
 
 
 class NATSBackend:
-    """Publishes events to NATS subjects. Requires nats-py."""
+    """
+    Publishes events to NATS subjects.
+
+    Subject pattern: enrich.events.{tenant_id}.{event_type}
+    Requires nats-py: pip install nats-py
+    """
 
     def __init__(self, nats_url: str) -> None:
         self._nats_url = nats_url
@@ -94,9 +105,12 @@ class NATSBackend:
     async def connect(self) -> None:
         try:
             import nats
+
             self._nc = await nats.connect(self._nats_url)
         except ImportError as exc:
-            raise RuntimeError("nats-py not installed. Run: pip install nats-py") from exc
+            raise RuntimeError(
+                "nats-py not installed. Run: pip install nats-py"
+            ) from exc
 
     async def publish(self, event: EnrichmentEvent) -> None:
         if self._nc is None:
@@ -111,7 +125,12 @@ class NATSBackend:
 
 
 class EventEmitter:
-    """Fire-and-forget event publisher. Never blocks the enrichment hot path."""
+    """
+    Fire-and-forget event publisher.
+
+    All emit() calls dispatch via asyncio.create_task — the enrichment
+    hot path never awaits event delivery.
+    """
 
     def __init__(self, backend: RedisStreamsBackend | NATSBackend) -> None:
         self._backend = backend
@@ -132,44 +151,72 @@ class EventEmitter:
         asyncio.create_task(self._publish_safe(event))
 
     async def emit_enrichment_completed(
-        self, tenant_id: str, entity_id: str, domain: str | None,
-        fields: dict[str, Any], confidence: float, tokens_used: int,
+        self,
+        tenant_id: str,
+        entity_id: str,
+        domain: str | None,
+        fields: dict[str, Any],
+        confidence: float,
+        tokens_used: int,
     ) -> None:
-        await self.emit(EnrichmentEvent(
-            event_type=EventType.ENRICHMENT_COMPLETED,
-            entity_id=entity_id,
-            tenant_id=tenant_id,
-            domain=domain,
-            payload={"fields_count": len(fields), "confidence": confidence, "tokens_used": tokens_used},
-        ))
+        await self.emit(
+            EnrichmentEvent(
+                event_type=EventType.ENRICHMENT_COMPLETED,
+                entity_id=entity_id,
+                tenant_id=tenant_id,
+                domain=domain,
+                payload={
+                    "fields_count": len(fields),
+                    "confidence": confidence,
+                    "tokens_used": tokens_used,
+                },
+            )
+        )
 
     async def emit_convergence_completed(
-        self, tenant_id: str, entity_id: str, domain: str | None,
-        pass_count: int, convergence_reason: str, total_tokens: int, total_cost_usd: float,
+        self,
+        tenant_id: str,
+        entity_id: str,
+        domain: str | None,
+        pass_count: int,
+        convergence_reason: str,
+        total_tokens: int,
+        total_cost_usd: float,
     ) -> None:
-        await self.emit(EnrichmentEvent(
-            event_type=EventType.CONVERGENCE_COMPLETED,
-            entity_id=entity_id,
-            tenant_id=tenant_id,
-            domain=domain,
-            payload={
-                "pass_count": pass_count,
-                "convergence_reason": convergence_reason,
-                "total_tokens": total_tokens,
-                "total_cost_usd": total_cost_usd,
-            },
-        ))
+        await self.emit(
+            EnrichmentEvent(
+                event_type=EventType.CONVERGENCE_COMPLETED,
+                entity_id=entity_id,
+                tenant_id=tenant_id,
+                domain=domain,
+                payload={
+                    "pass_count": pass_count,
+                    "convergence_reason": convergence_reason,
+                    "total_tokens": total_tokens,
+                    "total_cost_usd": total_cost_usd,
+                },
+            )
+        )
 
     async def emit_schema_proposed(
-        self, tenant_id: str, domain: str, batch_run_id: str, proposals_count: int,
+        self,
+        tenant_id: str,
+        domain: str,
+        batch_run_id: str,
+        proposals_count: int,
     ) -> None:
-        await self.emit(EnrichmentEvent(
-            event_type=EventType.SCHEMA_PROPOSED,
-            entity_id=batch_run_id,
-            tenant_id=tenant_id,
-            domain=domain,
-            payload={"batch_run_id": batch_run_id, "proposals_count": proposals_count},
-        ))
+        await self.emit(
+            EnrichmentEvent(
+                event_type=EventType.SCHEMA_PROPOSED,
+                entity_id=batch_run_id,
+                tenant_id=tenant_id,
+                domain=domain,
+                payload={
+                    "batch_run_id": batch_run_id,
+                    "proposals_count": proposals_count,
+                },
+            )
+        )
 
 
 @lru_cache(maxsize=1)
