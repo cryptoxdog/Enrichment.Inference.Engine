@@ -1,13 +1,13 @@
+# app/api/v1/discover.py
 """
-app/api/v1/discover.py
-
 Schema discovery and CRM scan API.
 
-POST /api/v1/discover                      — trigger schema discovery
-POST /api/v1/scan                          — CRM field scanner (Seed tier)
-GET  /api/v1/proposals/{domain}            — pending schema proposals
+POST /api/v1/discover                        — trigger schema discovery
+POST /api/v1/scan                            — CRM field scanner (Seed tier)
+GET  /api/v1/proposals/{domain}              — pending schema proposals
 POST /api/v1/proposals/{proposal_id}/approve — human approval
 """
+
 from __future__ import annotations
 
 import uuid
@@ -25,7 +25,8 @@ logger = structlog.get_logger("api.discover")
 router = APIRouter(tags=["discover"])
 
 
-# ── Request / Response Models ──────────────────────────────────────────────
+# ── Request/Response Models ────────────────────────────────────────────────
+
 
 class DiscoverRequest(BaseModel):
     entity_id: str
@@ -54,6 +55,7 @@ class ApprovalRequest(BaseModel):
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
+
 @router.post(
     "/api/v1/discover",
     dependencies=[Depends(verify_api_key)],
@@ -65,6 +67,7 @@ async def discover_schema(
 ) -> dict[str, Any]:
     try:
         from ...engines.schema_discovery import discover
+
         result = await discover(
             entity_id=request.entity_id,
             domain=request.domain,
@@ -94,6 +97,7 @@ async def scan_crm_fields(
 ) -> dict[str, Any]:
     try:
         from ...services.crm_field_scanner import scan_crm_fields as _scan
+
         crm_fields = [
             {
                 "name": f.name,
@@ -111,7 +115,11 @@ async def scan_crm_fields(
         )
         return result
     except Exception as exc:
-        logger.error("crm_scan_failed", domain=request.domain, error=str(exc))
+        logger.error(
+            "crm_scan_failed",
+            domain=request.domain,
+            error=str(exc),
+        )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
