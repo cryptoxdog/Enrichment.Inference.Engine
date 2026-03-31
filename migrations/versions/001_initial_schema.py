@@ -1,8 +1,10 @@
+# migrations/versions/001_initial_schema.py
 """Initial schema: enrichment_results, convergence_runs,
 field_confidence_history, schema_proposals.
 
 Revision ID: 001
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -16,6 +18,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # convergence_runs first — enrichment_results has FK to it
     op.create_table(
         "convergence_runs",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -35,11 +38,23 @@ def upgrade() -> None:
         sa.Column("total_cost_usd", sa.Numeric(10, 6), nullable=False, server_default="0"),
         sa.Column("max_budget_tokens", sa.Integer, nullable=False, server_default="50000"),
         sa.Column("schema_proposals", JSONB, nullable=False, server_default="[]"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.create_index("ix_convergence_runs_tenant_entity", "convergence_runs", ["tenant_id", "entity_id"])
+    op.create_index(
+        "ix_convergence_runs_tenant_entity", "convergence_runs", ["tenant_id", "entity_id"]
+    )
     op.create_index("ix_convergence_runs_state", "convergence_runs", ["state"])
 
     op.create_table(
@@ -68,13 +83,31 @@ def upgrade() -> None:
             sa.ForeignKey("convergence_runs.id", ondelete="SET NULL"),
             nullable=True,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
     )
-    op.create_index("ix_enrichment_results_tenant_entity", "enrichment_results", ["tenant_id", "entity_id"])
-    op.create_index("ix_enrichment_results_tenant_created", "enrichment_results", ["tenant_id", "created_at"])
-    op.create_index("ix_enrichment_results_idempotency", "enrichment_results", ["idempotency_key"])
-    op.create_index("ix_enrichment_results_convergence_run", "enrichment_results", ["convergence_run_id"])
+    op.create_index(
+        "ix_enrichment_results_tenant_entity", "enrichment_results", ["tenant_id", "entity_id"]
+    )
+    op.create_index(
+        "ix_enrichment_results_tenant_created", "enrichment_results", ["tenant_id", "created_at"]
+    )
+    op.create_index(
+        "ix_enrichment_results_idempotency", "enrichment_results", ["idempotency_key"]
+    )
+    op.create_index(
+        "ix_enrichment_results_convergence_run", "enrichment_results", ["convergence_run_id"]
+    )
 
     op.create_table(
         "field_confidence_history",
@@ -93,10 +126,23 @@ def upgrade() -> None:
         sa.Column("source", sa.String(32), nullable=False),
         sa.Column("pass_number", sa.Integer, nullable=False),
         sa.Column("variation_agreement", sa.Numeric(5, 4), nullable=True),
-        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "recorded_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
     )
-    op.create_index("ix_field_confidence_entity_field", "field_confidence_history", ["tenant_id", "entity_id", "field_name"])
-    op.create_index("ix_field_confidence_result_pass", "field_confidence_history", ["enrichment_result_id", "pass_number"])
+    op.create_index(
+        "ix_field_confidence_entity_field",
+        "field_confidence_history",
+        ["tenant_id", "entity_id", "field_name"],
+    )
+    op.create_index(
+        "ix_field_confidence_result_pass",
+        "field_confidence_history",
+        ["enrichment_result_id", "pass_number"],
+    )
 
     op.create_table(
         "schema_proposals",
@@ -114,13 +160,28 @@ def upgrade() -> None:
         sa.Column("proposed_gate", sa.Text, nullable=True),
         sa.Column("proposed_scoring_dimension", sa.Text, nullable=True),
         sa.Column("yaml_diff", sa.Text, nullable=True),
-        sa.Column("approval_status", sa.String(32), nullable=False, server_default="pending"),
+        sa.Column(
+            "approval_status", sa.String(32), nullable=False, server_default="pending"
+        ),
         sa.Column("reviewed_by", sa.String(256), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.UniqueConstraint("tenant_id", "domain", "batch_run_id", "field_name", name="uq_schema_proposal_batch_field"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.UniqueConstraint(
+            "tenant_id",
+            "domain",
+            "batch_run_id",
+            "field_name",
+            name="uq_schema_proposal_batch_field",
+        ),
     )
-    op.create_index("ix_schema_proposals_domain_status", "schema_proposals", ["domain", "approval_status"])
+    op.create_index(
+        "ix_schema_proposals_domain_status", "schema_proposals", ["domain", "approval_status"]
+    )
     op.create_index("ix_schema_proposals_tenant", "schema_proposals", ["tenant_id"])
 
 
