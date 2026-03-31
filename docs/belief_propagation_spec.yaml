@@ -1,0 +1,109 @@
+# belief_propagation_engine spec.yaml
+# Drives all engine behavior — Python implements mechanics, not domain policy.
+
+engine:
+  name: belief_propagation_engine
+  version: "1.0.0"
+  description: >
+    Bayesian belief propagation engine for L9 constellation.
+    Provides candidate re-scoring (CEG) and hop trace quality assessment (GATE).
+
+ingress:
+  endpoints:
+    - method: POST
+      path: /v1/execute
+      description: Route action to handler
+    - method: GET
+      path: /v1/health
+      description: Liveness check
+
+actions:
+  rescore_candidates:
+    handler: handle_rescore_candidates
+    description: Re-score and rank CEG candidates using Bayesian belief propagation
+    mode: multi_parent
+    inputs:
+      candidates:
+        type: list[dict]
+        required: true
+      dimension_keys:
+        type: list[str]
+        required: true
+      prior_key:
+        type: str
+        default: confidence
+      score_key:
+        type: str
+        default: belief_score
+    outputs:
+      candidates:
+        type: list[dict]
+        description: Sorted descending by score_key, inputs never mutated
+
+  assess_gate_trace:
+    handler: handle_assess_gate_trace
+    description: Assess GATE hop trace quality via chain propagation
+    mode: chain
+    inputs:
+      hops:
+        type: list[HopEntry]
+        required: true
+      prior_mu:
+        type: float
+        default: 0.5
+    outputs:
+      chain_confidence:
+        type: float
+        description: Terminal posterior_score (mu - entropy)
+      chain_composite:
+        type: float
+        description: Entropy-penalised chain quality scalar
+      n_hops:
+        type: int
+
+trust_tiers:
+  entailment:
+    value: 0.95
+    applies_to: [COMPLETED]
+    timeout_penalty:
+      threshold_ratio: 0.5
+      max_reduction: 0.5
+      formula: "base * (1 - 0.5 * (ratio - 0.5) / 0.5)"
+  neutral:
+    value: 0.60
+    applies_to: [SKIPPED, PENDING]
+  contradiction:
+    value: 0.10
+    applies_to: [FAILED, CONTRADICTED]
+
+convergence:
+  threshold: 0.85
+  metric: posterior_score
+  formula: "max(0.0, min(1.0, mu - entropy))"
+
+propagation_modes:
+  multi_parent:
+    description: >
+      Aggregate INDEPENDENT evidence sources.
+      Order-invariant. Used for CEG dimension scoring.
+    formula: "average(trust_scores) -> bayesian_update(prior, aggregate_trust)"
+  chain:
+    description: >
+      Propagate CAUSALLY ORDERED evidence.
+      Each hop update feeds the next. Used for GATE hop traces.
+    formula: "sequential bayesian_update for each trust in trust_scores"
+
+entropy_penalty:
+  formula: "mu * (1 - entropy)"
+  properties:
+    - monotonically decreasing in entropy
+    - equals mu when entropy=0
+    - approaches 0 as entropy->1
+
+packet_envelope:
+  immutability: strict
+  mutation_policy: >
+    All output dicts must be new objects ({**c, key: value}).
+    Never mutate input dicts. Verified by test suite.
+  hash_integrity: sha256
+  determinism: required
