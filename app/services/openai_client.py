@@ -1,11 +1,13 @@
+# app/services/openai_client.py
 """
-app/services/openai_client.py
-
 OpenAI API client for consensus variation diversity.
 
 Uses httpx.AsyncClient directly (no openai SDK) to avoid version conflicts
 and to enable precise retry/timeout/circuit-breaker control.
+
+All calls are logged with model, token usage, and latency.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +31,7 @@ class LLMResponseError(Exception):
 
 class OpenAIClient:
     """
-    Async OpenAI chat completions client with retry and circuit breaker.
+    Async OpenAI chat completions client.
 
     Usage:
         client = OpenAIClient(api_key=settings.openai_api_key)
@@ -37,7 +39,12 @@ class OpenAIClient:
         data = await client.complete_json("Extract fields as JSON...")
     """
 
-    def __init__(self, api_key: str, model: str = "gpt-4o", timeout: int = 60) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o",
+        timeout: int = 60,
+    ) -> None:
         self._api_key = api_key
         self._model = model
         self._timeout = timeout
@@ -53,31 +60,57 @@ class OpenAIClient:
         self._circuit_open = False
         self._availability_cache: tuple[bool, float] | None = None
 
-    async def complete(self, prompt: str, max_tokens: int = 2000, temperature: float = 0.3) -> str:
+    async def complete(
+        self,
+        prompt: str,
+        max_tokens: int = 2000,
+        temperature: float = 0.3,
+    ) -> str:
         """Return the text content of the first completion choice."""
-        response = await self._call(prompt=prompt, max_tokens=max_tokens, temperature=temperature, json_mode=False)
+        response = await self._call(
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            json_mode=False,
+        )
         return response["choices"][0]["message"]["content"]
 
-    async def complete_json(self, prompt: str, schema: dict | None = None) -> dict[str, Any]:
-        """Return parsed JSON from the model. Raises LLMResponseError if not valid JSON."""
-        response = await self._call(prompt=prompt, max_tokens=2000, temperature=0.1, json_mode=True)
+    async def complete_json(
+        self,
+        prompt: str,
+        schema: dict | None = None,
+    ) -> dict[str, Any]:
+        """
+        Return parsed JSON from the model.
+
+        Raises LLMResponseError if the response is not valid JSON.
+        """
+        response = await self._call(
+            prompt=prompt,
+            max_tokens=2000,
+            temperature=0.1,
+            json_mode=True,
+        )
         content = response["choices"][0]["message"]["content"]
         try:
             return json.loads(content)
         except json.JSONDecodeError as exc:
-            raise LLMResponseError(f"OpenAI returned non-JSON content: {content[:200]}") from exc
+            raise LLMResponseError(
+                f"OpenAI returned non-JSON content: {content[:200]}"
+            ) from exc
 
     def count_tokens(self, text: str) -> int:
         """Estimate token count using tiktoken cl100k_base encoding."""
         try:
             import tiktoken
+
             enc = tiktoken.get_encoding("cl100k_base")
             return len(enc.encode(text))
         except ImportError:
             return len(text) // 4
 
     async def is_available(self) -> bool:
-        """Health check via GET /v1/models. Cached 60 seconds."""
+        """Health check via GET /v1/models. Result cached for 60 seconds."""
         now = time.monotonic()
         if self._availability_cache and (now - self._availability_cache[1]) < 60:
             return self._availability_cache[0]
@@ -89,7 +122,13 @@ class OpenAIClient:
         self._availability_cache = (available, now)
         return available
 
-    async def _call(self, prompt: str, max_tokens: int, temperature: float, json_mode: bool) -> dict[str, Any]:
+    async def _call(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        json_mode: bool,
+    ) -> dict[str, Any]:
         if self._circuit_open:
             raise LLMResponseError("OpenAI circuit breaker is open")
 
@@ -110,7 +149,9 @@ class OpenAIClient:
                 latency_ms = int((time.monotonic() - start) * 1000)
 
                 if resp.status_code in _RETRYABLE_STATUS:
-                    last_exc = LLMResponseError(f"OpenAI {resp.status_code} on attempt {attempt}")
+                    last_exc = LLMResponseError(
+                        f"OpenAI {resp.status_code} on attempt {attempt}"
+                    )
                     await asyncio.sleep(delay)
                     continue
 
@@ -129,7 +170,11 @@ class OpenAIClient:
 
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
-                logger.warning("openai_call_network_error", attempt=attempt, error=str(exc))
+                logger.warning(
+                    "openai_call_network_error",
+                    attempt=attempt,
+                    error=str(exc),
+                )
                 await asyncio.sleep(delay)
 
         self._failure_count += 1
@@ -137,4 +182,6 @@ class OpenAIClient:
             self._circuit_open = True
             logger.error("openai_circuit_breaker_opened", failures=self._failure_count)
 
-        raise LLMResponseError(f"OpenAI call failed after {len(_RETRY_DELAYS)} attempts") from last_exc
+        raise LLMResponseError(
+            f"OpenAI call failed after {len(_RETRY_DELAYS)} attempts"
+        ) from last_exc
