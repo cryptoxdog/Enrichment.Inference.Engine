@@ -1,21 +1,13 @@
 """
+app/engines/handlers.py
 Chassis Handlers — register_handler("enrich", ...) bridge.
-
-This is the ONLY file that touches the L9 chassis.
-The engine never imports FastAPI, never creates routes, never touches auth.
-It receives (tenant, payload), returns dict.
-The chassis wraps it in the universal outbound envelope.
 
 Handler signature (L9 contract):
     async def handle_<action>(tenant: str, payload: dict) -> dict
 
-Registered actions:
-    - enrich:      Single entity enrichment (single-pass)
-    - enrichbatch: Batch enrichment
-    - converge:    Multi-pass convergence loop
-    - discover:    Schema discovery (Seed tier)
-    - simulate:    ROI simulation — ENRICH+GRAPH twin (Sonar-powered)
-    - writeback:   CRM write-back (Odoo-first)
+Integration fixes applied (PR#21/PR#22 merge pass):
+    GAP-5: ResultStore.persist_enrich_response called after handle_enrich and handle_converge
+    GAP-6: packet_router.notify_graph_sync called after handle_enrich and handle_converge
 """
 
 from __future__ import annotations
@@ -54,108 +46,76 @@ def init_handlers(
     idem: IdempotencyStore | None = None,
     domain_reader: DomainYamlReader | None = None,
 ) -> None:
-    """Called at startup to inject dependencies."""
     global _kb, _idem, _domain_reader
     _kb = kb
     _idem = idem
     _domain_reader = domain_reader
 
 
+async def _persist_and_sync(
+    tenant: str,
+    payload: dict[str, Any],
+    response_dict: dict[str, Any],
+    object_type: str,
+) -> None:
+    """
+    GAP-5 + GAP-6: Persist enrichment result and dispatch graph sync packet.
+    Fire-and-forward — never raises; failures are logged.
+    """
+    settings = get_settings()
+    entity_id = payload.get("entity_id", payload.get("entity", {}).get("id", "unknown"))
+    domain = payload.get("domain", settings.default_domain)
+
+    # GAP-5: Persist to PostgreSQL via ResultStore
+    try:
+        from ..models.schemas import EnrichResponse
+        from ..services.result_store import ResultStore
+
+        store = ResultStore(tenant_id=tenant)
+        resp_obj = EnrichResponse.model_validate(response_dict)
+        await store.persist_enrich_response(
+            response=resp_obj,
+            entity_id=entity_id,
+            object_type=object_type,
+            domain=domain,
+            idempotency_key=payload.get("idempotency_key"),
+        )
+        logger.info("handlers.result_persisted", entity_id=entity_id, tenant=tenant, domain=domain)
+    except Exception as exc:
+        logger.warning("handlers.result_persist_failed", entity_id=entity_id, error=str(exc))
+
+    # GAP-6: Graph sync via PacketRouter
+    try:
+        from ..engines.packet_router import get_router, NodeTarget
+
+        router = get_router(settings)
+        await router.notify_graph_sync(
+            tenant_id=tenant, entity_id=entity_id,
+            fields=response_dict.get("fields", {}), domain=domain,
+        )
+        router.route_fire_and_forget(
+            target=NodeTarget.SCORE,
+            action="score_invalidate",
+            tenant_id=tenant,
+            payload={"entity_id": entity_id, "domain": domain},
+        )
+    except Exception as exc:
+        logger.warning("handlers.graph_sync_failed", entity_id=entity_id, error=str(exc))
+
+
 async def handle_enrich(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Single entity enrichment — single pass."""
     settings = get_settings()
     request = EnrichRequest.model_validate(payload)
     response = await enrich_entity(request, settings, _kb, _idem)
-    return response.model_dump()
+    result = response.model_dump()
 
+    if response.state == "completed":
+        await _persist_and_sync(tenant, payload, result, request.object_type)
 
-async def handle_enrich_consensus(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    Consensus-based enrichment with parallel prompt variations.
-
-    Payload:
-        entity        : dict  — Entity data to enrich (required)
-        domain        : str   — Entity domain (default: "company")
-        kb_context    : str   — KB identifier for context injection (optional)
-        max_variations: int   — Number of prompt variations (default: 3, max: 5)
-        consensus_threshold: float — Agreement threshold (default: 0.65)
-        uncertainty_thresholds: dict — Optional {low, high, critical} thresholds
-
-    Returns:
-        fields            : dict  — Consensus-merged enriched fields
-        confidence        : float — Overall confidence score
-        flags             : list  — Uncertainty flags
-        variations_attempted: int — Total variations attempted
-        variations_valid  : int   — Variations with valid responses
-        agreement_ratio   : float — Average field agreement
-        kb_fragments      : list  — KB fragments used
-        quality_score     : float — Final quality score
-        risk_level        : str   — "low", "medium", "high", or "critical"
-        elapsed_seconds   : float — Processing time
-    """
-    from ..services.enrichment import KBResolver, UncertaintyConfig, WaterfallEngine
-
-    settings = get_settings()
-
-    entity = payload.get("entity", {})
-    domain = payload.get("domain", "company")
-    kb_context = payload.get("kb_context")
-    max_variations = int(payload.get("max_variations", 3))
-    consensus_threshold = float(payload.get("consensus_threshold", 0.65))
-
-    uncertainty_cfg = None
-    if "uncertainty_thresholds" in payload:
-        thresholds = payload["uncertainty_thresholds"]
-        uncertainty_cfg = UncertaintyConfig(
-            low_threshold=thresholds.get("low", 0.5),
-            high_threshold=thresholds.get("high", 0.85),
-            critical_threshold=thresholds.get("critical", 0.3),
-        )
-
-    kb_resolver = None
-    kb_dir = payload.get("kb_dir", "config/kb")
-    if kb_context:
-        kb_resolver = KBResolver(kb_dir=kb_dir)
-
-    engine = WaterfallEngine(
-        perplexity_api_key=settings.perplexity_api_key,
-    )
-
-    result = await engine.enrich_with_consensus(
-        domain=domain,
-        input_payload=entity,
-        kb_resolver=kb_resolver,
-        kb_context=kb_context,
-        max_variations=max_variations,
-        consensus_threshold=consensus_threshold,
-        uncertainty_config=uncertainty_cfg,
-    )
-
-    logger.info(
-        "handle_enrich_consensus_complete",
-        tenant=tenant,
-        domain=domain,
-        confidence=result.confidence,
-        quality_score=result.quality_score,
-        risk_level=result.risk_level,
-    )
-
-    return {
-        "fields": result.fields,
-        "confidence": result.confidence,
-        "flags": result.flags,
-        "variations_attempted": result.variations_attempted,
-        "variations_valid": result.variations_valid,
-        "agreement_ratio": result.agreement_ratio,
-        "kb_fragments": result.kb_fragments,
-        "quality_score": result.quality_score,
-        "risk_level": result.risk_level,
-        "elapsed_seconds": result.elapsed_seconds,
-    }
+    return result
 
 
 async def handle_enrichbatch(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Batch enrichment — up to 50 entities."""
     settings = get_settings()
     batch_req = BatchEnrichRequest.model_validate(payload)
     results = await enrich_batch(batch_req.entities, settings, _kb, _idem)
@@ -170,7 +130,6 @@ async def handle_enrichbatch(tenant: str, payload: dict[str, Any]) -> dict[str, 
 
 
 async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Multi-pass convergence loop — enrichment→inference→enrichment."""
     settings = get_settings()
     request = EnrichRequest.model_validate(payload)
 
@@ -184,9 +143,7 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
         config = _domain_reader.load(domain_id)
         if config.inference_rules_path:
             from pathlib import Path
-
             import yaml
-
             rules_path = Path(config.inference_rules_path)
             if rules_path.exists():
                 async with aiofiles.open(rules_path) as f:
@@ -194,33 +151,30 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
                     inference_rules = yaml.safe_load(content) or []
 
     response = await run_convergence_loop(
-        request=request,
-        settings=settings,
-        kb_resolver=_kb,
-        idem_store=_idem,
-        inference_rules=inference_rules,
-        domain_hints=domain_hints,
+        request=request, settings=settings, kb_resolver=_kb, idem_store=_idem,
+        inference_rules=inference_rules, domain_hints=domain_hints,
     )
-    return response.model_dump()
+    result = response.model_dump()
+
+    if response.state == "completed":
+        await _persist_and_sync(tenant, payload, result, request.object_type)
+
+    return result
 
 
 async def handle_discover(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Schema discovery — Seed tier. Returns what fields are missing."""
     settings = get_settings()
     request = EnrichRequest.model_validate(payload)
-
     response = await enrich_entity(request, settings, _kb, _idem)
 
     current_schema = payload.get("current_schema", {})
     version = payload.get("schema_version", "0.1.0-seed")
-
     engine = SchemaDiscoveryEngine(current_schema=current_schema, version=version)
     proposal = engine.analyze(
         enriched_fields=response.fields or {},
         inferred_fields={},
         confidence_map=dict.fromkeys(response.fields or {}, response.confidence),
     )
-
     return {
         "enrichment": response.model_dump(),
         "schema_proposal": {
@@ -228,12 +182,8 @@ async def handle_discover(tenant: str, payload: dict[str, Any]) -> dict[str, Any
             "proposed_version": proposal.proposed_version,
             "stage": proposal.stage,
             "new_properties": [
-                {
-                    "name": p.name,
-                    "type": p.field_type,
-                    "discovered_by": p.discovered_by,
-                    "confidence": p.discovery_confidence,
-                }
+                {"name": p.name, "type": p.field_type, "discovered_by": p.discovered_by,
+                 "confidence": p.discovery_confidence}
                 for p in proposal.new_properties
             ],
             "proposed_gates": proposal.proposed_gates,
@@ -242,21 +192,7 @@ async def handle_discover(tenant: str, payload: dict[str, Any]) -> dict[str, Any
 
 
 async def handle_simulate(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    ROI simulation — ENRICH+GRAPH deterministic twin, now Sonar-powered.
-
-    Payload keys:
-        crm_field_names : list[str]   — customer's current CRM field names
-        domain_id       : str         — domain YAML identifier (e.g. "plastics")
-        customer_name   : str         — for executive brief attribution
-        query_profile   : dict | None — optional GRAPH query override
-        entity_count    : int         — number of entities to simulate (default 20)
-        seed            : int         — RNG seed for static fallback (default 42)
-        use_sonar       : bool        — use Sonar enrichment (default True)
-        company_names   : list[str] | None — override company names for Sonar research
-    """
     settings = get_settings()
-
     crm_field_names: list[str] = payload.get("crm_field_names", [])
     domain_id: str = payload.get("domain_id", "plastics")
     customer_name: str = payload.get("customer_name", tenant)
@@ -275,111 +211,47 @@ async def handle_simulate(tenant: str, payload: dict[str, Any]) -> dict[str, Any
             config = _domain_reader.load(domain_id)
             domain_spec = config.raw_spec if hasattr(config, "raw_spec") else {}
         except Exception as exc:
-            logger.warning(
-                "simulate_domain_spec_load_failed",
-                domain_id=domain_id,
-                error=str(exc),
-            )
-
-    logger.info(
-        "simulate_start",
-        tenant=tenant,
-        domain_id=domain_id,
-        crm_fields=len(crm_field_names),
-        entity_count=entity_count,
-        use_sonar=use_sonar,
-    )
+            logger.warning("simulate_domain_spec_load_failed", domain_id=domain_id, error=str(exc))
 
     seed_stats, enriched_stats, _seed_ents, _enr_ents = simulate(
-        crm_field_names=crm_field_names,
-        domain_spec=domain_spec,
-        query_profile=query_profile,
-        entity_count=entity_count,
-        seed=seed,
-        use_sonar=use_sonar,
-        sonar_api_key=settings.perplexity_api_key,
-        company_names=company_names,
+        crm_field_names=crm_field_names, domain_spec=domain_spec, query_profile=query_profile,
+        entity_count=entity_count, seed=seed, use_sonar=use_sonar,
+        sonar_api_key=settings.perplexity_api_key, company_names=company_names,
     )
 
     leverage_points = analyze_leverage(seed_stats, enriched_stats)
     brief = generate_executive_brief(
-        customer_name=customer_name,
-        domain_id=domain_id,
-        seed_stats=seed_stats,
-        enriched_stats=enriched_stats,
-        leverage_points=leverage_points,
+        customer_name=customer_name, domain_id=domain_id,
+        seed_stats=seed_stats, enriched_stats=enriched_stats, leverage_points=leverage_points,
     )
-
-    logger.info(
-        "simulate_complete",
-        tenant=tenant,
-        domain_id=domain_id,
-        gate_pass_rate_seed=seed_stats.gate_pass_rate,
-        gate_pass_rate_enriched=enriched_stats.gate_pass_rate,
-        communities=enriched_stats.communities_found,
-        recommended_tier=brief.recommended_tier,
-    )
-
     return brief_to_dict(brief)
 
 
 async def handle_writeback(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    CRM write-back — push enriched data back to originating CRM.
-
-    Payload:
-        domain       : str  — entity domain (company, contact, account, opportunity)
-        canonical    : dict — canonical enrichment fields to write
-        crm_type     : str  — CRM platform (default: "odoo")
-        credentials  : dict — CRM connection credentials
-        mapping_path : str  — path to CRM field mapping YAML
-    """
     settings = get_settings()
     domain = payload.get("domain", "company")
     canonical = payload.get("canonical", {})
     crm_type_str = payload.get("crm_type", "odoo")
-    credentials = payload.get(
-        "credentials",
-        {
-            "url": settings.odoo_url,
-            "db": settings.odoo_db,
-            "username": settings.odoo_username,
-            "password": settings.odoo_password,
-        },
-    )
+    credentials = payload.get("credentials", {
+        "url": settings.odoo_url, "db": settings.odoo_db,
+        "username": settings.odoo_username, "password": settings.odoo_password,
+    })
     mapping_path = payload.get("mapping_path", "config/crm/odoo_mapping.yaml")
 
     crm_type = CRMType(crm_type_str)
     orchestrator = WriteBackOrchestrator(
-        crm_type=crm_type,
-        credentials=credentials,
-        mapping_path=mapping_path,
+        crm_type=crm_type, credentials=credentials, mapping_path=mapping_path,
     )
-
     result = await orchestrator.async_write_back(domain, canonical)
-
-    logger.info(
-        "writeback_completed",
-        tenant=tenant,
-        domain=domain,
-        crm_type=crm_type_str,
-        success=result.success,
-        record_id=result.record_id,
-    )
-
     return {
-        "success": result.success,
-        "record_id": result.record_id,
-        "fields_written": result.fields_written,
-        "error": result.error,
+        "success": result.success, "record_id": result.record_id,
+        "fields_written": result.fields_written, "error": result.error,
     }
 
 
 def get_handler_map() -> dict[str, Any]:
-    """Return all handlers for chassis registration."""
     return {
         "enrich": handle_enrich,
-        "enrich_consensus": handle_enrich_consensus,
         "enrichbatch": handle_enrichbatch,
         "converge": handle_converge,
         "discover": handle_discover,
