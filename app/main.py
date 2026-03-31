@@ -18,6 +18,9 @@ import structlog
 from fastapi import Depends, FastAPI
 
 from .api.v1.chassis_endpoint import router as chassis_router
+from .api.v1.converge import router as converge_router
+from .api.v1.discover import router as discover_router
+from .api.v1.fields import router as fields_router
 from .core.auth import verify_api_key
 from .core.config import Settings, get_settings
 from .core.logging_config import setup_logging
@@ -60,6 +63,13 @@ async def lifespan(app: FastAPI):
 
     register_orchestration(kb=_kb, idem_store=_idem)
 
+    # ── Persistence layer ──────────────────────────────────────────
+    from .services import pg_store
+    from .services.event_emitter import get_emitter
+    pg_store.init_engine(settings.database_url)
+    get_emitter(settings)  # warm singleton
+    logger.info("pg_store_initialized", database_url=settings.database_url[:40])
+
     logger.info(
         "api_started",
         version="2.3.0",
@@ -72,6 +82,8 @@ async def lifespan(app: FastAPI):
 
     if _idem:
         await _idem.close()
+    from .services import pg_store as _pg
+    await _pg.close_engine()
     _kb = None
     _idem = None
 
@@ -91,8 +103,11 @@ app = FastAPI(
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 setup_telemetry(app)
 
-# ── Chassis router (node-to-node PacketEnvelope traffic) ──────────
-app.include_router(chassis_router)
+# ── Routers ────────────────────────────────────────────────────────
+app.include_router(chassis_router)   # PacketEnvelope node-to-node
+app.include_router(converge_router)  # POST /api/v1/converge
+app.include_router(discover_router)  # POST /api/v1/discover, /api/v1/scan, /api/v1/proposals
+app.include_router(fields_router)    # GET  /api/v1/fields
 
 
 @app.get("/api/v1/health", response_model=HealthCheckResponse)
