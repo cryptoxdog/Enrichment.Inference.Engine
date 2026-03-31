@@ -1,20 +1,16 @@
+# app/services/pg_models.py
 """
-app/services/pg_models.py
-
-SQLAlchemy ORM models for the Enrichment Inference Engine persistence layer.
+SQLAlchemy 2.x async ORM models for durable enrichment persistence.
 
 Tables:
-  enrichment_results      — one row per completed enrichment
-  convergence_runs        — one row per convergence loop run (multi-pass)
-  field_confidence_history — time-series per-field confidence values
-  schema_proposals        — schema proposals with human approval workflow
+    enrichment_results       — one row per EnrichResponse
+    convergence_runs         — one row per multi-pass loop execution
+    field_confidence_history — per-field confidence time-series
+    schema_proposals         — proposer output with human approval workflow
 
-All tables use:
-  - UUID primary keys (PostgreSQL native UUID type)
-  - JSONB for variable-width dicts/lists
-  - Composite indexes for tenant-scoped queries
-  - server_default=func.now() for created_at/updated_at
+All tables: tenant_id for RLS, NUMERIC for confidence/cost, JSONB for blobs.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -22,6 +18,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -29,10 +26,10 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 
 
 class Base(DeclarativeBase):
@@ -41,10 +38,10 @@ class Base(DeclarativeBase):
 
 class EnrichmentResult(Base):
     """
-    Persists the output of a single enrichment call.
+    Persisted snapshot of a single EnrichResponse.
 
-    Written by ResultStore.persist_enrich_response() after each completed
-    enrichment. The idempotency_key prevents duplicate writes on retry.
+    One row per enrichment execution — single-pass or final pass of a
+    convergence loop. Linked to ConvergenceRun when part of multi-pass.
     """
 
     __tablename__ = "enrichment_results"
@@ -60,14 +57,10 @@ class EnrichmentResult(Base):
         String(256), nullable=True, unique=True, index=True
     )
     fields: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    confidence: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
-    uncertainty_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
-    quality_tier: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="unknown"
-    )
-    state: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="completed", index=True
-    )
+    confidence: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0.0)
+    uncertainty_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    quality_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="completed")
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     tokens_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     processing_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
