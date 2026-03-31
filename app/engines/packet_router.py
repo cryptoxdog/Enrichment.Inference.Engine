@@ -6,6 +6,9 @@ Builds and dispatches PacketEnvelopes to L9 constellation nodes
 via POST /v1/execute. All inter-node traffic carries tenant lineage,
 correlation_id, and content-hash integrity markers.
 
+The content_hash covers (action, tenant_id, payload) to detect mutation
+in transit. Recipients must re-derive and compare before processing.
+
 Usage:
     router = get_router(settings)
     await router.notify_graph_sync(tenant_id, entity_id, fields, domain)
@@ -55,49 +58,51 @@ def _build_envelope(
     """
     Build a PacketEnvelope with lineage, hash integrity, and delegation trace.
 
-    Fields:
-        packet_id        — unique envelope UUID
-        action           — target handler action string
-        tenant_id        — originating tenant (lineage)
-        correlation_id   — caller-supplied trace ID (or generated)
-        payload          — action-specific data dict
-        content_hash     — SHA-256 of serialized payload (integrity)
-        sent_at          — ISO timestamp
+    The content_hash covers (action, tenant_id, payload) to detect mutation
+    in transit. Recipients must re-derive and compare before processing.
     """
     cid = correlation_id or str(uuid.uuid4())
-    payload_bytes = json.dumps(payload, sort_keys=True, default=str).encode()
-    content_hash = hashlib.sha256(payload_bytes).hexdigest()
+    payload_json = json.dumps(payload, sort_keys=True, default=str)
+    content_hash = hashlib.sha256(
+        f"{action}:{tenant_id}:{payload_json}".encode()
+    ).hexdigest()
 
     return {
-        "packet_id": str(uuid.uuid4()),
         "action": action,
         "tenant_id": tenant_id,
-        "correlation_id": cid,
         "payload": payload,
+        "correlation_id": cid,
         "content_hash": content_hash,
         "sent_at": datetime.now(timezone.utc).isoformat(),
+        "source_node": "enrich",
     }
 
 
 class PacketRouter:
     """
-    Routes PacketEnvelopes to constellation node endpoints.
+    Sends PacketEnvelopes to L9 constellation nodes.
 
-    Node URLs resolved from settings.node_urls dict keyed by NodeTarget value.
-    Shared httpx.AsyncClient with connection pooling.
+    Builds URL map from Settings at construction time.
+    Singleton per process via get_router().
     """
 
     def __init__(self, settings: Any) -> None:
-        self._node_urls: dict[str, str] = getattr(settings, "node_urls", {})
-        self._http = httpx.AsyncClient(timeout=httpx.Timeout(_ROUTE_TIMEOUT))
-
-    def _url_for(self, target: NodeTarget) -> str:
-        url = self._node_urls.get(target.value)
-        if not url:
-            raise NodeUnreachableError(
-                f"No URL configured for node target: {target.value}"
-            )
-        return url.rstrip("/") + "/v1/execute"
+        self._url_map: dict[NodeTarget, str] = {
+            NodeTarget.GRAPH: settings.graph_node_url,
+            NodeTarget.SCORE: settings.score_node_url,
+            NodeTarget.ROUTE: settings.route_node_url,
+            NodeTarget.SIGNAL: getattr(settings, "signal_node_url", ""),
+            NodeTarget.FORECAST: getattr(settings, "forecast_node_url", ""),
+            NodeTarget.HANDOFF: getattr(settings, "handoff_node_url", ""),
+        }
+        self._secret = settings.inter_node_secret
+        self._http = httpx.AsyncClient(
+            timeout=httpx.Timeout(_ROUTE_TIMEOUT),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.inter_node_secret}",
+            },
+        )
 
     async def route(
         self,
@@ -108,42 +113,56 @@ class PacketRouter:
         correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Dispatch a packet to a target node and return the response body.
+        Route a PacketEnvelope to a constellation node.
 
-        Retries up to _RETRY_ATTEMPTS times on retryable HTTP errors.
-        Raises NodeUnreachableError if all attempts fail.
+        Retries up to _RETRY_ATTEMPTS times on 5xx responses.
+        Raises NodeUnreachableError when all attempts fail.
         """
-        envelope = _build_envelope(action, tenant_id, payload, correlation_id)
-        url = self._url_for(target)
-        last_exc: Exception | None = None
+        base_url = self._url_map.get(target, "")
+        if not base_url:
+            raise NodeUnreachableError(
+                f"No URL configured for node target: {target.value}"
+            )
 
+        envelope = _build_envelope(
+            action=action,
+            tenant_id=tenant_id,
+            payload=payload,
+            correlation_id=correlation_id,
+        )
+        url = f"{base_url.rstrip('/')}/v1/execute"
+
+        last_exc: Exception | None = None
         for attempt in range(1, _RETRY_ATTEMPTS + 2):
             try:
                 resp = await self._http.post(url, json=envelope)
-                if resp.status_code in _RETRYABLE_STATUS:
-                    last_exc = NodeUnreachableError(
-                        f"{target.value} returned {resp.status_code} on attempt {attempt}"
+                if resp.status_code in _RETRYABLE_STATUS and attempt <= _RETRY_ATTEMPTS:
+                    logger.warning(
+                        "packet_router_retrying",
+                        target=target.value,
+                        action=action,
+                        status=resp.status_code,
+                        attempt=attempt,
                     )
-                    await asyncio.sleep(attempt * 0.5)
                     continue
                 resp.raise_for_status()
-                logger.debug(
+                logger.info(
                     "packet_routed",
                     target=target.value,
                     action=action,
-                    packet_id=envelope["packet_id"],
-                    status=resp.status_code,
+                    tenant_id=tenant_id,
+                    correlation_id=envelope["correlation_id"],
                 )
                 return resp.json()
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
                 logger.warning(
-                    "packet_route_network_error",
+                    "packet_router_network_error",
                     target=target.value,
+                    action=action,
                     attempt=attempt,
                     error=str(exc),
                 )
-                await asyncio.sleep(attempt * 0.5)
 
         raise NodeUnreachableError(
             f"Node {target.value} unreachable after {_RETRY_ATTEMPTS + 1} attempts"
