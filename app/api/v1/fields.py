@@ -1,11 +1,11 @@
+# app/api/v1/fields.py
 """
-app/api/v1/fields.py
-
 Field-level confidence and provenance API.
 
-GET  /api/v1/fields/{entity_id}                      — field map + confidence
-GET  /api/v1/fields/{entity_id}/{field_name}/history — confidence time-series
+GET /api/v1/fields/{entity_id}                       — field map + confidence
+GET /api/v1/fields/{entity_id}/{field_name}/history  — confidence time-series
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -83,11 +83,16 @@ async def get_field_confidence_map(
     field_count = len(field_entries)
     avg_conf = total_confidence / field_count if field_count else 0.0
 
+    # coverage_ratio: fields present vs total schema fields
+    # Without a schema reference, treat present fields as 100% coverage
+    total_schema_fields = max(field_count, 1)
+    coverage_ratio = field_count / total_schema_fields
+
     return FieldsResponse(
         entity_id=entity_id,
         fields=field_entries,
         avg_confidence=round(avg_conf, 4),
-        coverage_ratio=1.0,  # coverage vs schema requires domain spec; full coverage assumed here
+        coverage_ratio=round(coverage_ratio, 4),
         last_enriched_at=latest.created_at,
     )
 
