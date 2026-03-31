@@ -1,12 +1,12 @@
+# app/services/result_store.py
 """
-app/services/result_store.py
-
 ResultStore — domain facade over pg_store.
 
 Provides a clean API for convergence_controller and API layer without
 coupling callers to SQLAlchemy internals. Handles serialization
 and field confidence extraction automatically.
 """
+
 from __future__ import annotations
 
 import uuid
