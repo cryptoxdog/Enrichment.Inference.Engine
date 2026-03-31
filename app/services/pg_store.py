@@ -1,11 +1,11 @@
+# app/services/pg_store.py
 """
-app/services/pg_store.py
-
 PostgreSQL async store — connection pool, CRUD, and query helpers.
 
 Module-level engine (one per process). All writes are idempotent where possible.
 Callers acquire a session via get_session() context manager.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -37,9 +37,7 @@ logger = structlog.get_logger("pg_store")
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
-_TERMINAL_STATES = frozenset(
-    {"converged", "budget_exhausted", "max_passes", "human_hold", "failed"}
-)
+_TERMINAL_STATES = frozenset({"converged", "budget_exhausted", "max_passes", "human_hold", "failed"})
 
 
 def init_engine(
@@ -375,7 +373,7 @@ async def save_schema_proposal(
         record.proposed_scoring_dimension = proposed_scoring_dimension
         record.yaml_diff = yaml_diff
         await session.flush()
-        return record
+    return record
 
 
 async def get_pending_schema_proposals(
