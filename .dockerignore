@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Testing / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+coverage.xml
+.coverage
+*.cover
+
+# IDE
+.cursor/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docs / misc
+docs/
+readme/
+*.md
+LICENSE
+CHANGELOG.md
+SECURITY.md
+
+# CI
+.github/
+
+# Model weights / large files
+*.bin
+*.pt
+*.safetensors
+*.gguf
+
+# Logs
+*.log
+logs/

@@ -1,0 +1,20 @@
+# Enrichment.Inference.Engine
+
+> Universal domain-aware entity enrichment API for PlasticOS.
+> Enriches CRM records (Odoo + Salesforce) with structured intelligence
+> from Perplexity sonar-reasoning, normalized into material and facility profiles
+> for high-accuracy buyer matching.
+
+## Key Files
+
+- [AGENTS.md](AGENTS.md): Agent operating instructions and repo conventions
+- [ARCHITECTURE.md](ARCHITECTURE.md): System architecture, component map, data flow
+- [GUARDRAILS.md](GUARDRAILS.md): AI safety constraints, prompt rules, field write policy
+- [CLAUDE.md](CLAUDE.md): Claude Code context and instructions
+
+## Docs
+
+- [TESTING.md](TESTING.md): Test strategy, coverage thresholds, fixture patterns
+- [CONTRIBUTING.md](CONTRIBUTING.md): Contribution guide
+- [CHANGELOG.md](CHANGELOG.md): Version history
+- [SECURITY.md](SECURITY.md): Vulnerability disclosure policy
