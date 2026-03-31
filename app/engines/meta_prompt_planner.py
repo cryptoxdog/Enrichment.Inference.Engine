@@ -39,7 +39,7 @@ class MetaPromptPlanner:
     def __init__(
         self,
         domain_spec: DomainSpec,
-        rule_registry: Any = None,  # RuleRegistry from inference_rule_loader
+        rule_registry: Any = None,  # RuleRegistry from inference.rule_loader
         unlock_index: dict[str, list[str]] | None = None,
     ):
         """
@@ -166,7 +166,7 @@ class MetaPromptPlanner:
         # Targeted/verification: use unlock-aware ranking if available
         if self.rule_registry and self.unlock_index:
             try:
-                from ..engines.inference_rule_loader import rank_fields_by_unlock
+                from ..engines.inference.rule_loader import rank_fields_by_unlock
 
                 ranked = rank_fields_by_unlock(
                     missing_fields,

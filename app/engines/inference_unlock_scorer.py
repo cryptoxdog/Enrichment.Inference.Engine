@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 if TYPE_CHECKING:
-    from .inference_rule_loader import RuleRegistry
+    from .inference.rule_loader import RuleRegistry
 
 from typing import Any
 
