@@ -1,4 +1,6 @@
+# migrations/env.py
 """Alembic async migration environment."""
+
 from __future__ import annotations
 
 import asyncio
@@ -37,7 +39,8 @@ async def run_async_migrations() -> None:
     async with engine.connect() as connection:
         await connection.run_sync(
             lambda sync_conn: context.configure(
-                connection=sync_conn, target_metadata=target_metadata
+                connection=sync_conn,
+                target_metadata=target_metadata,
             )
         )
         await connection.run_sync(lambda _: context.run_migrations())
