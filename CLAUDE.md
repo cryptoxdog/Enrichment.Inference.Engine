@@ -1,113 +1,197 @@
-# AI Coding Context — L9 Golden Repo / L9 Constellation Engine
+# CLAUDE.md
 
-## What This Is
-An L9 constellation engine. FastAPI chassis + domain engine. Single ingress (`POST /v1/execute`).
-Read `L9_Platform_Architecture.md` before writing any code.
+## Purpose
+Claude AI specific guidance for code review and generation tasks in Enrichment.Inference.Engine.
 
-## The One Rule
-The chassis already handles: auth, rate limiting, tenant resolution, logging, metrics, routing, Docker, CI/CD.
-**You build the engine. Nothing else.**
+## Scope
+Applies to: Claude AI assistant when reviewing PRs, generating code, or answering questions
+Context: PlasticOS ecosystem, L9 Platform Architecture, Graph Cognitive Engine
 
-## Architecture
+## Source Evidence
+- `.cursorrules` (SHA: 4c2d06a8f3823eb8b4f8cce80cf920337ae13f95)
+- `ARCHITECTURE.md` (SHA: 9ea05a1414534b45143cb17308e5511ae5b33185)
+- `AGENTS.md` (SHA: c4272ba65818a9790ad7592130aec2b72a2ed291)
+- `.github/workflows/compliance.yml` (SHA: ab57ddb48a57ea1908ca535370441dd9fb787a5a)
+
+## Facts
+
+### Repository Context
+- **Name:** Enrichment.Inference.Engine
+- **Purpose:** Universal domain-aware entity enrichment API for Salesforce + Odoo
+- **Primary Language:** Python 3.12+
+- **Framework:** FastAPI (chassis only), Neo4j (graph storage), Redis (caching)
+- **Architecture Pattern:** Chassis-Engine separation (L9 Platform Architecture)
+
+### Core Components
+1. **Chassis** (`app/api/`, `app/main.py`): HTTP surface, tenant resolution, observability
+2. **Engine** (`engine/`): Domain-agnostic matching logic, gate compilation, scoring
+3. **Domain Specs** (`domains/`): YAML configuration per vertical (plasticos, etc.)
+4. **Knowledge Base** (`kb/`): YAML rule files for enrichment logic
+
+### Key Dependencies (from pyproject.toml)
+- `fastapi>=0.115.0` (chassis only)
+- `pydantic>=2.9.0` (all data models)
+- `structlog>=24.0.0` (logging)
+- `redis>=5.0.0` (caching)
+- `perplexityai>=0.2.0` (enrichment source)
+- `httpx>=0.27.0` (HTTP client)
+
+## Invariants
+
+### Architectural Contracts (Summary from .cursorrules)
+1. **Single HTTP Ingress:** POST /v1/execute, GET /v1/health only
+2. **Handler Interface:** `async def handle_<action>(tenant: str, payload: dict) -> dict`
+3. **Tenant Isolation:** Chassis resolves tenant (5-level waterfall), engine receives string
+4. **Observability:** Chassis configures structlog, engine uses `structlog.get_logger(__name__)`
+5. **PacketEnvelope Protocol:** All inter-service payloads frozen, immutable, content-hashed
+6. **Cypher Injection Prevention:** All labels sanitized, values parameterized
+7. **Domain Spec Source of Truth:** All matching behavior from YAML → DomainConfig Pydantic
+
+### Code Quality Gates (from Makefile)
 ```
-POST /v1/execute → L9 Chassis → Action Router → engine/handlers.py → domain logic
-```
-- Engine registers handlers: `chassis.router.register_handler("match", handle_match)`
-- Handler signature: `async def handle_{action}(tenant: str, payload: dict) -> dict`
-- Engine NEVER imports FastAPI, never creates routes, never touches auth/logging/metrics config
-
-## 20 Contracts (enforced by contract_scanner.py + CI)
-
-### Layer 1 — Chassis Boundary (1–5)
-1. Single ingress — `POST /v1/execute` only. No custom routes.
-2. Handler interface — `async def handle_<action>(tenant: str, payload: dict) -> dict`. Only `engine/handlers.py` imports chassis.
-3. Tenant isolation — chassis resolves tenant. Engine receives it as string. Every Neo4j query scopes to tenant database.
-4. Observability inherited — engine uses `structlog.get_logger(__name__)` only. Never configures logging.
-5. Infrastructure is template — no Dockerfile, docker-compose, CI, or Terraform in engine/.
-
-### Layer 2 — Packet Protocol (6–8)
-6. PacketEnvelope is the only data container between services.
-7. Immutability + content_hash — `frozen=True`. Mutations via `.derive()`. `content_hash` is UNIQUE constraint.
-8. Lineage + audit — all derived packets set `parent_id`, `root_id`, increment `generation`.
-
-### Layer 3 — Security (9–11)
-9. Cypher injection prevention — labels/types via `sanitize_label()` only. Values always parameterized.
-10. Prohibited factors — compliance fields blocked at compile time. Never runtime.
-11. PII handling — declared in domain spec. Never logged. Chassis filters set it.
-
-### Layer 4 — Engine Architecture (12–16)
-12. Domain spec is SSOT — all behavior from `spec.yaml`. DomainPackLoader → DomainConfig.
-13. Gate-then-score — gates compile to Cypher WHERE, scoring to Cypher WITH. Zero Python post-filtering.
-14. NULL semantics are deterministic — per-gate `null_behavior: pass | fail`. Compiler handles it.
-15. Bidirectional matching — invertible gates swap props on direction reversal. Compiler handles it.
-16. File structure is fixed — see directory layout below.
-
-### Layer 5 — Testing + Quality (17–18)
-17. Tests: unit (gate compilation, scoring math), integration (testcontainers-neo4j, no mock drivers), compliance, performance (<200ms p95).
-18. L9_META on every file.
-
-### Layer 6 — Graph Intelligence (19–20)
-19. GDS jobs are declarative — declared in `spec.gds_jobs`, not hardcoded.
-20. KGE embeddings — CompoundE3D 256-dim, domain-specific, never cross-tenant.
-
-## Protected Files — Explicit Approval Required
-- `engine/handlers.py` — chassis bridge
-- `docker-compose.prod.yml` — production infra
-- `.github/workflows/ci-quality.yml` — CI gate
-
-## Canonical Directory Layout
-```
-engine/handlers.py      ← ONLY chassis bridge
-engine/config/          ← domain spec schema + loader
-engine/gates/           ← gate compiler + types (10 types)
-engine/scoring/         ← scoring assembler (9 computation types)
-engine/traversal/       ← traversal assembler
-engine/sync/            ← sync generator
-engine/gds/             ← GDS scheduler (APScheduler)
-engine/graph/           ← Neo4j async driver wrapper
-engine/compliance/      ← prohibited factors + PII + audit
-engine/packet/          ← PacketEnvelope bridge
-chassis/                ← thin chassis adapter
-domains/                ← {domain_id}/spec.yaml per vertical
+make agent-check runs 7 sequential gates:
+1. ruff check .
+2. ruff format --check .
+3. mypy app
+4. pytest tests/unit/ tests/compliance/ -v --tb=short -x
+5. pytest tests/ci/ -v --tb=short -x
+6. python tools/audit_engine.py --strict
+7. python tools/verify_contracts.py
 ```
 
-## Banned Patterns (CRITICAL — merge blocked)
-- `f-string Cypher MATCH` without `sanitize_label()` → SEC-001
-- `eval()`, `exec()`, `pickle.load()` → SEC-002/003/006
-- `from fastapi import` in engine/ → ARCH-001
-- `INSERT INTO packet_store` in engine/ → MEM-001
-- `raise NotImplementedError` outside tests/ → STUB-001
-- `# TODO` or `# PLACEHOLDER` comments → STUB-002/003
-- Uppercase `packet_type` values → PKT-001
-- `yaml.load()` without SafeLoader → SEC-007
+### Banned Patterns (from .cursorrules)
+**Merge-blocking violations:**
+- f-string Cypher without `sanitize_label()`
+- `eval()`, `exec()`, `pickle.load()`
+- `yaml.load()` without SafeLoader
+- `from fastapi import` in engine/ (except app/api/, app/main.py, handlers.py)
+- `httpx.post/get` in engine/ (delegation protocol violation)
+- `raise NotImplementedError` outside tests/ (zero-stub protocol)
 
-## Code Style
-- Python 3.12+, async/await for all I/O
-- Pydantic v2 BaseModel (frozen where appropriate)
-- ruff format (88-char), mypy --strict engine/
-- structlog: include `tenant`, `trace_id`, `action` in every log context
-- snake_case everywhere. No `Field(alias=...)`.
+## Constraints
 
-## Ruff Patterns to Avoid
+### File Modification Rules
+1. **NEVER modify:** Dockerfile, docker-compose.yml, CI workflows (l9-template managed)
+2. **ALWAYS add:** L9_META header via `tools/l9_meta_injector.py`
+3. **ALWAYS use:** Type hints on all function signatures
+4. **ALWAYS use:** `structlog.get_logger(__name__)` for logging (never print())
+5. **ALWAYS use:** Pydantic v2 BaseModel for structured data
+
+### Import Patterns (Canonical)
 ```python
-# ❌ raise ValueError(f"invalid {x}")
-# ✅ msg = f"invalid {x}"; raise ValueError(msg)  # prevents EM101/102
+# ONLY in engine/handlers.py:
+from chassis.router import register_handler
 
-# ❌ def f(x: str = None)
-# ✅ def f(x: str | None = None)  # prevents RUF013
+# Domain specs:
+from engine.config.loader import DomainPackLoader
+from engine.config.schema import DomainSpec, GateSpec, ScoringDimension
 
-# ❌ datetime.now()
-# ✅ datetime.now(tz=UTC)  # prevents DTZ005
+# Gate compilation:
+from engine.gates.compiler import GateCompiler
+from engine.gates.types import RangeGate, ThresholdGate, BooleanGate
+
+# Packet protocol:
+from engine.packet.chassis_contract import inflate_ingress, deflate_egress
+from engine.packet.packet_envelope import PacketEnvelope, PacketMetadata
 ```
 
-## What NOT to Build
-- FastAPI routes, APIRouter → chassis (contract 1)
-- Auth, tenant resolution, CORS middleware → chassis (contract 3)
-- Logging/structlog configuration → chassis (contract 4)
-- Prometheus setup → chassis (contract 4)
-- Dockerfile, docker-compose, CI/CD → l9-template (contract 5)
-- Custom request/response HTTP schemas → universal envelope (contract 1)
-- String-interpolated Cypher without sanitize_label → security (contract 9)
-- Python post-filtering of match results → gate-then-score in Cypher (contract 13)
-- Hardcoded GDS scheduling → declarative spec (contract 19)
-- eval(), exec(), pickle.load(), yaml.load() without SafeLoader → banned (contract 9)
+### Ruff Configuration (from pyproject.toml)
+```toml
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]
+ignore = [
+    "E501",     # formatter handles line length
+    "TC001",    # typing-only first-party import (Pydantic v2 runtime)
+    "SIM105",   # contextlib.suppress (explicit try/except preferred)
+    "TRY003",   # long exception messages acceptable
+    "ARG001",   # unused function args (handler interface compliance)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "PT011", "E741", "SIM102", "F841", "F821"]
+"engine/config/**" = ["PLR2004"]
+"tools/**" = ["PLC0415", "E741", "SIM102"]
+```
+
+### MyPy Configuration (from pyproject.toml)
+```toml
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"
+exclude = ["app/engines/field_classifier\.py", "app/engines/inference_bridge_v2\.py"]
+```
+
+## Known Unknowns
+- Specific Neo4j database schema (referenced but not documented)
+- GDS algorithm runtime execution details (spec-driven, implementation opaque)
+- Memory substrate PostgreSQL schema (mentioned in contracts, DDL unknown)
+- Production deployment configuration (Railway/ArgoCD referenced, configs unknown)
+
+## Agent Guidance
+
+### When Reviewing Code
+1. **Check Contracts First:** Does it violate any of the 20 contracts in .cursorrules?
+2. **Check Banned Patterns:** Scan for SEC-001 through ENV-001 violations
+3. **Check Imports:** Engine code importing FastAPI? Instant reject
+4. **Check Type Hints:** Missing type hints on function signatures? Request addition
+5. **Check Tests:** New logic without tests? Request unit/compliance tests
+6. **Check L9_META:** Missing header on new files? Request injection
+
+### When Generating Code
+1. **Use Existing Patterns:** Copy structure from similar existing files
+2. **Follow Directory Structure:** Never create new top-level directories
+3. **Add Type Hints:** Every signature, every class attribute
+4. **Use Structlog:** `structlog.get_logger(__name__)`, never `print()`
+5. **Add Tests:** Unit tests in `tests/unit/`, compliance in `tests/compliance/`
+6. **Run Agent Check:** Include `make agent-check` in PR description
+
+### When Answering Questions
+1. **Cite Source Files:** Reference specific SHA hashes from repository
+2. **Quote Exact Paths:** Use verbatim file paths from repository
+3. **Quote Exact Commands:** Copy commands from Makefile exactly
+4. **Admit Unknowns:** If information not in repository → state "Unknown"
+5. **Reference Contracts:** Cite specific contract numbers (1-20) from .cursorrules
+
+### Terminology Corrections
+- **NEVER say:** "best practices", "as needed", "etc", "where appropriate"
+- **ALWAYS say:** Specific contract names, exact file paths, explicit rules
+- **NEVER invent:** Environment variables, secret names, config keys
+- **ALWAYS quote:** Exact names from `.env.example`, `pyproject.toml`, workflows
+
+### CI Pipeline Awareness (from ci.yml)
+**Workflow name:** "CI Pipeline"
+**Triggers:** push (main, develop), pull_request (main, develop), workflow_dispatch
+**Jobs:**
+1. `validate` (10min) — Python syntax, YAML validation, KB YAML validation
+2. `lint` (10min) — ruff check, ruff format --check, mypy
+3. `semgrep` (10min) — Semgrep policy check (.semgrep/ directory)
+4. `test` (30min) — Full pytest with coverage ≥60%, PostgreSQL + Redis services
+5. `security` (15min) — Gitleaks, pip-audit, Safety, Bandit (non-blocking warnings)
+6. `sbom` (10min) — Anchore SBOM generation (spdx-json)
+7. `scorecard` (15min) — OpenSSF Scorecard
+8. `ci-gate` (5min) — Fan-in gate, blocks merge if validate/lint/semgrep/test fail
+
+**Non-blocking steps:**
+- Mypy warnings (step continues with echo)
+- pip-audit vulnerabilities (echo "⚠️ Vulnerabilities found (non-blocking)")
+- Safety check warnings (echo "⚠️ Safety check warnings (non-blocking)")
+- Bandit warnings (echo "⚠️ Security warnings found (non-blocking)")
+
+**Merge-blocking failures:**
+- validate, lint, semgrep, test (any failure blocks ci-gate)
+
+### Compliance Workflow Awareness (from compliance.yml)
+**Workflow name:** "Architecture Compliance"
+**Triggers:** pull_request, push (main), workflow_dispatch
+**Checks:**
+1. **Terminology Guard:** Scans for `\bprint\(`, `\bOptional\[`, `\bList\[`, `\bDict\[`
+2. **Chassis Isolation:** Rejects FastAPI imports outside app/api/, app/main.py, handlers.py
+3. **KB YAML Schema:** Validates rules[].field, rules[].conditions/when blocks
+4. **L9 Contract Audit:** Runs `tools/audit_engine.py --strict` (if available)
+5. **L9 Contract Verification:** Runs `tools/verify_contracts.py` (if available)
+
+**All checks blocking:** Any failure prevents merge
