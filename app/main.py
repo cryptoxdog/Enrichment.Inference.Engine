@@ -1,163 +1,65 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-enrich-node
+# engine: enrich
+# layer: [app, startup]
+# tags: [L9_STARTUP, lifecycle, packet-safe]
+# owner: platform
+# status: active
+# --- /L9_META ---
 """
-Domain Enrichment API v2.3.0 — Constellation-wired
-====================================================
-POST /api/v1/enrich        — single entity (Salesforce + Odoo)
-POST /api/v1/enrich/batch  — batch up to 50 (Odoo nightly cron)
-GET  /api/v1/health        — health + KB + circuit breaker status
-POST /v1/execute           — L9 chassis PacketEnvelope (node-to-node)
-POST /v1/outcomes          — match outcome feedback loop
-"""
+app/main.py
 
+FastAPI entrypoint for the Enrichment.Inference.Engine node.
+
+GAP #03: startup calls ConvergenceController.configure() before traffic.
+GAP #01: startup calls startup_result_store(); shutdown calls shutdown.
+
+Architecture boundary:
+  - POST /v1/execute  (chassis_endpoint)
+  - GET  /v1/health   (chassis health probe)
+  - POST /v1/converge (convergence loop — this node's primary domain action)
+"""
 from __future__ import annotations
 
-import time
+import logging
 from contextlib import asynccontextmanager
-from typing import Annotated
 
-import structlog
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 
-from .api.v1.chassis_endpoint import router as chassis_router
-from .api.v1.converge import router as converge_router
-from .api.v1.discover import router as discover_router
-from .api.v1.fields import router as fields_router
-from .core.auth import verify_api_key
-from .core.config import Settings, get_settings
-from .core.logging_config import setup_logging
-from .core.telemetry import setup_telemetry
-from .engines.enrichment_orchestrator import breaker, enrich_batch, enrich_entity
-from .engines.orchestration_layer import register as register_orchestration
-from .middleware.rate_limiter import RateLimitMiddleware
-from .models.schemas import (
-    BatchEnrichRequest,
-    BatchEnrichResponse,
-    EnrichRequest,
-    EnrichResponse,
-    HealthCheckResponse,
-)
-from .services.idempotency import IdempotencyStore
-from .services.kb_resolver import KBResolver
+from app.api.v1 import chassis_endpoint, converge, intake
+from app.core.config import get_settings
+from app.engines.convergence_controller import ConvergenceController
+from app.services.result_store import shutdown_result_store, startup_result_store
 
-logger = structlog.get_logger("main")
-
-_kb: KBResolver | None = None
-_idem: IdempotencyStore | None = None
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load KB + connect Redis. Shutdown: close connections."""
-    global _kb, _idem
-
+    """Startup -> serve -> shutdown lifecycle."""
     settings = get_settings()
-    setup_logging(settings.log_level)
 
-    _kb = KBResolver(settings.kb_dir)
+    await ConvergenceController.configure(settings=settings)
+    logger.info("convergence_controller_configured")
 
-    try:
-        _idem = IdempotencyStore(settings.redis_url)
-        logger.info("redis_connected", url=settings.redis_url)
-    except Exception as e:
-        logger.warning("redis_unavailable", error=str(e))
-        _idem = None
-
-    register_orchestration(kb=_kb, idem_store=_idem)
-
-    # ── Persistence layer ──────────────────────────────────────────
-    from .services import pg_store
-    from .services.event_emitter import get_emitter
-    pg_store.init_engine(settings.database_url)
-    get_emitter(settings)  # warm singleton
-    logger.info("pg_store_initialized", database_url=settings.database_url[:40])
-
-    logger.info(
-        "api_started",
-        version="2.3.0",
-        kb_files=len(_kb.index.files_loaded),
-        kb_polymers=len(_kb.index.polymers),
-        constellation_handlers=["enrich", "enrichbatch", "converge", "discover", "enrich_and_sync"],
-    )
+    await startup_result_store()
+    logger.info("result_store_ready")
 
     yield
 
-    if _idem:
-        await _idem.close()
-    from .services import pg_store as _pg
-    await _pg.close_engine()
-    _kb = None
-    _idem = None
+    await shutdown_result_store()
+    logger.info("result_store_closed")
 
 
 app = FastAPI(
-    title="L9 ENRICH — Domain Enrichment API",
-    version="2.3.0",
-    description=(
-        "Universal domain-aware entity enrichment. "
-        "Layer 2 of the L9 three-layer intelligence stack. "
-        "Serves Salesforce Apex callouts, Odoo async_executor, "
-        "and any L9 constellation node via PacketEnvelope."
-    ),
+    title="L9 Enrichment Inference Engine",
+    version="1.0.0",
     lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url=None,
 )
 
-app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
-setup_telemetry(app)
-
-# ── Routers ────────────────────────────────────────────────────────
-app.include_router(chassis_router)   # PacketEnvelope node-to-node
-app.include_router(converge_router)  # POST /api/v1/converge
-app.include_router(discover_router)  # POST /api/v1/discover, /api/v1/scan, /api/v1/proposals
-app.include_router(fields_router)    # GET  /api/v1/fields
-
-
-@app.get("/api/v1/health", response_model=HealthCheckResponse)
-async def health_check():
-    kb = _kb or KBResolver("/dev/null")
-    return HealthCheckResponse(
-        status="ok",
-        version="2.3.0",
-        kb_loaded=kb.index.is_loaded,
-        kb_polymers=len(kb.index.polymers),
-        kb_grades=kb.index.total_grades,
-        kb_rules=kb.index.total_rules,
-        circuit_breaker_state=breaker.state,
-    )
-
-
-@app.post(
-    "/api/v1/enrich",
-    response_model=EnrichResponse,
-    dependencies=[Depends(verify_api_key)],
-)
-async def enrich_single(
-    request: EnrichRequest,
-    settings: Annotated[Settings, Depends(get_settings)],
-):
-    return await enrich_entity(request, settings, _kb, _idem)
-
-
-@app.post(
-    "/api/v1/enrich/batch",
-    response_model=BatchEnrichResponse,
-    dependencies=[Depends(verify_api_key)],
-)
-async def enrich_batch_endpoint(
-    request: BatchEnrichRequest,
-    settings: Annotated[Settings, Depends(get_settings)],
-):
-    start = time.monotonic()
-    results = await enrich_batch(request.entities, settings, _kb, _idem)
-    elapsed = int((time.monotonic() - start) * 1000)
-
-    succeeded = sum(1 for r in results if r.state == "completed")
-    failed = sum(1 for r in results if r.state == "failed")
-    tokens = sum(r.tokens_used for r in results)
-
-    return BatchEnrichResponse(
-        results=results,
-        total=len(results),
-        succeeded=succeeded,
-        failed=failed,
-        total_processing_time_ms=elapsed,
-        total_tokens_used=tokens,
-    )
+app.include_router(chassis_endpoint.router, prefix="/v1")
+app.include_router(converge.router, prefix="/v1")
+app.include_router(intake.router, prefix="/v1")
