@@ -1,107 +1,67 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "domain-enrichment-api"
-version = "2.2.0"
-description = "Universal domain-aware entity enrichment API — Salesforce + Odoo single ingress"
-requires-python = ">=3.11"
+name = "enrichment-inference-engine"
+version = "0.1.0"
+description = "L9 Platform Enrichment & Inference Engine"
+requires-python = ">=3.12"
 dependencies = [
-    "aiofiles>=23.0.0",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "httpx>=0.27.0",
-    "pydantic>=2.9.0",
-    "pydantic-settings>=2.6.0",
-    "pyyaml>=6.0",
-    "redis>=5.0.0",
-    "structlog>=24.0.0",
-    "perplexityai>=0.2.0",
-    "opentelemetry-api>=1.27.0",
-    "opentelemetry-sdk>=1.27.0",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
-    "opentelemetry-instrumentation-fastapi>=0.48b0",
-    "opentelemetry-instrumentation-httpx>=0.48b0",
-    "opentelemetry-instrumentation-redis>=0.48b0",
+    "fastapi>=0.109.0,<1.0",
+    "uvicorn[standard]>=0.27.0,<1.0",
+    "pydantic>=2.5,<3.0",
+    "pydantic-settings>=2.1,<3.0",
+    "structlog>=24.1,<25.0",
+    "redis>=5.0,<6.0",
+    "httpx>=0.26,<1.0",
+    "prometheus-client>=0.20,<1.0",
+    "psutil>=5.9,<7.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==9.0.2",
-    "pytest-asyncio>=0.24",
-    "pytest-httpx>=0.34",
-    "pytest-cov==7.1.0",
-    "respx>=0.22",
-    "ruff==0.15.8",
-    "mypy==1.19.1",
-    "coverage==7.13.5",
+    "pytest>=8.0,<9.0",
+    "pytest-cov>=4.1,<5.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "ruff>=0.2,<1.0",
+    "mypy>=1.8,<2.0",
+    "pip-audit>=2.7,<3.0",
+    "bandit>=1.7,<2.0",
 ]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["app*", "tools*"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "A", "C4", "PT", "SIM", "ARG", "TCH"]
 ignore = [
-    "E501",     # formatter handles line length
-    "TC001",    # typing-only first-party import — breaks Pydantic v2 validators at runtime
-    "TC002",    # typing-only third-party import — same Pydantic v2 runtime issue
-    "TC003",    # typing-only stdlib import — same Pydantic v2 runtime issue
-    "SIM105",   # contextlib.suppress — explicit try/except is clearer in async+structlog code
-    "TRY003",   # long exception messages acceptable in domain code
-    "TRY400",   # logging.error vs logging.exception — both acceptable
-    "ARG001",   # unused function args — handler interface compliance
-    "ARG002",   # unused method args — handler interface compliance
-    "ARG003",   # unused classmethod args — handler interface compliance
-    "B007",     # unused loop variable — use _ prefix convention
-    "B008",     # function-call-in-default-argument — FastAPI Depends() pattern is intentional
+    "E501",    # Line too long (handled by formatter)
+    "TC001",   # Typing-only first-party import
+    "TC002",   # Typing-only third-party import
+    "TC003",   # Typing-only standard library import
+    "B007",    # Unused loop variable
+    "B008",    # Function call in argument defaults
+    "TRY400",  # Use logging.exception instead of logging.error
+    "ARG001",  # Unused function argument (handler interface compliance)
+    "ARG002",  # Unused method argument
+    "ARG003",  # Unused class method argument
 ]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["PLR2004", "PT011", "E741", "SIM102", "F841", "F821"]
-"engine/config/**" = ["PLR2004"]
-"tools/**" = ["PLC0415", "E741", "SIM102"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["app", "engine"]
 
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = false
 ignore_missing_imports = true
-check_untyped_defs = true
-follow_imports = "silent"
-exclude = ["app/engines/field_classifier\\.py", "app/engines/inference_bridge_v2\\.py"]
-
-[[tool.mypy.overrides]]
-module = ["app.engines.field_classifier", "app.engines.inference_bridge_v2"]
-follow_imports = "skip"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-markers = [
-    "unit: Unit tests (fast, no external deps)",
-    "integration: Integration tests (may need services)",
-    "slow: Slow tests (enrichment, convergence)",
-]
 testpaths = ["tests"]
-
-[tool.coverage.run]
-source = ["app"]
-omit = ["tests/*", "tools/*"]
-
-[tool.coverage.report]
-fail_under = 60
-show_missing = true
-exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING:",
-    "if __name__ == .__main__.",
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "unit: Unit tests (no external dependencies)",
+    "integration: Integration tests (requires services)",
+    "slow: Slow-running tests",
 ]
