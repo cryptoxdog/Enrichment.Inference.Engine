@@ -1,0 +1,111 @@
+{
+  "dashboard": {
+    "title": "Enrichment Engine Overview",
+    "uid": "engine-overview",
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Requests per Second",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(l9_http_requests_total[1m])",
+            "legendFormat": "{{method}} {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{"format": "reqps", "label": "Requests/sec"}]
+      },
+      {
+        "id": 2,
+        "title": "Request Latency (p50/p95/p99)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(l9_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(l9_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(l9_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [{"format": "s", "label": "Latency"}]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "100 * (rate(l9_http_requests_total{status_code=~"5.."}[1m]) / rate(l9_http_requests_total[1m]))",
+            "legendFormat": "5xx rate",
+            "refId": "A"
+          },
+          {
+            "expr": "100 * (rate(l9_errors_total[1m]) / rate(l9_http_requests_total[1m]))",
+            "legendFormat": "Error rate",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [{"format": "percent", "label": "Error %", "max": 100}]
+      },
+      {
+        "id": 4,
+        "title": "Active Requests",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "l9_http_requests_active",
+            "legendFormat": "Active",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{"format": "short", "label": "Requests"}]
+      },
+      {
+        "id": 5,
+        "title": "Neo4j Query Latency (p95 by type)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(l9_neo4j_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{query_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{"format": "s", "label": "Latency"}]
+      },
+      {
+        "id": 6,
+        "title": "Redis Operation Latency (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(l9_redis_op_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{operation}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{"format": "s", "label": "Latency"}]
+      }
+    ]
+  }
+}
