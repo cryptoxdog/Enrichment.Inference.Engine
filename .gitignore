@@ -59,3 +59,9 @@ logs/
 # Work in progress
 WIP/
 Current Work/
+
+# Generated test coverage artifacts
+coverage.xml
+coverage.json
+htmlcov/
+.coverage
