@@ -91,7 +91,7 @@ class TestExecuteGateLookup:
         mock_driver = MockNeo4jDriver(
             [
                 {
-                    "endpoint": "http://ceg-engine:8000/v1/execute",
+                    "endpoint": "https://ceg-engine:8000/v1/execute",
                     "timeout_ms": 30000,
                 }
             ]
@@ -100,7 +100,7 @@ class TestExecuteGateLookup:
         config = await execute_gate_lookup(mock_driver, "ceg-engine", "match")
 
         assert config is not None
-        assert config["endpoint"] == "http://ceg-engine:8000/v1/execute"
+        assert config["endpoint"] == "https://ceg-engine:8000/v1/execute"
         assert config["timeout_ms"] == 30000
 
     @pytest.mark.asyncio
@@ -108,8 +108,6 @@ class TestExecuteGateLookup:
         """GATE not found returns None."""
         mock_driver = MockNeo4jDriver([])
 
-        config = await execute_gate_lookup(
-            mock_driver, "unknown-service", "unknown-action"
-        )
+        config = await execute_gate_lookup(mock_driver, "unknown-service", "unknown-action")
 
         assert config is None
