@@ -29,6 +29,7 @@ Architecture compliance:
   - Lineage forwarding mandatory
   - Timeout: 10s per call
 """
+
 from __future__ import annotations
 
 import logging
@@ -63,7 +64,8 @@ async def trigger_graph_sync(
         logger.debug("graph_sync_skipped_no_url", extra={"entity_id": entity_id})
         return
 
-    url = f"{settings.graph_service_url}/v1/sync"
+    base = settings.graph_service_url.rstrip("/")
+    url = f"{base}/v1/sync"
     headers = {
         "X-L9-Lineage": lineage_id,
         "X-L9-Packet": packet_id,
@@ -112,7 +114,8 @@ async def invalidate_score_cache(
         logger.debug("score_invalidation_skipped_no_url", extra={"entity_id": entity_id})
         return
 
-    url = f"{settings.score_service_url}/v1/invalidate"
+    base = settings.score_service_url.rstrip("/")
+    url = f"{base}/v1/invalidate"
     headers = {
         "X-L9-Lineage": lineage_id,
         "X-L9-Packet": packet_id,

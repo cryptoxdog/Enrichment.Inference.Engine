@@ -22,20 +22,25 @@ PacketEnvelope compliance:
   - Both forwarded to persistence and downstream hooks
   - content_hash computed from enriched_fields (deterministic SHA-256)
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.engines.convergence_controller import ConvergenceController
 from app.services.graph_sync_hooks import invalidate_score_cache, trigger_graph_sync
-from app.services.result_store import EnrichmentResult, get_result_store
+from app.services.result_store import (
+    EnrichmentResult,
+    StorePersistenceError,
+    get_result_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +49,18 @@ router = APIRouter(tags=["convergence"])
 
 class ConvergeRequest(BaseModel):
     """Inbound convergence request."""
+
     tenant_id: str
     entity_id: str
     raw_fields: dict[str, Any]
     max_passes: int = Field(default=5, ge=1, le=20)
     confidence_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
-    domain: Optional[str] = None
+    domain: str | None = None
 
 
 class ConvergeResponse(BaseModel):
     """Outbound convergence result."""
+
     entity_id: str
     tenant_id: str
     pass_count: int
@@ -121,8 +128,13 @@ async def converge_entity(request: ConvergeRequest) -> ConvergeResponse:
     )
     try:
         await store.save(result)
-    except Exception as e:
+    except StorePersistenceError as e:
         logger.error("converge_persist_failed", extra={"error": str(e)}, exc_info=True)
+        msg = "Failed to persist enrichment result"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=msg,
+        ) from e
 
     # Graph sync + score invalidation (fire-and-forget)
     try:

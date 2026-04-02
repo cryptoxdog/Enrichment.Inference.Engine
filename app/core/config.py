@@ -20,13 +20,13 @@ Aliases:
   - max_budget_tokens ← token_budget ← max_tokens (highest priority wins)
   - perplexity_api_key defaults to "" so startup doesn't crash when absent
 """
+
 from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import Optional
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # Database
     database_url: str = ""
 
+    # API auth (SHA-256 hex of configured key; empty disables validation in dev)
+    api_key_hash: str = ""
+
+    # Redis (optional — event emitter / cache)
+    redis_url: str = ""
+
+    # Odoo defaults for handle_writeback when payload omits credentials
+    odoo_url: str = ""
+    odoo_db: str = ""
+    odoo_username: str = ""
+    odoo_password: str = ""
+
     # Perplexity
     perplexity_api_key: str = ""
     perplexity_model: str = "sonar-pro"
@@ -47,12 +59,14 @@ class Settings(BaseSettings):
     max_budget_tokens: int = 4096
 
     # Backward-compat aliases (resolved in validator)
-    token_budget: Optional[int] = None
-    max_tokens: Optional[int] = None
+    token_budget: int | None = None
+    max_tokens: int | None = None
 
     # Convergence defaults
     default_max_passes: int = 5
     default_confidence_threshold: float = 0.85
+    max_concurrent_variations: int = 8
+    default_timeout_seconds: float = 120.0
 
     # Downstream service URLs (optional — hooks skip when unset)
     graph_service_url: str = ""
@@ -65,7 +79,7 @@ class Settings(BaseSettings):
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 
     @model_validator(mode="after")
-    def resolve_token_budget_aliases(self) -> "Settings":
+    def resolve_token_budget_aliases(self) -> Settings:
         """
         Resolve backward-compat aliases into max_budget_tokens.
 

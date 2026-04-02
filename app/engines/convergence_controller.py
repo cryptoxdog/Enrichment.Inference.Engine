@@ -455,3 +455,83 @@ def _build_pass_request(
         max_variations=plan.variation_count or original.max_variations,
         idempotency_key=None,
     )
+
+
+class _ConvergeLoopResult:
+    """Maps EnrichResponse to attributes read by app.api.v1.converge."""
+
+    def __init__(self, response: EnrichResponse) -> None:
+        self._r = response
+
+    @property
+    def enriched_fields(self) -> dict[str, Any]:
+        return dict(self._r.fields)
+
+    @property
+    def inference_outputs(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for i, row in enumerate(self._r.inferences):
+            out[f"inf_{i}"] = row
+        return out
+
+    @property
+    def converged(self) -> bool:
+        return self._r.state == "completed"
+
+    @property
+    def confidence(self) -> float:
+        return float(self._r.confidence)
+
+    @property
+    def pass_count(self) -> int:
+        return int(self._r.pass_count)
+
+
+class ConvergenceController:
+    """API adapter: POST /v1/converge → run_convergence_loop."""
+
+    def __init__(
+        self,
+        tenant_id: str,
+        entity_id: str,
+        max_passes: int = 5,
+        confidence_threshold: float = 0.85,
+        domain: str | None = None,
+    ) -> None:
+        self._tenant_id = tenant_id
+        self.entity_id = entity_id
+        self.max_passes = max_passes
+        self.confidence_threshold = confidence_threshold
+        self._domain = domain
+
+    @classmethod
+    async def configure(cls, settings: Settings) -> None:
+        """App lifespan hook (extend for domain wiring)."""
+        logger.info(
+            "convergence_controller_configure",
+            max_budget_tokens=settings.max_budget_tokens,
+        )
+
+    async def run(self, raw_fields: dict[str, Any]) -> _ConvergeLoopResult:
+        from ..core.config import get_settings
+
+        settings = get_settings()
+        entity = {**raw_fields, "id": self.entity_id}
+        request = EnrichRequest(
+            entity=entity,
+            object_type="Account",
+            objective="convergence",
+        )
+        cfg = ConvergenceConfig(
+            max_passes=self.max_passes,
+            confidence_threshold=self.confidence_threshold,
+        )
+        resp = await run_convergence_loop(
+            request=request,
+            settings=settings,
+            kb_resolver=None,
+            idem_store=None,
+            enricher=None,
+            convergence_config=cfg,
+        )
+        return _ConvergeLoopResult(resp)

@@ -26,20 +26,35 @@ at shutdown via lifecycle hooks in app/main.py.
 Storage backend: PostgreSQL via asyncpg connection pool.  The store is a
 singleton — one pool per process.  All async operations.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlparse
 
 import asyncpg
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _dsn_for_log(dsn: str) -> str:
+    """Host + database for logs only (no userinfo)."""
+    try:
+        parsed = urlparse(dsn)
+        if parsed.hostname:
+            port = f":{parsed.port}" if parsed.port else ""
+            db = (parsed.path or "").lstrip("/") or "?"
+            return f"{parsed.scheme}://{parsed.hostname}{port}/{db}"
+    except Exception:
+        pass
+    return "postgresql"
 
 
 class StorePersistenceError(Exception):
@@ -59,7 +74,7 @@ class EnrichmentResult:
     confidence: float
     enriched_fields: dict[str, Any]
     content_hash: str = field(init=False)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self):
         """Compute deterministic content_hash from enriched_fields."""
@@ -71,13 +86,16 @@ class ResultStore:
     """Singleton persistence layer for enrichment results."""
 
     def __init__(self):
-        self._pool: Optional[asyncpg.Pool] = None
+        self._pool: asyncpg.Pool | None = None
 
     async def initialize(self, dsn: str) -> None:
         """Create the asyncpg pool and ensure the enrichment_results table exists."""
         self._pool = await asyncpg.create_pool(dsn, min_size=2, max_size=10)
         await self._ensure_table()
-        logger.info("result_store_initialized", extra={"dsn": dsn[:20] + "..."})
+        logger.info(
+            "result_store_initialized",
+            extra={"database": _dsn_for_log(dsn)},
+        )
 
     async def shutdown(self) -> None:
         """Close the connection pool."""
@@ -170,7 +188,7 @@ class ResultStore:
 
 
 # Singleton instance
-_store: Optional[ResultStore] = None
+_store: ResultStore | None = None
 
 
 def get_result_store() -> ResultStore:
