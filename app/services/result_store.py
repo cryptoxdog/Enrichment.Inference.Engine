@@ -1,220 +1,197 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-enrich-node
+# engine: enrich
+# layer: [services, persistence]
+# tags: [L9_PERSISTENCE, pg_store, packet-safe]
+# owner: platform
+# status: active
+# --- /L9_META ---
 """
 app/services/result_store.py
 
-ResultStore — domain facade over pg_store.
+GAP #01: ResultStore persistence layer — wires EnrichmentResult to pg_store.
 
-Provides a clean API for convergence_controller and API layer without
-coupling callers to SQLAlchemy internals. Handles serialization
-and field confidence extraction automatically.
+Every converged enrichment pass produces an EnrichmentResult with:
+  - tenant_id, entity_id, packet_id, lineage_id (PacketEnvelope trace)
+  - pass_number, converged, confidence
+  - enriched_fields (dict)
+  - content_hash (SHA-256 of sorted enriched_fields — deterministic)
+  - timestamp (UTC)
+
+ResultStore.save() persists to PostgreSQL enrichment_results table via upsert
+(ON CONFLICT DO UPDATE).  The store is initialized at startup and torn down
+at shutdown via lifecycle hooks in app/main.py.
+
+Storage backend: PostgreSQL via asyncpg connection pool.  The store is a
+singleton — one pool per process.  All async operations.
 """
 from __future__ import annotations
 
-import uuid
-from typing import Any
+import hashlib
+import json
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Optional
 
-import structlog
+import asyncpg
 
-from ..models.schemas import EnrichResponse
-from . import pg_store
-from .pg_models import ConvergenceRun, EnrichmentResult
+from app.core.config import get_settings
 
-logger = structlog.get_logger("result_store")
+logger = logging.getLogger(__name__)
+
+
+class StorePersistenceError(Exception):
+    """Raised when ResultStore save() encounters unrecoverable errors."""
+
+
+@dataclass
+class EnrichmentResult:
+    """Immutable enrichment result record."""
+
+    tenant_id: str
+    entity_id: str
+    packet_id: str
+    lineage_id: str
+    pass_number: int
+    converged: bool
+    confidence: float
+    enriched_fields: dict[str, Any]
+    content_hash: str = field(init=False)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __post_init__(self):
+        """Compute deterministic content_hash from enriched_fields."""
+        serialized = json.dumps(self.enriched_fields, sort_keys=True, default=str)
+        self.content_hash = hashlib.sha256(serialized.encode()).hexdigest()
 
 
 class ResultStore:
-    """
-    High-level persistence facade for enrichment results and convergence runs.
+    """Singleton persistence layer for enrichment results."""
 
-    Usage:
-        store = ResultStore(tenant_id="acme")
-        result_id = await store.persist_enrich_response(
-            response, entity_id="cmp_001", object_type="Account"
-        )
-    """
+    def __init__(self):
+        self._pool: Optional[asyncpg.Pool] = None
 
-    def __init__(self, tenant_id: str) -> None:
-        self.tenant_id = tenant_id
+    async def initialize(self, dsn: str) -> None:
+        """Create the asyncpg pool and ensure the enrichment_results table exists."""
+        self._pool = await asyncpg.create_pool(dsn, min_size=2, max_size=10)
+        await self._ensure_table()
+        logger.info("result_store_initialized", extra={"dsn": dsn[:20] + "..."})
 
-    async def persist_enrich_response(
-        self,
-        response: EnrichResponse,
-        entity_id: str,
-        object_type: str,
-        domain: str | None = None,
-        idempotency_key: str | None = None,
-        convergence_run_id: uuid.UUID | None = None,
-        field_confidence_map: dict[str, float] | None = None,
-    ) -> uuid.UUID:
-        """
-        Persist a completed EnrichResponse.
+    async def shutdown(self) -> None:
+        """Close the connection pool."""
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
+            logger.info("result_store_shutdown")
 
-        If field_confidence_map is not provided, it is extracted from
-        response.feature_vector["confidence_tracking"] automatically.
-        Returns the database record UUID.
-        """
-        if field_confidence_map is None and response.feature_vector:
-            tracking = response.feature_vector.get("confidence_tracking", {})
-            field_confidence_map = {
-                fname: fdata.get("latest_confidence", response.confidence)
-                for fname, fdata in tracking.items()
-                if isinstance(fdata, dict)
-            }
+    async def _ensure_table(self) -> None:
+        """Create enrichment_results table if it doesn't exist (idempotent)."""
+        if not self._pool:
+            return
 
-        record = await pg_store.save_enrichment_result(
-            tenant_id=self.tenant_id,
-            entity_id=entity_id,
-            object_type=object_type,
-            fields=response.fields,
-            confidence=response.confidence,
-            uncertainty_score=response.uncertainty_score,
-            tokens_used=response.tokens_used,
-            processing_time_ms=response.processing_time_ms,
-            pass_count=response.pass_count,
-            state=response.state,
-            quality_tier=response.quality_tier,
-            inferences=response.inferences,
-            kb_fragment_ids=response.kb_fragment_ids,
-            feature_vector=response.feature_vector,
-            domain=domain,
-            idempotency_key=idempotency_key,
-            failure_reason=response.failure_reason,
-            convergence_run_id=convergence_run_id,
-            field_confidence_map=field_confidence_map,
-        )
-        return record.id
-
-    async def get_result(self, result_id: uuid.UUID) -> EnrichmentResult | None:
-        return await pg_store.get_enrichment_result(result_id)
-
-    async def get_latest_for_entity(self, entity_id: str) -> EnrichmentResult | None:
-        return await pg_store.get_latest_enrichment_for_entity(
-            self.tenant_id, entity_id
-        )
-
-    async def start_convergence_run(
-        self,
-        entity_id: str,
-        domain: str,
-        max_passes: int = 5,
-        max_budget_tokens: int = 50000,
-        domain_yaml_version: str | None = None,
-    ) -> uuid.UUID:
-        """Create a convergence run record and return its ID."""
-        run = await pg_store.create_convergence_run(
-            tenant_id=self.tenant_id,
-            entity_id=entity_id,
-            domain=domain,
-            max_passes=max_passes,
-            max_budget_tokens=max_budget_tokens,
-            domain_yaml_version_before=domain_yaml_version,
-        )
-        return run.id
-
-    async def checkpoint_convergence_pass(
-        self,
-        run_id: uuid.UUID,
-        pass_number: int,
-        accumulated_fields: dict[str, Any],
-        accumulated_confidences: dict[str, float],
-        pass_results: list[dict],
-        total_tokens: int,
-        total_cost_usd: float,
-    ) -> None:
-        """
-        Persist state after each pass for crash recovery.
-
-        A restarted process loads this checkpoint and resumes from
-        pass_number + 1 without re-running completed passes.
-        """
-        await pg_store.update_convergence_run(
-            run_id=run_id,
-            current_pass=pass_number,
-            accumulated_fields=accumulated_fields,
-            accumulated_confidences=accumulated_confidences,
-            pass_results=pass_results,
-            total_tokens=total_tokens,
-            total_cost_usd=total_cost_usd,
-        )
-
-    async def complete_convergence_run(
-        self,
-        run_id: uuid.UUID,
-        state: str,
-        convergence_reason: str,
-        accumulated_fields: dict[str, Any],
-        accumulated_confidences: dict[str, float],
-        pass_results: list[dict],
-        total_tokens: int,
-        total_cost_usd: float,
-        schema_proposals: list[dict] | None = None,
-        domain_yaml_version_after: str | None = None,
-    ) -> None:
-        """Mark a convergence run as complete with final state."""
-        await pg_store.update_convergence_run(
-            run_id=run_id,
-            state=state,
-            convergence_reason=convergence_reason,
-            accumulated_fields=accumulated_fields,
-            accumulated_confidences=accumulated_confidences,
-            pass_results=pass_results,
-            total_tokens=total_tokens,
-            total_cost_usd=total_cost_usd,
-            schema_proposals=schema_proposals or [],
-            domain_yaml_version_after=domain_yaml_version_after,
-        )
-        logger.info(
-            "convergence_run_completed",
-            run_id=str(run_id),
-            state=state,
-            reason=convergence_reason,
-            total_tokens=total_tokens,
-        )
-
-    async def get_convergence_run(self, run_id: uuid.UUID) -> ConvergenceRun | None:
-        return await pg_store.get_convergence_run(run_id)
-
-    async def list_active_runs(self, domain: str | None = None) -> list[ConvergenceRun]:
-        return await pg_store.list_active_convergence_runs(self.tenant_id, domain)
-
-    async def get_field_confidence_history(
-        self, entity_id: str, field_name: str
-    ) -> list[dict[str, Any]]:
-        """
-        Return per-field confidence history across all enrichment passes.
-
-        Returns list of {pass_number, confidence, source, field_value,
-        variation_agreement, recorded_at} sorted by pass_number ASC.
-        Enables convergence analytics and diminishing-returns detection.
-        """
-        from sqlalchemy import select
-
-        async with pg_store.get_session() as session:
-            from .pg_models import FieldConfidenceHistory
-
-            stmt = (
-                select(FieldConfidenceHistory)
-                .where(
-                    FieldConfidenceHistory.tenant_id == self.tenant_id,
-                    FieldConfidenceHistory.entity_id == entity_id,
-                    FieldConfidenceHistory.field_name == field_name,
-                )
-                .order_by(
-                    FieldConfidenceHistory.pass_number.asc(),
-                    FieldConfidenceHistory.recorded_at.asc(),
-                )
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS enrichment_results (
+                    tenant_id TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    packet_id TEXT NOT NULL,
+                    lineage_id TEXT NOT NULL,
+                    pass_number INT NOT NULL,
+                    converged BOOLEAN NOT NULL,
+                    confidence FLOAT NOT NULL,
+                    enriched_fields JSONB NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (tenant_id, entity_id, packet_id, pass_number)
+                );
+                CREATE INDEX IF NOT EXISTS idx_enrichment_results_lineage
+                    ON enrichment_results (lineage_id);
+                CREATE INDEX IF NOT EXISTS idx_enrichment_results_hash
+                    ON enrichment_results (content_hash);
+                """
             )
-            result = await session.execute(stmt)
-            rows = result.scalars().all()
-            return [
-                {
-                    "pass_number": r.pass_number,
-                    "confidence": float(r.confidence),
-                    "source": r.source,
-                    "field_value": r.field_value,
-                    "variation_agreement": (
-                        float(r.variation_agreement) if r.variation_agreement else None
-                    ),
-                    "recorded_at": r.recorded_at.isoformat(),
-                }
-                for r in rows
-            ]
+
+    async def save(self, result: EnrichmentResult) -> None:
+        """Persist enrichment result to pg_store.  Upserts on conflict."""
+        if not self._pool:
+            logger.warning(
+                "result_store_save_skipped_no_pool",
+                extra={"entity_id": result.entity_id},
+            )
+            return
+
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO enrichment_results (
+                        tenant_id, entity_id, packet_id, lineage_id, pass_number,
+                        converged, confidence, enriched_fields, content_hash, timestamp
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    ON CONFLICT (tenant_id, entity_id, packet_id, pass_number)
+                    DO UPDATE SET
+                        lineage_id = EXCLUDED.lineage_id,
+                        converged = EXCLUDED.converged,
+                        confidence = EXCLUDED.confidence,
+                        enriched_fields = EXCLUDED.enriched_fields,
+                        content_hash = EXCLUDED.content_hash,
+                        timestamp = EXCLUDED.timestamp
+                    """,
+                    result.tenant_id,
+                    result.entity_id,
+                    result.packet_id,
+                    result.lineage_id,
+                    result.pass_number,
+                    result.converged,
+                    result.confidence,
+                    json.dumps(result.enriched_fields),
+                    result.content_hash,
+                    result.timestamp,
+                )
+            logger.info(
+                "enrichment_result_saved",
+                extra={
+                    "entity_id": result.entity_id,
+                    "pass": result.pass_number,
+                    "converged": result.converged,
+                    "hash": result.content_hash[:12],
+                },
+            )
+        except Exception as e:
+            logger.error(
+                "result_store_save_failed",
+                extra={"entity_id": result.entity_id, "error": str(e)},
+                exc_info=True,
+            )
+            raise StorePersistenceError(f"Failed to save result: {e}") from e
+
+
+# Singleton instance
+_store: Optional[ResultStore] = None
+
+
+def get_result_store() -> ResultStore:
+    """Return the singleton ResultStore instance."""
+    global _store
+    if _store is None:
+        _store = ResultStore()
+    return _store
+
+
+async def startup_result_store() -> None:
+    """Initialize the result store at app startup."""
+    settings = get_settings()
+    store = get_result_store()
+    if settings.database_url:
+        await store.initialize(settings.database_url)
+    else:
+        logger.warning("result_store_not_initialized_no_database_url")
+
+
+async def shutdown_result_store() -> None:
+    """Shutdown the result store at app shutdown."""
+    store = get_result_store()
+    await store.shutdown()
