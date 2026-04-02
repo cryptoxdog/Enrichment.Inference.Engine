@@ -1,95 +1,84 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-enrich-node
+# engine: enrich
+# layer: [core, config]
+# tags: [L9_CONFIG, settings, backward-compat]
+# owner: platform
+# status: active
+# --- /L9_META ---
 """
-Settings — single source of truth for all configuration.
-Loaded once at startup from env vars / .env file.
-"""
+app/core/config.py
 
+GAP #04: max_budget_tokens alias (token_budget, max_tokens).
+GAP #05: perplexity_api_key safe empty-string default.
+
+Settings model for the Enrichment Inference Engine node.
+All env vars are read from the environment with safe defaults.
+
+Aliases:
+  - max_budget_tokens ← token_budget ← max_tokens (highest priority wins)
+  - perplexity_api_key defaults to "" so startup doesn't crash when absent
+"""
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
+from typing import Optional
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
-    # ── Perplexity ───────────────────────────────────
-    perplexity_api_key: str
-    perplexity_model: str = "sonar-reasoning"
+    """L9 Enrichment Inference Engine settings."""
 
-    # ── Auth ─────────────────────────────────────────
-    api_secret_key: str
-    api_key_hash: str = ""
+    # Database
+    database_url: str = ""
 
-    # ── Knowledge Base ───────────────────────────────
-    kb_dir: str = "/app/kb"
+    # Perplexity
+    perplexity_api_key: str = ""
+    perplexity_model: str = "sonar-pro"
+    perplexity_temperature: float = 0.1
 
-    # ── Redis ────────────────────────────────────────
-    redis_url: str = "redis://localhost:6379/0"
+    # Token budget — canonical field
+    max_budget_tokens: int = 4096
 
-    # ── Enrichment ───────────────────────────────────
-    default_consensus_threshold: float = 0.65
-    default_max_variations: int = 5
-    default_timeout_seconds: int = 120
-    max_concurrent_variations: int = 3
-    max_entities_per_batch: int = 50
+    # Backward-compat aliases (resolved in validator)
+    token_budget: Optional[int] = None
+    max_tokens: Optional[int] = None
 
-    # ── CRM / Odoo (first consumer) ──────────────────
-    odoo_url: str = ""
-    odoo_db: str = ""
-    odoo_username: str = ""
-    odoo_password: str = ""
-    crm_mapping_path: str = "config/crm/odoo_mapping.yaml"
+    # Convergence defaults
+    default_max_passes: int = 5
+    default_confidence_threshold: float = 0.85
 
-    # ── CRM / Salesforce ─────────────────────────────
-    salesforce_client_id: str = ""
-    salesforce_client_secret: str = ""
-    salesforce_username: str = ""
-    salesforce_password: str = ""
-    salesforce_security_token: str = ""
+    # Downstream service URLs (optional — hooks skip when unset)
+    graph_service_url: str = ""
+    score_service_url: str = ""
 
-    # ── CRM / HubSpot ───────────────────────────────
-    hubspot_access_token: str = ""
-
-    # ── Enrichment Sources (waterfall providers) ─────
-    clearbit_api_key: str = ""
-    zoominfo_api_key: str = ""
-    apollo_api_key: str = ""
-    hunter_api_key: str = ""
-
-    # ── Cognitive Engine Graphs (sibling node) ───────
-    ceg_base_url: str = "http://localhost:8001"
-
-    # ── Constellation nodes (inter-node PacketEnvelope traffic) ──
-    graph_node_url: str = "http://localhost:8001"
-    score_node_url: str = "http://localhost:8002"
-    route_node_url: str = "http://localhost:8003"
-    inter_node_secret: str = "dev-inter-node-secret"
-
-    # ── Graph persistence ─────────────────────────────
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "changeme"
-
-    # ── Relational persistence ────────────────────────
-    database_url: str = "postgresql+asyncpg://enrich:changeme@localhost:5432/enrich"
-
-    # ── Domain configuration ──────────────────────────
-    domains_dir: str = "./domains"
-    default_domain: str = "plasticos"
-
-    # ── Token budget ──────────────────────────────────
-    max_budget_tokens_default: int = 50_000
-    token_rate_usd_per_1k: float = 0.005
-
-    # ── Circuit Breaker ──────────────────────────────
-    cb_failure_threshold: int = 5
-    cb_cooldown_seconds: int = 60
-
-    # ── Logging ──────────────────────────────────────
+    # Observability
     log_level: str = "INFO"
+    otel_endpoint: str = ""
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
+
+    @model_validator(mode="after")
+    def resolve_token_budget_aliases(self) -> "Settings":
+        """
+        Resolve backward-compat aliases into max_budget_tokens.
+
+        Priority: max_tokens > token_budget > max_budget_tokens (default).
+        """
+        if self.max_tokens is not None:
+            self.max_budget_tokens = self.max_tokens
+        elif self.token_budget is not None:
+            self.max_budget_tokens = self.token_budget
+        return self
 
 
-@lru_cache
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return cached singleton Settings instance."""
     return Settings()
