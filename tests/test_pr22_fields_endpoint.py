@@ -9,7 +9,7 @@ Also proves the router is mounted (not orphaned) and respects tenant_id isolatio
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -30,7 +30,7 @@ def _make_mock_result(entity_id: str = "ent-001", tenant_id: str = "test-tenant"
     r.pass_count = 2
     r.tokens_used = 480
     r.processing_time_ms = 1100
-    r.created_at = datetime.now(timezone.utc)
+    r.created_at = datetime.now(UTC)
     return r
 
 
@@ -46,7 +46,7 @@ async def test_fields_endpoint_404_when_no_result():
     ):
         from app.main import app
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
             resp = await client.get(
                 "/api/v1/fields/ent-001",
                 params={"tenant_id": "test-tenant"},
@@ -63,26 +63,26 @@ async def test_fields_endpoint_200_after_persist():
 
     mock_result = _make_mock_result()
 
-    with patch(
-        "app.services.result_store.ResultStore.get_latest_for_entity",
-        new_callable=AsyncMock,
-        return_value=mock_result,
-    ):
-        with patch(
+    with (
+        patch(
+            "app.services.result_store.ResultStore.get_latest_for_entity",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ),
+        patch(
             "app.services.result_store.ResultStore.get_field_confidence_history",
             new_callable=AsyncMock,
             return_value=[],
-        ):
-            from app.main import app
+        ),
+    ):
+        from app.main import app
 
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                resp = await client.get(
-                    "/api/v1/fields/ent-001",
-                    params={"tenant_id": "test-tenant"},
-                    headers={"X-API-Key": "test-key"},
-                )
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+            resp = await client.get(
+                "/api/v1/fields/ent-001",
+                params={"tenant_id": "test-tenant"},
+                headers={"X-API-Key": "test-key"},
+            )
 
     assert resp.status_code == 200
     body = resp.json()
@@ -108,26 +108,26 @@ async def test_fields_endpoint_confidence_history_used_when_present():
         }
     ]
 
-    with patch(
-        "app.services.result_store.ResultStore.get_latest_for_entity",
-        new_callable=AsyncMock,
-        return_value=mock_result,
-    ):
-        with patch(
+    with (
+        patch(
+            "app.services.result_store.ResultStore.get_latest_for_entity",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ),
+        patch(
             "app.services.result_store.ResultStore.get_field_confidence_history",
             new_callable=AsyncMock,
             return_value=history,
-        ):
-            from app.main import app
+        ),
+    ):
+        from app.main import app
 
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                resp = await client.get(
-                    "/api/v1/fields/ent-001/material_type/history",
-                    params={"tenant_id": "test-tenant"},
-                    headers={"X-API-Key": "test-key"},
-                )
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+            resp = await client.get(
+                "/api/v1/fields/ent-001/material_type/history",
+                params={"tenant_id": "test-tenant"},
+                headers={"X-API-Key": "test-key"},
+            )
 
     assert resp.status_code == 200
     entries = resp.json()
@@ -154,24 +154,24 @@ async def test_fields_endpoint_tenant_isolation():
         captured_tenant.append(tenant_id)
         original_init(self, tenant_id)
 
-    with patch(
-        "app.services.result_store.ResultStore.__init__",
-        side_effect=capturing_init,
-    ):
-        with patch(
+    with (
+        patch(
+            "app.services.result_store.ResultStore.__init__",
+            side_effect=capturing_init,
+        ),
+        patch(
             "app.services.result_store.ResultStore.get_latest_for_entity",
             new_callable=AsyncMock,
             return_value=None,
-        ):
-            from app.main import app
+        ),
+    ):
+        from app.main import app
 
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                await client.get(
-                    "/api/v1/fields/ent-001",
-                    params={"tenant_id": "specific-tenant"},
-                    headers={"X-API-Key": "test-key"},
-                )
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+            await client.get(
+                "/api/v1/fields/ent-001",
+                params={"tenant_id": "specific-tenant"},
+                headers={"X-API-Key": "test-key"},
+            )
 
     assert "specific-tenant" in captured_tenant

@@ -11,12 +11,11 @@ Proves GAP-1 and GAP-6:
 
 from __future__ import annotations
 
-import importlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.engines.packet_router import PacketRouter, NodeTarget, _build_envelope, get_router
+from app.engines.packet_router import NodeTarget, PacketRouter, _build_envelope, get_router
 
 
 def test_dispatch_to_score_symbol_absent():
@@ -66,9 +65,7 @@ def test_build_envelope_structure():
 @pytest.mark.asyncio
 async def test_notify_graph_sync_posts_to_graph_node():
     """GAP-6: notify_graph_sync must POST a PacketEnvelope to the graph node."""
-    router = PacketRouter(
-        node_urls={NodeTarget.GRAPH.value: "http://graph-node:8001"}
-    )
+    router = PacketRouter(node_urls={NodeTarget.GRAPH.value: "https://graph-node:8001"})
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -103,9 +100,7 @@ async def test_notify_graph_sync_returns_none_when_no_graph_url():
 
 def test_notify_score_invalidate_is_fire_and_forget():
     """GAP-1: notify_score_invalidate must call route_fire_and_forget (non-blocking)."""
-    router = PacketRouter(
-        node_urls={NodeTarget.SCORE.value: "http://score-node:8002"}
-    )
+    router = PacketRouter(node_urls={NodeTarget.SCORE.value: "https://score-node:8002"})
 
     fired: list = []
 
@@ -117,9 +112,7 @@ def test_notify_score_invalidate_is_fire_and_forget():
     import asyncio
 
     asyncio.get_event_loop().run_until_complete(
-        router.notify_score_invalidate(
-            tenant_id="tenant-x", entity_id="ent-007", domain="plastics"
-        )
+        router.notify_score_invalidate(tenant_id="tenant-x", entity_id="ent-007", domain="plastics")
     )
 
     assert len(fired) == 1
@@ -135,8 +128,8 @@ def test_get_router_returns_singleton():
     settings = Settings(
         perplexity_api_key="test",
         api_secret_key="test",
-        graph_node_url="http://graph:8001",
-        score_node_url="http://score:8002",
+        graph_node_url="https://graph:8001",
+        score_node_url="https://score:8002",
     )
 
     r1 = get_router(settings)

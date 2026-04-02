@@ -47,10 +47,10 @@ class TestCRMBase:
     def test_crm_credentials(self):
         creds = CRMCredentials(
             crm_type=CRMType.ODOO,
-            credentials={"url": "http://odoo.test", "db": "test"},
+            credentials={"url": "https://odoo.test", "db": "test"},
         )
         assert creds.crm_type == CRMType.ODOO
-        assert creds.credentials["url"] == "http://odoo.test"
+        assert creds.credentials["url"] == "https://odoo.test"
 
 
 # ── Odoo Client ───────────────────────────────────────────────
@@ -64,7 +64,7 @@ class TestOdooClient:
         return CRMCredentials(
             crm_type=CRMType.ODOO,
             credentials={
-                "url": "http://odoo.test",
+                "url": "https://odoo.test",
                 "db": "testdb",
                 "username": "admin",
                 "password": "admin",

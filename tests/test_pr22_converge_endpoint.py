@@ -9,7 +9,7 @@ Proves GAP-3 and GAP-4:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -35,7 +35,6 @@ def _make_conv_response(
 @pytest.mark.asyncio
 async def test_converge_503_when_not_configured():
     """GAP-3: /v1/converge must return 503 if configure() was never called."""
-    import importlib
 
     import app.api.v1.converge as cm
 
@@ -43,10 +42,11 @@ async def test_converge_503_when_not_configured():
     cm._state_store = None
 
     from httpx import ASGITransport, AsyncClient
+
     from app.main import app
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
             resp = await client.post(
                 "/v1/converge",
                 json={
@@ -64,20 +64,33 @@ async def test_converge_503_when_not_configured():
 @pytest.mark.asyncio
 async def test_converge_calls_run_convergence_loop():
     """GAP-4: POST /v1/converge must delegate to convergence_controller.run_convergence_loop."""
-    from app.engines.convergence.loop_state import LoopStateStore, LoopState, LoopStatus
+    from app.engines.convergence.loop_state import LoopStateStore
     from app.services.enrichment_profile import ProfileRegistry
 
     run_loop_calls: list = []
 
-    async def mock_run_loop(request, settings, kb_resolver, idem_store, convergence_config=None, **kw):
-        run_loop_calls.append({"entity": request.entity, "passes": convergence_config.max_passes if convergence_config else 5})
+    async def mock_run_loop(
+        request, settings, kb_resolver, idem_store, convergence_config=None, **kw
+    ):
+        run_loop_calls.append(
+            {
+                "entity": request.entity,
+                "passes": convergence_config.max_passes if convergence_config else 5,
+            }
+        )
         return _make_conv_response()
 
     class MockStateStore(LoopStateStore):
         _states: dict = {}
-        async def save(self, state): self._states[state.run_id] = state
-        async def load(self, run_id): return self._states.get(run_id)
-        async def list_active(self, domain=None): return []
+
+        async def save(self, state):
+            self._states[state.run_id] = state
+
+        async def load(self, run_id):
+            return self._states.get(run_id)
+
+        async def list_active(self, domain=None):
+            return []
 
     import app.api.v1.converge as cm
 
@@ -94,9 +107,10 @@ async def test_converge_calls_run_convergence_loop():
         side_effect=mock_run_loop,
     ):
         from httpx import ASGITransport, AsyncClient
+
         from app.main import app
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
             resp = await client.post(
                 "/v1/converge",
                 json={
@@ -121,20 +135,28 @@ async def test_converge_calls_run_convergence_loop():
 @pytest.mark.asyncio
 async def test_converge_batch_processes_inline_entities():
     """GAP-9: converge/batch must process inline entity list and return real counts."""
-    from app.engines.convergence.loop_state import LoopStateStore, LoopStatus
-    from app.services.enrichment_profile import ProfileRegistry, EnrichmentProfile
+    from app.engines.convergence.loop_state import LoopStateStore
+    from app.services.enrichment_profile import EnrichmentProfile, ProfileRegistry
 
     processed: list = []
 
-    async def mock_run_loop(request, settings, kb_resolver, idem_store, convergence_config=None, **kw):
+    async def mock_run_loop(
+        request, settings, kb_resolver, idem_store, convergence_config=None, **kw
+    ):
         processed.append(request.entity.get("id"))
         return _make_conv_response(fields={"material_type": "PP"}, tokens_used=400)
 
     class MockStateStore(LoopStateStore):
         _states: dict = {}
-        async def save(self, state): self._states[state.run_id] = state
-        async def load(self, run_id): return self._states.get(run_id)
-        async def list_active(self, domain=None): return []
+
+        async def save(self, state):
+            self._states[state.run_id] = state
+
+        async def load(self, run_id):
+            return self._states.get(run_id)
+
+        async def list_active(self, domain=None):
+            return []
 
     import app.api.v1.converge as cm
 
@@ -153,9 +175,10 @@ async def test_converge_batch_processes_inline_entities():
         side_effect=mock_run_loop,
     ):
         from httpx import ASGITransport, AsyncClient
+
         from app.main import app
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
             resp = await client.post(
                 "/v1/converge/batch",
                 json={
