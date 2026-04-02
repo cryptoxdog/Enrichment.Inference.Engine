@@ -149,7 +149,7 @@ async def converge_single(
     )
     convergence_cfg = ConvergenceConfig(
         max_passes=body.max_passes,
-        convergence_threshold=body.convergence_threshold,
+        min_improvement_delta=body.convergence_threshold,
         confidence_threshold=min(body.convergence_threshold / 10.0, 1.0),
     )
 
@@ -211,8 +211,12 @@ async def converge_batch(
     entities = body.entities
     if not entities:
         return BatchConvergeResponse(
-            entities_selected=0, entities_processed=0, total_tokens=0,
-            total_cost_usd=0.0, profile_used=profile.profile_name, run_ids=[],
+            entities_selected=0,
+            entities_processed=0,
+            total_tokens=0,
+            total_cost_usd=0.0,
+            profile_used=profile.profile_name,
+            run_ids=[],
         )
 
     convergence_cfg = ConvergenceConfig(max_passes=profile.max_passes)
@@ -234,19 +238,24 @@ async def converge_batch(
         await store.save(state)
         try:
             resp = await run_convergence_loop(
-                request=enrich_req, settings=settings,
-                kb_resolver=_kb_resolver, idem_store=_idem_store,
+                request=enrich_req,
+                settings=settings,
+                kb_resolver=_kb_resolver,
+                idem_store=_idem_store,
                 convergence_config=convergence_cfg,
             )
             state.accumulated_fields = resp.fields or {}
             state.current_pass = resp.pass_count
-            state.status = LoopStatus.CONVERGED
+            state.status = LoopStatus.CONVERGED if resp.state == "completed" else LoopStatus.FAILED
             total_tokens += resp.tokens_used
             processed += 1
         except Exception as exc:
             state.status = LoopStatus.FAILED
             state.failure_reason = str(exc)
-            logger.warning("converge_batch.entity_failed", error=str(exc))
+            logger.warning(
+                "converge_batch.entity_failed",
+                extra={"error": str(exc)},
+            )
         await store.save(state)
         run_ids.append(state.run_id)
 
@@ -269,8 +278,11 @@ async def get_convergence_status(run_id: str) -> dict[str, Any]:
     if state is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return {
-        "run_id": state.run_id, "entity_id": state.entity_id, "domain": state.domain,
-        "status": state.status.value, "current_pass": state.current_pass,
+        "run_id": state.run_id,
+        "entity_id": state.entity_id,
+        "domain": state.domain,
+        "status": state.status.value,
+        "current_pass": state.current_pass,
         "fields_accumulated": len(state.accumulated_fields),
         "cost": state.cost_summary.model_dump(),
         "created_at": state.created_at.isoformat(),
@@ -285,23 +297,33 @@ async def approve_proposals(run_id: str, body: ApproveRequestBody) -> dict[str, 
     if state is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     if state.status != LoopStatus.HUMAN_HOLD:
-        raise HTTPException(status_code=409, detail=f"Run is {state.status.value}, not awaiting approval")
+        raise HTTPException(
+            status_code=409, detail=f"Run is {state.status.value}, not awaiting approval"
+        )
     domain_spec = _domain_specs.get(state.domain, {})
     if not domain_spec:
         raise HTTPException(status_code=404, detail=f"Domain spec for '{state.domain}' not found")
     proposal_set = propose_schema(
-        batch_results=[{"final_fields": state.accumulated_fields,
-                        "final_field_confidences": state.accumulated_confidences}],
-        current_yaml=domain_spec, domain=state.domain,
+        batch_results=[
+            {
+                "final_fields": state.accumulated_fields,
+                "final_field_confidences": state.accumulated_confidences,
+            }
+        ],
+        current_yaml=domain_spec,
+        domain=state.domain,
     )
     updated_yaml = apply_proposals(domain_spec, body.decisions, proposal_set)
     _domain_specs[state.domain] = updated_yaml
     approved_count = sum(1 for d in body.decisions if d.approved)
     state.status = LoopStatus.CONVERGED
     await store.save(state)
-    return {"run_id": run_id, "approved": approved_count,
-            "rejected": len(body.decisions) - approved_count,
-            "new_version": updated_yaml.get("version", "unknown")}
+    return {
+        "run_id": run_id,
+        "approved": approved_count,
+        "rejected": len(body.decisions) - approved_count,
+        "new_version": updated_yaml.get("version", "unknown"),
+    }
 
 
 @router.get("/converge/proposals/{domain}")
@@ -313,11 +335,18 @@ async def get_pending_proposals(domain: str) -> dict[str, Any]:
     proposals: list[dict[str, Any]] = []
     for run in held_runs:
         ps = propose_schema(
-            batch_results=[{"final_fields": run.accumulated_fields,
-                            "final_field_confidences": run.accumulated_confidences}],
-            current_yaml=domain_spec, domain=domain,
+            batch_results=[
+                {
+                    "final_fields": run.accumulated_fields,
+                    "final_field_confidences": run.accumulated_confidences,
+                }
+            ],
+            current_yaml=domain_spec,
+            domain=domain,
         )
-        proposals.append({"run_id": run.run_id, "entity_id": run.entity_id, "proposal": ps.model_dump()})
+        proposals.append(
+            {"run_id": run.run_id, "entity_id": run.entity_id, "proposal": ps.model_dump()}
+        )
     return {"domain": domain, "pending_count": len(proposals), "proposals": proposals}
 
 
@@ -326,7 +355,8 @@ async def scan_crm(body: ScanRequestBody) -> DiscoveryReport:
     domain_spec = _domain_specs.get(body.domain)
     if not domain_spec:
         available = list(_domain_specs.keys())
-        raise HTTPException(status_code=400,
-                            detail=f"Domain '{body.domain}' not found. Available: {available}")
+        raise HTTPException(
+            status_code=400, detail=f"Domain '{body.domain}' not found. Available: {available}"
+        )
     scan_result = scan_crm_fields(body.fields, domain_spec)
     return generate_discovery_report(scan_result, domain_spec)

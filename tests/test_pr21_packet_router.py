@@ -72,16 +72,17 @@ async def test_notify_graph_sync_posts_to_graph_node():
     mock_resp.json.return_value = {"status": "synced"}
     mock_resp.raise_for_status = MagicMock()
 
-    with patch.object(router._http, "post", new_callable=AsyncMock, return_value=mock_resp):
+    with patch.object(
+        router._http, "post", new_callable=AsyncMock, return_value=mock_resp
+    ) as mock_post:
         result = await router.notify_graph_sync(
             tenant_id="tenant-acme",
             entity_id="ent-001",
             fields={"material_type": "HDPE", "mfi_range": "2-4"},
             domain="plastics",
         )
-
-    assert result == {"status": "synced"}
-    call_json = router._http.post.call_args.kwargs["json"]
+        assert result == {"status": "synced"}
+        call_json = mock_post.call_args.kwargs["json"]
     assert call_json["header"]["action"] == "graph_sync"
     assert call_json["header"]["tenant_id"] == "tenant-acme"
     assert call_json["payload"]["entity_id"] == "ent-001"

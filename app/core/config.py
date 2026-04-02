@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -78,6 +79,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @model_validator(mode="after")
+    def align_legacy_token_budget(self) -> Settings:
+        """If only MAX_BUDGET_TOKENS_DEFAULT was customized, apply it to max_budget_tokens."""
+        if self.max_budget_tokens == 50_000 and self.max_budget_tokens_default != 50_000:
+            self.max_budget_tokens = self.max_budget_tokens_default
+        return self
 
 
 @lru_cache

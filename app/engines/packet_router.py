@@ -12,16 +12,16 @@ Usage:
     await router.notify_graph_sync(tenant_id, entity_id, fields, domain)
     router.route_fire_and_forget(NodeTarget.SCORE, "score_invalidate", ...)
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
-from functools import lru_cache
-from typing import Any
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any, cast
 
 import httpx
 import structlog
@@ -33,7 +33,7 @@ _RETRY_ATTEMPTS = 2
 _RETRYABLE_STATUS = frozenset({500, 502, 503, 504})
 
 
-class NodeTarget(str, Enum):
+class NodeTarget(StrEnum):
     GRAPH = "graph"
     SCORE = "score"
     ROUTE = "route"
@@ -73,7 +73,7 @@ def _build_envelope(
             "action": action,
             "tenant_id": tenant_id,
             "correlation_id": corr_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "content_hash": content_hash,
         },
         "payload": payload,
@@ -125,11 +125,11 @@ class PacketRouter:
                     last_exc = httpx.HTTPStatusError(
                         f"Retryable {resp.status_code}", request=resp.request, response=resp
                     )
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
                     continue
 
                 resp.raise_for_status()
-                data = resp.json()
+                data = cast("dict[str, Any]", resp.json())
                 logger.info(
                     "packet_routed",
                     target=target.value,
@@ -149,7 +149,7 @@ class PacketRouter:
                     error=str(exc),
                 )
                 if attempt < _RETRY_ATTEMPTS:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
 
         raise NodeUnreachableError(
             f"Node {target.value} unreachable after {_RETRY_ATTEMPTS + 1} attempts"
@@ -167,6 +167,7 @@ class PacketRouter:
         Dispatch without awaiting. Errors are logged, never raised.
         Use for non-critical downstream notifications.
         """
+
         async def _safe_route() -> None:
             try:
                 await self.route(target, action, tenant_id, payload, correlation_id)
@@ -228,9 +229,14 @@ class PacketRouter:
         await self._http.aclose()
 
 
-@lru_cache(maxsize=1)
+_router_singleton: PacketRouter | None = None
+
+
 def get_router(settings: Any) -> PacketRouter:
-    """Module-level singleton router. Cached per process."""
+    """Module-level singleton router. One instance per process (settings URLs applied once)."""
+    global _router_singleton
+    if _router_singleton is not None:
+        return _router_singleton
     node_urls = {}
     for target in NodeTarget:
         url_attr = f"{target.value}_node_url"
@@ -238,4 +244,5 @@ def get_router(settings: Any) -> PacketRouter:
             url = getattr(settings, url_attr)
             if url:
                 node_urls[target.value] = url
-    return PacketRouter(node_urls=node_urls)
+    _router_singleton = PacketRouter(node_urls=node_urls)
+    return _router_singleton

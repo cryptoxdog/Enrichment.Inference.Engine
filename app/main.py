@@ -81,7 +81,10 @@ async def lifespan(app: FastAPI):
 
     try:
         from .engines.convergence.loop_state import RedisLoopStateStore
-        loop_state_store = RedisLoopStateStore(redis_client=_idem._client) if _idem else _fallback_loop_store()
+
+        loop_state_store = (
+            RedisLoopStateStore(redis_client=_idem.client) if _idem else _fallback_loop_store()
+        )
     except Exception:
         loop_state_store = _fallback_loop_store()
 
@@ -106,6 +109,7 @@ async def lifespan(app: FastAPI):
     if _idem:
         await _idem.close()
     from .services import pg_store as _pg
+
     await _pg.close_engine()
     _kb = None
     _idem = None
@@ -113,13 +117,22 @@ async def lifespan(app: FastAPI):
 
 def _fallback_loop_store():
     """In-memory LoopStateStore used when Redis is unavailable."""
-    from .engines.convergence.loop_state import LoopStateStore, LoopState
+    from .engines.convergence.loop_state import LoopState, LoopStateStore
 
     class _InMemory(LoopStateStore):
-        _data: dict = {}
-        async def save(self, state: LoopState) -> None: self._data[state.run_id] = state
-        async def load(self, run_id: str) -> LoopState | None: return self._data.get(run_id)
-        async def list_active(self, domain: str | None = None):
+        __slots__ = ("_data",)
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._data: dict[str, LoopState] = {}
+
+        async def save(self, state: LoopState) -> None:
+            self._data[state.run_id] = state
+
+        async def load(self, run_id: str) -> LoopState | None:
+            return self._data.get(run_id)
+
+        async def list_active(self, domain: str | None = None) -> list[LoopState]:
             return [s for s in self._data.values() if domain is None or s.domain == domain]
 
     return _InMemory()
@@ -186,6 +199,10 @@ async def enrich_batch_endpoint(
     failed = sum(1 for r in results if r.state == "failed")
     tokens = sum(r.tokens_used for r in results)
     return BatchEnrichResponse(
-        results=results, total=len(results), succeeded=succeeded, failed=failed,
-        total_processing_time_ms=elapsed, total_tokens_used=tokens,
+        results=results,
+        total=len(results),
+        succeeded=succeeded,
+        failed=failed,
+        total_processing_time_ms=elapsed,
+        total_tokens_used=tokens,
     )
