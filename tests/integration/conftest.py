@@ -28,7 +28,7 @@ async def api_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,
-        base_url="http://testserver",
+        base_url="https://testserver",
         headers={"Authorization": "Bearer test-key"},
     ) as client:
         yield client
