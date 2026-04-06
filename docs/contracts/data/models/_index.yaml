@@ -1,0 +1,25 @@
+models:
+  - name: EnrichmentResult
+    schema_file: enrichment-result.schema.json
+    storage: postgresql
+    table: enrichment_results
+    description: Persisted single enrichment output
+
+  - name: ConvergenceRun
+    schema_file: convergence-run.schema.json
+    storage: postgresql
+    table: convergence_runs
+    description: Multi-pass convergence loop state
+
+  - name: FieldConfidenceHistory
+    schema_file: field-confidence-history.schema.json
+    storage: postgresql
+    table: field_confidence_history
+    description: Per-field confidence time-series
+
+  - name: SchemaProposalRecord
+    schema_file: schema-proposal.schema.json
+    storage: postgresql
+    table: schema_proposals
+    description: Schema proposals with approval workflow
+
