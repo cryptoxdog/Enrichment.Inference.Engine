@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "Name": "Acme Recycling Corp",
+    "BillingCountry": "US",
+    "Industry": "Recycling"
+  },
+  "object_type": "Account",
+  "objective": "Enrich polymer type and material grade for recycling facility"
+}
