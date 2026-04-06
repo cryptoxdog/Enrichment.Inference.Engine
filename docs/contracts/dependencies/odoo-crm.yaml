@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Odoo CRM Dependency
+# Source:   app/services/crm/odoo_client.py, config/crm/odoo_mapping.yaml
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: OdooCRM
+type: external
+protocol: xmlrpc  # Odoo standard XMLRPC/JSON-RPC
+auth_method: Username + password (ODOO_USERNAME, ODOO_PASSWORD)
+base_url_env: ODOO_URL
+database_env: ODOO_DB
+
+role: |
+  Primary CRM consumer #1. Odoo ERP integration:
+  - async_executor.py calls POST /api/v1/enrich for each entity
+  - CRM writeback writes enriched fields to res.partner, crm.lead, etc.
+  - Odoo nightly cron calls POST /api/v1/enrich/batch
+  - plasticos_research_enrichment Odoo module integrates directly.
+
+odoo_module: odoo_modules/plasticos_research_enrichment
+field_mapping: config/crm/odoo_mapping.yaml
+source_file: app/services/crm/odoo_client.py
+
