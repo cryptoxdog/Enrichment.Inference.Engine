@@ -1,0 +1,18 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: HubSpot CRM Dependency
+# Source:   app/services/crm/hubspot_client.py,
+#           config/crm/hubspot_mapping.yaml
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: HubSpotCRM
+type: external
+protocol: http
+auth_method: Bearer token (HUBSPOT_ACCESS_TOKEN)
+
+role: CRM consumer #3. HubSpot private app integration for enrichment writeback.
+
+field_mapping: config/crm/hubspot_mapping.yaml
+source_file: app/services/crm/hubspot_client.py
+
