@@ -1,0 +1,1191 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Unified OpenAPI Specification
+# Source:   app/main.py, app/api/v1/*, app/models/schemas.py
+# Version:  2.3.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+openapi: "3.1.0"
+
+info:
+  title: L9 ENRICH — Domain Enrichment API
+  version: "2.3.0"
+  description: |
+    Universal domain-aware entity enrichment. Layer 2 of the L9 three-layer
+    intelligence stack. Serves Salesforce Apex callouts, Odoo async_executor,
+    and any L9 constellation node via PacketEnvelope.
+
+    ## Authentication
+    All endpoints (except GET /api/v1/health) require an `X-API-Key` header.
+    The raw key is SHA-256 hashed and compared against `API_KEY_HASH` using
+    constant-time comparison (`hmac.compare_digest`).
+
+    ## Rate Limiting
+    Global: 120 requests/minute per client IP.
+    Source: `app/middleware/rate_limiter.py`
+  contact:
+    name: L9 Enrichment Engine
+    url: https://github.com/cryptoxdog/Enrichment.Inference.Engine
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://enrich.yourdomain.com
+    description: Production
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        SHA-256-hashed API key. Callers send the raw key; the server hashes and
+        compares. Source: app/core/auth.py
+
+  schemas:
+    # ── Shared base types ──────────────────────────────────────
+    EntityDict:
+      $ref: "./schemas/shared-models.yaml#/components/schemas/EntityDict"
+
+    ErrorResponse:
+      $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+
+    # ── Enrichment ──────────────────────────────────────────
+    EnrichRequest:
+      title: EnrichRequest
+      description: |
+        Single entity enrichment request. Callers: Salesforce EnrichmentCalloutService,
+        Odoo async_executor, Clay webhooks.
+      type: object
+      required:
+        - entity
+        - object_type
+        - objective
+      properties:
+        entity:
+          type: object
+          additionalProperties: true
+          description: Record fields as key-value pairs.
+          example:
+            name: "Acme Plastics Ltd"
+            industry: "Plastics Recycling"
+        object_type:
+          type: string
+          description: Source object API name (Account, Lead, res.partner, etc.).
+          example: Account
+        schema:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: |
+            Target fields to enrich: {field_api_name: type}. Accepts JSON string
+            (from Salesforce LongTextArea) or dict.
+          example:
+            recycling_grade: "string"
+            annual_tonnage: "number"
+        objective:
+          type: string
+          description: Natural-language instruction describing what to enrich.
+          example: "Identify the primary polymer grades handled and annual throughput capacity."
+        kb_context:
+          type: string
+          nullable: true
+          description: KB profile identifier for selective injection (e.g., 'HDPE', 'recycling').
+          example: HDPE
+        consensus_threshold:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.65
+          description: Minimum consensus ratio to accept a field value.
+        max_variations:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: Number of parallel prompt variations for consensus mode.
+        idempotency_key:
+          type: string
+          nullable: true
+          description: Caller-supplied UUID for duplicate prevention.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      x-source-file: app/models/schemas.py:26
+      additionalProperties: false
+
+    EnrichResponse:
+      title: EnrichResponse
+      description: |
+        Full enrichment response. Salesforce EnrichmentWriteBack reads `fields`.
+        Salesforce EnrichmentRunLogger reads all provenance fields.
+        Odoo enrichment_run stores the entire response as JSON.
+      type: object
+      properties:
+        fields:
+          type: object
+          additionalProperties: true
+          description: Enriched field values. Salesforce WriteBack reads this.
+          example:
+            recycling_grade: "HDPE"
+            annual_tonnage: 50000
+        confidence:
+          type: number
+          format: float
+          description: Overall consensus confidence (0.0–1.0).
+          example: 0.87
+        kb_content_hash:
+          type: string
+          description: SHA-256 hash of the KB content snapshot used.
+          example: "a3f1b2c4..."
+        variation_count:
+          type: integer
+          description: Number of prompt variations attempted.
+          example: 5
+        consensus_threshold:
+          type: number
+          format: float
+          description: Threshold applied during this run.
+          example: 0.65
+        uncertainty_score:
+          type: number
+          format: float
+          description: Aggregate uncertainty metric (0.0–10.0 scale).
+          example: 1.4
+        pass_count:
+          type: integer
+          description: Number of convergence passes executed.
+          example: 3
+        inference_version:
+          type: string
+          description: Inference engine version.
+          default: v2.2.0
+          example: v2.2.0
+        processing_time_ms:
+          type: integer
+          description: Wall-clock processing time in milliseconds.
+          example: 1847
+        enrichment_payload:
+          type: object
+          nullable: true
+          description: Full prompt+response payload for replay.
+        feature_vector:
+          type: object
+          nullable: true
+          description: Extracted feature vector for downstream scoring.
+        kb_files_consulted:
+          type: array
+          items:
+            type: string
+          description: List of KB file names consulted.
+          example: ["plastics_recycling.yaml"]
+        kb_fragment_ids:
+          type: array
+          items:
+            type: string
+          description: KB fragment IDs referenced in this enrichment.
+        inferences:
+          type: array
+          items:
+            type: object
+          description: Deterministic KB inference results.
+        quality_tier:
+          type: string
+          enum: [platinum, gold, silver, bronze, unknown]
+          description: Quality tier classification from QualityScorer.
+          example: gold
+        grade_matches:
+          type: array
+          items:
+            type: object
+          description: Matched polymer grades from KB.
+        tokens_used:
+          type: integer
+          description: Total LLM tokens consumed.
+          example: 4200
+        failure_reason:
+          type: string
+          nullable: true
+          description: Error message if state is 'failed'.
+        state:
+          type: string
+          enum: [completed, failed, partial]
+          default: completed
+          description: Enrichment outcome state.
+      x-source-file: app/models/schemas.py:68
+      additionalProperties: false
+
+    BatchEnrichRequest:
+      title: BatchEnrichRequest
+      description: Batch enrichment — up to 50 entities in one HTTP call.
+      type: object
+      required:
+        - entities
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnrichRequest"
+          maxItems: 50
+          description: List of entity enrichment requests.
+      x-source-file: app/models/schemas.py:113
+      additionalProperties: false
+
+    BatchEnrichResponse:
+      title: BatchEnrichResponse
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnrichResponse"
+        total:
+          type: integer
+        succeeded:
+          type: integer
+        failed:
+          type: integer
+        total_processing_time_ms:
+          type: integer
+        total_tokens_used:
+          type: integer
+      x-source-file: app/models/schemas.py:117
+      additionalProperties: false
+
+    HealthCheckResponse:
+      title: HealthCheckResponse
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          example: ok
+        version:
+          type: string
+          example: "2.3.0"
+        kb_loaded:
+          type: boolean
+          description: Whether the knowledge base index is loaded.
+        kb_polymers:
+          type: integer
+          description: Number of polymer types in the KB.
+        kb_grades:
+          type: integer
+          description: Total grade entries in the KB.
+        kb_rules:
+          type: integer
+          description: Total inference rules loaded.
+        circuit_breaker_state:
+          type: string
+          enum: [closed, open, half-open]
+          description: Circuit breaker state for external API calls.
+      x-source-file: app/models/schemas.py:128
+      additionalProperties: false
+
+    PacketEnvelope:
+      title: PacketEnvelope
+      description: |
+        L9 chassis wire format for node-to-node communication.
+        Source: chassis/envelope.py
+      type: object
+      required:
+        - action
+        - payload
+      properties:
+        action:
+          type: string
+          enum: [enrich, enrichbatch, converge, discover, enrich_and_sync, writeback]
+          description: Handler action to invoke.
+        payload:
+          type: object
+          additionalProperties: true
+          description: Action-specific payload dict.
+        tenant:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                actor:
+                  type: string
+          description: Tenant identifier (string or object with actor field).
+          example: "acme-corp"
+        content_hash:
+          type: string
+          description: |
+            Optional SHA-256 of canonical(action+payload+tenant). If provided,
+            server verifies before processing.
+          example: "a3f1b2c4d5e6..."
+        source_node:
+          type: string
+          description: Originating node identifier.
+          example: "score-engine"
+        reply_to:
+          type: string
+          description: Node to receive the response.
+        lineage:
+          type: object
+          description: Packet lineage chain for distributed tracing.
+        governance:
+          type: object
+          description: Compliance and audit metadata.
+      x-source-file: chassis/envelope.py
+      additionalProperties: true
+
+    PacketEnvelopeResult:
+      title: PacketEnvelopeResult
+      description: Egress envelope wrapping the engine response.
+      type: object
+      properties:
+        packet_id:
+          type: string
+          format: uuid
+        packet_type:
+          type: string
+          enum: [enrichment_result]
+        action:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+        content_hash:
+          type: string
+        address:
+          type: object
+          properties:
+            source_node:
+              type: string
+            destination_node:
+              type: string
+            reply_to:
+              type: string
+        tenant:
+          type: object
+        lineage:
+          type: object
+        governance:
+          type: object
+        hop_trace:
+          type: array
+          items:
+            type: object
+      x-source-file: chassis/envelope.py
+      additionalProperties: true
+
+    ConvergeRequest:
+      title: ConvergeRequest
+      description: Single entity convergence loop request.
+      type: object
+      required:
+        - entity_id
+        - domain
+      properties:
+        entity_id:
+          type: string
+          description: The entity to converge.
+        domain:
+          type: string
+          description: Domain YAML identifier (e.g., 'plasticos').
+        max_passes:
+          type: integer
+          default: 5
+          description: Maximum convergence passes.
+        profile_id:
+          type: string
+          nullable: true
+          description: Enrichment profile ID.
+      x-source-file: app/api/v1/converge.py
+      additionalProperties: false
+
+    DiscoverRequest:
+      title: DiscoverRequest
+      type: object
+      required:
+        - entity_id
+        - domain
+        - object_type
+        - tenant_id
+      properties:
+        entity_id:
+          type: string
+        domain:
+          type: string
+        object_type:
+          type: string
+        tenant_id:
+          type: string
+      x-source-file: app/api/v1/discover.py:27
+      additionalProperties: false
+
+    ScanRequest:
+      title: ScanRequest
+      description: CRM field scan request for Seed tier entry point.
+      type: object
+      required:
+        - fields
+        - domain
+        - tenant_id
+      properties:
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+              sample_values:
+                type: array
+                items: {}
+                nullable: true
+              fill_rate:
+                type: number
+                nullable: true
+        domain:
+          type: string
+          example: plasticos
+        tenant_id:
+          type: string
+          example: acme-corp
+      x-source-file: app/api/v1/discover.py:37
+      additionalProperties: false
+
+    ApprovalRequest:
+      title: ApprovalRequest
+      type: object
+      required:
+        - approved
+        - reviewed_by
+      properties:
+        approved:
+          type: boolean
+        reviewed_by:
+          type: string
+          description: Identity of the reviewer.
+      x-source-file: app/api/v1/discover.py:47
+      additionalProperties: false
+
+paths:
+  # ── Enrichment ─────────────────────────────────────────────
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Health check — KB + circuit breaker status
+      description: |
+        Returns service health, API version, KB load status, and circuit breaker state.
+        Does NOT require authentication.
+      tags: [health]
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              example:
+                status: ok
+                version: "2.3.0"
+                kb_loaded: true
+                kb_polymers: 12
+                kb_grades: 47
+                kb_rules: 23
+                circuit_breaker_state: closed
+      x-source-file: app/main.py:81
+
+  /api/v1/enrich:
+    post:
+      operationId: enrichSingle
+      summary: Enrich a single entity
+      description: |
+        Core enrichment endpoint. Accepts an entity record and objective, runs the
+        waterfall enrichment pipeline (Perplexity Sonar → optional fallbacks),
+        applies deterministic KB inference, and returns enriched fields with
+        confidence scores.
+
+        Called by:
+        - Salesforce: `EnrichmentCalloutService.cls`
+        - Odoo: `async_executor.py`
+        - Clay: webhook integration
+
+        Supports idempotency via `idempotency_key` field (Redis-backed dedup).
+      tags: [enrichment]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrichRequest"
+            example:
+              entity:
+                name: "Acme Plastics Ltd"
+                country: "US"
+                industry: "Plastics Recycling"
+              object_type: Account
+              objective: "Identify polymer grades, annual tonnage, recycling certifications"
+              kb_context: HDPE
+              consensus_threshold: 0.70
+              max_variations: 5
+              idempotency_key: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "200":
+          description: Enrichment completed (or failed with state=failed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichResponse"
+              example:
+                fields:
+                  recycling_grade: HDPE
+                  annual_tonnage: 50000
+                confidence: 0.87
+                quality_tier: gold
+                pass_count: 2
+                tokens_used: 4200
+                state: completed
+                processing_time_ms: 1847
+        "401":
+          description: Missing X-API-Key header
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Request validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded (120 req/min)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal enrichment error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      x-source-file: app/main.py:95
+
+  /api/v1/enrich/batch:
+    post:
+      operationId: enrichBatch
+      summary: Batch enrichment — up to 50 entities
+      description: |
+        Batch enrichment for up to 50 entities per request.
+        Used by Odoo nightly cron (async_executor batch mode).
+        Returns aggregated token usage and per-entity results.
+      tags: [enrichment]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchEnrichRequest"
+      responses:
+        "200":
+          description: Batch results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchEnrichResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-source-file: app/main.py:106
+
+  # ── Chassis ────────────────────────────────────────────────
+  /v1/execute:
+    post:
+      operationId: executePacket
+      summary: L9 Chassis — universal packet ingress
+      description: |
+        Accepts any PacketEnvelope and routes it to the registered handler.
+        The `action` field determines which handler fires.
+
+        Supported actions: `enrich`, `enrichbatch`, `converge`, `discover`, `enrich_and_sync`
+
+        For use by other L9 constellation nodes only. External HTTP clients
+        (Salesforce, Odoo) use /api/v1/enrich directly.
+      tags: [chassis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PacketEnvelope"
+            example:
+              action: enrich
+              payload:
+                entity:
+                  name: "Acme Plastics"
+                object_type: Account
+                objective: "Enrich company profile"
+              tenant: "acme-corp"
+              source_node: "score-engine"
+      responses:
+        "200":
+          description: Routed packet result envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PacketEnvelopeResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No handler registered for the requested action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Envelope validation failed (missing action, hash mismatch)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-source-file: app/api/v1/chassis_endpoint.py:38
+
+  /v1/outcomes:
+    post:
+      operationId: receiveOutcome
+      summary: Receive match outcome for reinforcement feedback
+      description: |
+        Called by ROUTE/SCORE nodes to record whether an enrichment-driven match
+        was accepted or rejected. Feeds the outcome back to GRAPH for temporal
+        decay adjustment and community re-scoring.
+      tags: [chassis]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenant:
+                  type: string
+                  default: default
+                payload:
+                  type: object
+                  additionalProperties: true
+                parent_packet_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        "200":
+          description: Outcome recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-source-file: app/api/v1/chassis_endpoint.py:54
+
+  # ── Convergence ────────────────────────────────────────────
+  /v1/converge:
+    post:
+      operationId: convergeEntity
+      summary: Run single entity convergence loop
+      description: |
+        Executes a multi-pass enrichment-inference convergence loop for a single entity.
+        Runs up to `max_passes` enrichment passes, accumulating field confidence until
+        the loop converges (confidence plateau, budget exceeded, or max passes reached).
+        Returns the loop state and final accumulated fields.
+      tags: [convergence]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvergeRequest"
+      responses:
+        "200":
+          description: Convergence loop result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [converged, max_passes_reached, budget_exceeded, failed]
+                  pass_count:
+                    type: integer
+                  final_fields:
+                    type: object
+                  total_tokens:
+                    type: integer
+                  total_cost_usd:
+                    type: number
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-source-file: app/api/v1/converge.py
+
+  /v1/converge/batch:
+    post:
+      operationId: convergeBatch
+      summary: Batch convergence with profile-based selection
+      tags: [convergence]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entity_ids:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 100
+                domain:
+                  type: string
+                profile_id:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Batch convergence initiated
+          content:
+            application/json:
+              schema:
+                type: object
+      x-source-file: app/api/v1/converge.py
+
+  /v1/converge/{run_id}:
+    get:
+      operationId: getConvergeStatus
+      summary: Check convergence loop progress
+      tags: [convergence]
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The convergence run UUID.
+      responses:
+        "200":
+          description: Loop state
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Run ID not found
+      x-source-file: app/api/v1/converge.py
+
+  /v1/converge/{run_id}/approve:
+    post:
+      operationId: approveConvergeProposal
+      summary: Human approval for schema proposals
+      tags: [convergence]
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalRequest"
+      responses:
+        "200":
+          description: Approval recorded
+      x-source-file: app/api/v1/converge.py
+
+  /v1/converge/proposals/{domain}:
+    get:
+      operationId: getConvergeProposals
+      summary: Get pending schema proposals for a domain
+      tags: [convergence]
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+          example: plasticos
+      responses:
+        "200":
+          description: Pending proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+      x-source-file: app/api/v1/converge.py
+
+  # ── Schema Discovery ───────────────────────────────────────
+  /api/v1/discover:
+    post:
+      operationId: discoverSchema
+      summary: Trigger schema discovery for a domain entity
+      description: |
+        Runs schema discovery for an entity within a domain. Analyzes the entity's
+        existing fields, gaps, and coverage against the domain YAML spec. Returns
+        discovered field candidates and coverage metrics.
+      tags: [discover]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscoverRequest"
+            example:
+              entity_id: "acct_001"
+              domain: plasticos
+              object_type: Account
+              tenant_id: acme-corp
+      responses:
+        "200":
+          description: Schema discovery result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-source-file: app/api/v1/discover.py:51
+
+  /api/v1/scan:
+    post:
+      operationId: scanCRMFields
+      summary: CRM field scan — Seed tier entry point
+      description: |
+        Scans CRM field metadata against the domain YAML spec. Returns coverage ratio,
+        missing fields, enrichment candidates, and cost estimates. This is the primary
+        "Seed tier" entry point for onboarding new CRM instances.
+      tags: [discover]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+            example:
+              fields:
+                - name: company_name
+                  type: string
+                  sample_values: ["Acme Corp", "Plastics Inc"]
+                  fill_rate: 0.98
+                - name: industry
+                  type: string
+                  fill_rate: 0.72
+              domain: plasticos
+              tenant_id: acme-corp
+      responses:
+        "200":
+          description: CRM field scan result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      x-source-file: app/api/v1/discover.py:72
+
+  /api/v1/proposals/{domain}:
+    get:
+      operationId: getSchemaProposals
+      summary: Get pending schema proposals for a domain
+      tags: [discover]
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+          example: plasticos
+        - name: tenant_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Tenant identifier.
+          example: acme-corp
+      responses:
+        "200":
+          description: List of pending schema proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    field_name:
+                      type: string
+                    field_type:
+                      type: string
+                    source:
+                      type: string
+                    fill_rate:
+                      type: number
+                    avg_confidence:
+                      type: number
+                    sample_values:
+                      type: array
+                    proposed_gate:
+                      type: string
+                      nullable: true
+                    proposed_scoring_dimension:
+                      type: string
+                      nullable: true
+                    yaml_diff:
+                      type: string
+                      nullable: true
+                    approval_status:
+                      type: string
+                      enum: [pending, approved, rejected]
+                    created_at:
+                      type: string
+                      format: date-time
+      x-source-file: app/api/v1/discover.py:93
+
+  /api/v1/proposals/{proposal_id}/approve:
+    post:
+      operationId: approveSchemaProposal
+      summary: Approve or reject a schema proposal
+      tags: [discover]
+      parameters:
+        - name: proposal_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalRequest"
+            example:
+              approved: true
+              reviewed_by: "igor@example.com"
+      responses:
+        "200":
+          description: Approval status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [approved, rejected]
+                  proposal_id:
+                    type: string
+                    format: uuid
+      x-source-file: app/api/v1/discover.py:113
+
+  # ── Fields ─────────────────────────────────────────────────
+  /api/v1/fields/{entity_id}:
+    get:
+      operationId: getFieldConfidenceMap
+      summary: Get field confidence map for an entity
+      description: |
+        Returns enriched field values with per-field confidence scores,
+        source attribution, and pass number. Reads from the persistence
+        layer (ResultStore → pg_store).
+      tags: [fields]
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: acct_001
+        - name: tenant_id
+          in: query
+          required: true
+          schema:
+            type: string
+          example: acme-corp
+      responses:
+        "200":
+          description: Field confidence map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entity_id:
+                    type: string
+                  fields:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        value:
+                          description: The enriched field value
+                        confidence:
+                          type: number
+                          format: float
+                        source:
+                          type: string
+                        pass_number:
+                          type: integer
+                  avg_confidence:
+                    type: number
+                  coverage_ratio:
+                    type: number
+                  last_enriched_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No enrichment found for entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      x-source-file: app/api/v1/fields.py:60
+
+  /api/v1/fields/{entity_id}/{field_name}/history:
+    get:
+      operationId: getFieldConfidenceHistory
+      summary: Field confidence time-series
+      description: Returns the historical confidence values for a single field across enrichment passes.
+      tags: [fields]
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: field_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenant_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Confidence time-series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    confidence:
+                      type: number
+                    source:
+                      type: string
+                    pass_number:
+                      type: integer
+                    recorded_at:
+                      type: string
+                      format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Entity or field not found
+      x-source-file: app/api/v1/fields.py
+
+  responses:
+    Unauthorized:
+      description: Missing X-API-Key header
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+          example:
+            detail: "Missing X-API-Key header"
+    Forbidden:
+      description: Invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+          example:
+            detail: "Invalid API key"
+    ValidationError:
+      description: Request validation error (Pydantic)
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ValidationErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+          example:
+            detail: "Internal enrichment error"
+
+tags:
+  - name: enrichment
+    description: Core entity enrichment endpoints
+  - name: chassis
+    description: L9 PacketEnvelope node-to-node protocol
+  - name: convergence
+    description: Multi-pass convergence loop management
+  - name: discover
+    description: Schema discovery and CRM field scanning
+  - name: fields
+    description: Per-field confidence and provenance queries
+  - name: health
+    description: Service and CRM health monitoring
