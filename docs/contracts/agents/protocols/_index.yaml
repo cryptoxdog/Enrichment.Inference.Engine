@@ -1,0 +1,6 @@
+protocols:
+  - name: L9PacketEnvelope
+    file: packet-envelope.yaml
+    transport: HTTP POST /v1/execute
+    description: L9 chassis node-to-node wire protocol
+
