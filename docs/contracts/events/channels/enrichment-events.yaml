@@ -1,0 +1,26 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Enrichment Events Channel
+# Source:   app/services/event_emitter.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+channel_name: "enrich:events:{tenant_id}"
+backend: redis_streams
+direction: publish
+description: |
+  Tenant-scoped Redis Stream. One stream per tenant.
+  Consumers read via XREAD/XREADGROUP.
+
+event_types:
+  - enrichment_completed
+  - enrichment_failed
+  - convergence_completed
+  - schema_proposed
+  - score_invalidated
+  - entity_updated
+
+source_file: app/services/event_emitter.py
+emitter_class: EventEmitter
+backend_class: RedisStreamsBackend
+
