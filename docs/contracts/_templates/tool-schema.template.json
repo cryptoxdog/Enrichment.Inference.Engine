@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/agents/tool-schemas/{tool-name}.schema.json",
+  "title": "PascalCaseName",
+  "description": "One-line description of what this tool does. MCP tool for the Enrichment Inference Engine.",
+  "type": "object",
+  "properties": {
+    "required_param": {
+      "type": "string",
+      "description": "Description of this parameter."
+    },
+    "optional_param": {
+      "type": "string",
+      "description": "Description of this optional parameter."
+    }
+  },
+  "required": ["required_param"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "required_param": "example_value",
+      "optional_param": "optional_value"
+    }
+  ],
+  "x-source-file": "{source_file}:{line_number}",
+  "x-mcp-action": "enrich",
+  "x-returns": "Description of what the tool returns"
+}
