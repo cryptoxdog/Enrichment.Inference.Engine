@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: {channel_name} Event Channel
+# Source:   {source_file}:{line_number}
+# Version:  1.0.0
+# Updated:  {ISO-8601-date}
+# ═══════════════════════════════════════════════════════════════
+
+# Add a new channel entry to events/asyncapi.yaml under channels:
+# and add corresponding message + schema under components:
+
+event_name: {snake_case_event_name}
+channel: "enrich:events:{tenant_id}"
+direction: publish  # publish | subscribe | both
+backend: redis_streams
+
+payload_schema:
+  type: object
+  required:
+    - event_type
+    - entity_id
+    - tenant_id
+  properties:
+    event_type:
+      type: string
+      const: {snake_case_event_name}
+    entity_id:
+      type: string
+    tenant_id:
+      type: string
+    payload:
+      type: object
+      properties:
+        field_name:
+          type: string
+          description: Event-specific payload field.
+  additionalProperties: false
+
+examples:
+  - event_type: {snake_case_event_name}
+    entity_id: "001B000000LpT1FIAV"
+    tenant_id: acme-corp
+    payload:
+      field_name: example_value
+
+meta:
+  correlation_id: true
+  timestamp_format: ISO-8601
+  version: "1.0.0"
+
+delivery:
+  guarantee: at_most_once
+  ordering: per_tenant_stream
+  retry_policy: none
+
