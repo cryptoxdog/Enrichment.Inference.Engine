@@ -1,0 +1,111 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Graph Schema (Neo4j)
+# Source:   engine/kge/neuro_symbolic_engine.py,
+#           engine/kge/hyper_relational_encoder.py,
+#           engine/kge/rotate3d.py,
+#           app/engines/graph_sync_client.py,
+#           app/services/pg_models.py (graph_coverage field),
+#           config/inference_rules.yaml
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+connection:
+  protocol: bolt
+  uri_env: NEO4J_URI
+  user_env: NEO4J_USER
+  password_env: NEO4J_PASSWORD
+  default_uri: bolt://localhost:7687
+  default_user: neo4j
+
+description: |
+  Neo4j graph used by the Knowledge Graph Engine (KGE) for:
+  - Hyper-relational entity encoding (engine/kge/hyper_relational_encoder.py)
+  - Neuro-symbolic inference (engine/kge/neuro_symbolic_engine.py)
+  - 3D rotation embeddings (engine/kge/rotate3d.py)
+  - Graph sync of enriched entities (app/engines/graph_sync_client.py)
+
+  The EIE writes enriched entity data to the graph via GraphSyncClient
+  after each enrichment. The Cognitive Engine Graph (CEG) at CEG_BASE_URL
+  is a sibling node that also reads from Neo4j.
+
+nodes:
+  - label: Entity
+    description: Enriched CRM entity (Account, Contact, Lead, Opportunity)
+    properties:
+      - name: entity_id
+        type: string
+        indexed: true
+        description: CRM record ID
+      - name: tenant_id
+        type: string
+        indexed: true
+      - name: object_type
+        type: string
+      - name: domain
+        type: string
+      - name: last_enriched_at
+        type: datetime
+    # TODO: Verify exact node property set from app/engines/graph_sync_client.py
+
+  - label: Polymer
+    description: Polymer/material grade from KB (kb/plastics_recycling.yaml)
+    properties:
+      - name: name
+        type: string
+        description: e.g., HDPE, PP, PET, LDPE
+      - name: grade
+        type: string
+      - name: category
+        type: string
+    # TODO: Verify exact label and properties from engine/kge or KB sync logic
+
+  - label: EnrichmentResult
+    description: Graph representation of an enrichment outcome
+    properties:
+      - name: run_id
+        type: string
+      - name: confidence
+        type: float
+      - name: quality_tier
+        type: string
+    # TODO: Verify from app/engines/graph_sync_client.py
+
+relationships:
+  - type: HAS_ENRICHMENT
+    from: Entity
+    to: EnrichmentResult
+    description: Entity → enrichment result linkage
+    # TODO: Verify relationship type from graph_sync_client.py
+
+  - type: HANDLES_POLYMER
+    from: Entity
+    to: Polymer
+    description: Company handles a specific polymer type
+    # TODO: Verify from KGE or KB sync logic
+
+  - type: SIMILAR_TO
+    from: Entity
+    to: Entity
+    description: Graph affinity relationship (community scoring)
+    properties:
+      - name: affinity_score
+        type: float
+    # TODO: Verify from engine/kge/neuro_symbolic_engine.py
+
+kge_models:
+  - name: HyperRelationalEncoder
+    source_file: engine/kge/hyper_relational_encoder.py
+    description: Encodes entity + relation + context triplets as hyper-relational embeddings
+
+  - name: NeuroSymbolicEngine
+    source_file: engine/kge/neuro_symbolic_engine.py
+    description: Combines neural KGE embeddings with symbolic inference rules
+
+  - name: RotatE3D
+    source_file: engine/kge/rotate3d.py
+    description: 3D rotation-based link prediction for knowledge graph completion
+
+# TODO: Run `CALL db.schema.visualization()` on the Neo4j instance to extract
+# the exact label and relationship type inventory from live data.
+
