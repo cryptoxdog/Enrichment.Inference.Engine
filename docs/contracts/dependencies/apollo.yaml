@@ -1,0 +1,15 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Apollo.io API Dependency
+# Source:   app/services/enrichment/sources/apollo.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: Apollo
+type: external
+protocol: http
+auth_method: API key (APOLLO_API_KEY)
+role: Waterfall enrichment source — B2B prospecting and company data
+source_file: app/services/enrichment/sources/apollo.py
+enabled: false  # disabled unless APOLLO_API_KEY is set
+
