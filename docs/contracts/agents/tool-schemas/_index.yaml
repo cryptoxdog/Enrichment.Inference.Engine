@@ -1,0 +1,81 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: MCP Tool Registry Manifest
+# Source:   app/agents/mcp_server.py:TOOL_REGISTRY
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+tools:
+  - name: enrich_contact
+    schema_file: enrich-contact.schema.json
+    mcp_method: tools/call
+    chassis_action: enrich
+    description: Enrich a contact or company record using waterfall enrichment
+    required_params: [domain, entity_name]
+    optional_params: [entity_data, quality_threshold]
+
+  - name: lead_router
+    schema_file: lead-router.schema.json
+    mcp_method: tools/call
+    chassis_action: enrich
+    description: Route a lead to the best sales rep based on enrichment scores
+    required_params: [lead_data]
+    optional_params: [team_config]
+
+  - name: deal_risk
+    schema_file: deal-risk.schema.json
+    mcp_method: tools/call
+    chassis_action: enrich
+    description: Assess risk score for a deal/opportunity
+    required_params: [deal_data]
+    optional_params: [historical_context]
+
+  - name: data_hygiene
+    schema_file: data-hygiene.schema.json
+    mcp_method: tools/call
+    chassis_action: enrich
+    description: Assess data quality and recommend hygiene actions
+    required_params: [records, domain]
+    optional_params: []
+
+  - name: writeback
+    schema_file: writeback.schema.json
+    mcp_method: tools/call
+    chassis_action: writeback
+    description: Write enriched data back to the CRM system
+    required_params: [crm_type, object_type, record_id, enriched_data]
+    optional_params: [confidence_threshold]
+
+resources:
+  - uri: crm://contacts
+    name: CRM Contacts
+    description: Read/write access to CRM contact records
+    mime_type: application/json
+
+  - uri: crm://companies
+    name: CRM Companies
+    description: Read/write access to CRM company records
+    mime_type: application/json
+
+  - uri: pipeline://forecast
+    name: Pipeline Forecast
+    description: Real-time pipeline forecast with AI scoring
+    mime_type: application/json
+
+  - uri: enrichment://status
+    name: Enrichment Status
+    description: Current enrichment queue status and metrics
+    mime_type: application/json
+
+mcp_protocol:
+  methods:
+    - tools/list
+    - tools/call
+    - resources/list
+    - resources/read
+  error_codes:
+    "-32601": Unknown method
+    "-32602": Invalid params / unknown tool or resource
+    "-32603": Internal error / chassis dispatch not configured
+  source_file: app/agents/mcp_server.py:MCPServer
+
