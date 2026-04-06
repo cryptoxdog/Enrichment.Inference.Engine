@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/data/models/enrichment-result.schema.json",
+  "title": "EnrichmentResult",
+  "description": "Persisted output of a single enrichment call. Written by ResultStore.persist_enrich_response(). Table: enrichment_results. Source: app/services/pg_models.py:43",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key — PostgreSQL native UUID."
+    },
+    "tenant_id": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "Tenant identifier. Indexed. All queries are tenant-scoped."
+    },
+    "entity_id": {
+      "type": "string",
+      "maxLength": 256,
+      "description": "CRM record ID. Indexed."
+    },
+    "object_type": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "CRM object type (Account, Lead, res.partner, etc.)."
+    },
+    "domain": {
+      "type": ["string", "null"],
+      "maxLength": 128,
+      "description": "Domain YAML profile identifier. Nullable."
+    },
+    "idempotency_key": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "Caller-supplied idempotency key. UNIQUE constraint. Prevents duplicate writes on retry."
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Enriched field values (JSONB). Key-value pairs from the enrichment result."
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Overall confidence (0.0–1.0). Stored as NUMERIC(5,4)."
+    },
+    "uncertainty_score": {
+      "type": "number",
+      "description": "Aggregate uncertainty metric (0.0–10.0). NUMERIC(8,4)."
+    },
+    "quality_tier": {
+      "type": "string",
+      "enum": ["platinum", "gold", "silver", "bronze", "unknown"],
+      "default": "unknown",
+      "description": "Quality tier from QualityScorer."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["completed", "failed", "partial"],
+      "default": "completed",
+      "description": "Enrichment outcome state. Indexed."
+    },
+    "failure_reason": {
+      "type": ["string", "null"],
+      "description": "Error message when state=failed. TEXT column."
+    },
+    "tokens_used": {
+      "type": "integer",
+      "default": 0,
+      "description": "LLM tokens consumed."
+    },
+    "processing_time_ms": {
+      "type": "integer",
+      "default": 0,
+      "description": "Wall-clock processing time in milliseconds."
+    },
+    "pass_count": {
+      "type": "integer",
+      "default": 1,
+      "description": "Number of convergence passes executed."
+    },
+    "inferences": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Deterministic KB inference results (JSONB)."
+    },
+    "kb_fragment_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "KB fragment IDs referenced (JSONB)."
+    },
+    "feature_vector": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "description": "Extracted feature vector for downstream scoring (JSONB). Nullable."
+    },
+    "convergence_run_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "FK → convergence_runs.id (ON DELETE SET NULL). Nullable."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Row creation timestamp. server_default=func.now()."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp. onupdate=func.now()."
+    }
+  },
+  "required": ["id", "tenant_id", "entity_id", "object_type", "fields", "confidence", "uncertainty_score", "state", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "x-storage": "postgresql",
+  "x-table": "enrichment_results",
+  "x-indexes": [
+    { "name": "ix_enrichment_results_tenant_entity", "columns": ["tenant_id", "entity_id"] },
+    { "name": "ix_enrichment_results_tenant_created", "columns": ["tenant_id", "created_at"] },
+    { "name": "ix_enrichment_results_idempotency", "columns": ["idempotency_key"], "unique": true },
+    { "name": "ix_enrichment_results_convergence_run", "columns": ["convergence_run_id"] }
+  ],
+  "x-source-file": "app/services/pg_models.py:43",
+  "examples": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "tenant_id": "acme-corp",
+      "entity_id": "001B000000LpT1FIAV",
+      "object_type": "Account",
+      "domain": "plasticos",
+      "idempotency_key": "enrich-acme-2026-04-05",
+      "fields": { "recycling_grade": "HDPE", "annual_tonnage": 50000 },
+      "confidence": 0.87,
+      "uncertainty_score": 1.4,
+      "quality_tier": "gold",
+      "state": "completed",
+      "failure_reason": null,
+      "tokens_used": 4200,
+      "processing_time_ms": 1847,
+      "pass_count": 2,
+      "inferences": [{ "rule": "grade_from_polymer", "result": "HDPE" }],
+      "kb_fragment_ids": ["plastics_recycling#hdpe_grades"],
+      "feature_vector": { "polymer_diversity": 0.6 },
+      "convergence_run_id": null,
+      "created_at": "2026-04-05T19:54:14Z",
+      "updated_at": "2026-04-05T19:54:14Z"
+    }
+  ]
+}
