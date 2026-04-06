@@ -1,0 +1,9 @@
+{
+  "action": "enrich",
+  "payload": {
+    "entity": {"Name": "Acme Recycling Corp"},
+    "object_type": "Account",
+    "objective": "Enrich polymer data"
+  },
+  "tenant": "acme-corp"
+}
