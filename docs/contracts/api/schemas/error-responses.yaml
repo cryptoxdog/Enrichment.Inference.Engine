@@ -1,0 +1,69 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Standard Error Response Schemas
+# Source:   app/core/exceptions.py, app/core/auth.py,
+#           app/api/v1/* (HTTPException patterns)
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+openapi: "3.1.0"
+info:
+  title: Error Response Schemas
+  version: "1.0.0"
+
+components:
+  schemas:
+    ErrorResponse:
+      title: ErrorResponse
+      description: |
+        Standard FastAPI HTTPException error envelope.
+        FastAPI serializes HTTPException as {"detail": "..."} by default.
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error description.
+          example: "Invalid API key"
+      additionalProperties: false
+
+    ValidationErrorResponse:
+      title: ValidationErrorResponse
+      description: |
+        Pydantic v2 validation error envelope (HTTP 422).
+        FastAPI serializes RequestValidationError in this shape.
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+                description: Field location path.
+              msg:
+                type: string
+                description: Error message.
+              type:
+                type: string
+                description: Pydantic error type code.
+            required:
+              - loc
+              - msg
+              - type
+          description: List of field validation errors.
+      additionalProperties: false
+      example:
+        detail:
+          - loc: ["body", "objective"]
+            msg: "Field required"
+            type: "missing"
+
