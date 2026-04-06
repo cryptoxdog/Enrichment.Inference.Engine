@@ -1,0 +1,37 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Perplexity Sonar API Dependency
+# Source:   app/services/perplexity_client.py,
+#           app/services/enrichment/sources/perplexity_adapter.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: PerplexitySONAR
+type: external
+protocol: http
+auth_method: Bearer token (PERPLEXITY_API_KEY in Authorization header)
+base_url: https://api.perplexity.ai
+base_url_env: null  # hardcoded in perplexity_client.py
+
+role: |
+  Primary enrichment source. Used in consensus mode — N parallel variations
+  of the enrichment prompt are dispatched to sonar-reasoning, then synthesized.
+  Also used by Perplexity adapter in waterfall mode (perplexity_adapter.py).
+
+endpoints_used:
+  - method: POST
+    path: /chat/completions
+    purpose: Entity enrichment — structured field extraction via LLM prompt
+    model: sonar-reasoning (configurable via PERPLEXITY_MODEL)
+    # TODO: Confirm exact request/response schema from app/services/perplexity_client.py
+
+circuit_breaker:
+  enabled: true
+  source_file: app/services/circuit_breaker.py
+  failure_threshold_env: CB_FAILURE_THRESHOLD
+  cooldown_seconds_env: CB_COOLDOWN_SECONDS
+
+timeout_seconds: 120  # DEFAULT_TIMEOUT_SECONDS
+health_check: null  # no dedicated health endpoint — circuit breaker handles it
+fallback: null  # waterfall falls through to other sources on circuit open
+
