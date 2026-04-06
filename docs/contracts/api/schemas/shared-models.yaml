@@ -1,0 +1,125 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Shared Reusable Schemas
+# Source:   app/models/schemas.py, app/score/score_models.py,
+#           app/services/pg_models.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+openapi: "3.1.0"
+info:
+  title: Shared Model Schemas
+  version: "1.0.0"
+
+components:
+  schemas:
+    EntityDict:
+      title: EntityDict
+      description: Generic entity field map — key-value pairs representing a CRM record.
+      type: object
+      additionalProperties: true
+      example:
+        name: "Acme Plastics Ltd"
+        country: "US"
+        industry: "Plastics Recycling"
+        annual_tonnage: 50000
+
+    TenantId:
+      title: TenantId
+      description: Tenant identifier string. Used in all multi-tenant queries.
+      type: string
+      minLength: 1
+      maxLength: 128
+      example: acme-corp
+
+    EntityId:
+      title: EntityId
+      description: |
+        Entity identifier — CRM record ID, Salesforce ID, or Odoo res.partner ID.
+      type: string
+      minLength: 1
+      maxLength: 256
+      example: "001B000000LpT1FIAV"
+
+    DomainIdentifier:
+      title: DomainIdentifier
+      description: Domain YAML profile identifier (maps to config/domains/{name}.yaml).
+      type: string
+      enum: [plasticos, company, contact, opportunity, account]
+      example: plasticos
+
+    ObjectType:
+      title: ObjectType
+      description: |
+        CRM object type. Salesforce API names (Account, Lead, Contact, Opportunity)
+        or Odoo model names (res.partner, crm.lead) or generic types.
+      type: string
+      example: Account
+
+    ConfidenceScore:
+      title: ConfidenceScore
+      description: Normalized confidence value from enrichment or inference.
+      type: number
+      format: float
+      minimum: 0.0
+      maximum: 1.0
+      example: 0.87
+
+    QualityTier:
+      title: QualityTier
+      description: Quality tier classification from QualityScorer.
+      type: string
+      enum: [platinum, gold, silver, bronze, unknown]
+      example: gold
+
+    # ── Score Service Enums ─────────────────────────────────
+    ScoreDimension:
+      title: ScoreDimension
+      description: Lead/deal scoring dimension.
+      type: string
+      enum: [fit, intent, engagement, readiness, graph_affinity]
+
+    ScoreTier:
+      title: ScoreTier
+      description: Composite score tier classification.
+      type: string
+      enum: [hot, warm, cool, cold, disqualified]
+
+    ScoreSource:
+      title: ScoreSource
+      description: Data source that contributed to a score.
+      type: string
+      enum: [enrichment, graph, signal, crm, inference]
+
+    # ── Common UUIDs ────────────────────────────────────────
+    UUIDv4:
+      title: UUIDv4
+      type: string
+      format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ISO8601Timestamp:
+      title: ISO8601Timestamp
+      type: string
+      format: date-time
+      example: "2026-04-05T19:54:14Z"
+
+    # ── Pagination ──────────────────────────────────────────
+    PaginationMeta:
+      title: PaginationMeta
+      description: Standard pagination metadata for list responses.
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+        has_more:
+          type: boolean
+      additionalProperties: false
+
