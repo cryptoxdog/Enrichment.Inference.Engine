@@ -1,0 +1,66 @@
+dependencies:
+  - name: PerplexitySONAR
+    file: perplexity-sonar.yaml
+    type: external
+    required: true
+
+  - name: OpenAI
+    file: openai.yaml
+    type: external
+    required: false
+
+  - name: Anthropic
+    file: anthropic.yaml
+    type: external
+    required: false
+
+  - name: Clearbit
+    file: clearbit.yaml
+    type: external
+    required: false
+
+  - name: ZoomInfo
+    file: zoominfo.yaml
+    type: external
+    required: false
+
+  - name: Apollo
+    file: apollo.yaml
+    type: external
+    required: false
+
+  - name: Hunter
+    file: hunter.yaml
+    type: external
+    required: false
+
+  - name: OdooCRM
+    file: odoo-crm.yaml
+    type: external
+    required: false
+
+  - name: SalesforceCRM
+    file: salesforce-crm.yaml
+    type: external
+    required: false
+
+  - name: HubSpotCRM
+    file: hubspot-crm.yaml
+    type: external
+    required: false
+
+  - name: Redis
+    file: redis.yaml
+    type: internal
+    required: false
+
+  - name: PostgreSQL
+    file: postgresql.yaml
+    type: internal
+    required: false
+
+  - name: Neo4j
+    file: neo4j.yaml
+    type: internal
+    required: false
+
