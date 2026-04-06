@@ -1,0 +1,15 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: ZoomInfo API Dependency
+# Source:   app/services/enrichment/sources/zoominfo.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: ZoomInfo
+type: external
+protocol: http
+auth_method: API key (ZOOMINFO_API_KEY)
+role: Waterfall enrichment source — B2B company and contact data
+source_file: app/services/enrichment/sources/zoominfo.py
+enabled: false  # disabled unless ZOOMINFO_API_KEY is set
+
