@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/data/models/convergence-run.schema.json",
+  "title": "ConvergenceRun",
+  "description": "Tracks a full multi-pass convergence loop execution. Supports crash recovery — a restarted process loads this record and resumes from current_pass + 1. Table: convergence_runs. Source: app/services/pg_models.py:93",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "Primary key." },
+    "tenant_id": { "type": "string", "maxLength": 128 },
+    "entity_id": { "type": "string", "maxLength": 256 },
+    "domain": { "type": "string", "maxLength": 128 },
+    "domain_yaml_version_before": { "type": ["string", "null"], "maxLength": 64, "description": "Domain YAML version at loop start." },
+    "domain_yaml_version_after": { "type": ["string", "null"], "maxLength": 64, "description": "Domain YAML version at loop completion." },
+    "state": {
+      "type": "string",
+      "enum": ["running", "converged", "max_passes_reached", "budget_exceeded", "failed"],
+      "default": "running",
+      "description": "Loop state. Indexed."
+    },
+    "convergence_reason": { "type": ["string", "null"], "maxLength": 128, "description": "Why the loop stopped." },
+    "current_pass": { "type": "integer", "default": 0, "description": "Last completed pass number (0-indexed)." },
+    "max_passes": { "type": "integer", "default": 5, "description": "Maximum allowed passes." },
+    "accumulated_fields": { "type": "object", "additionalProperties": true, "description": "Field values accumulated across all passes (JSONB)." },
+    "accumulated_confidences": { "type": "object", "additionalProperties": true, "description": "Confidence per field accumulated across passes (JSONB)." },
+    "pass_results": { "type": "array", "items": { "type": "object" }, "description": "Per-pass result records (JSONB)." },
+    "total_tokens": { "type": "integer", "default": 0 },
+    "total_cost_usd": { "type": "number", "default": 0, "description": "NUMERIC(10,6)." },
+    "max_budget_tokens": { "type": "integer", "default": 50000 },
+    "schema_proposals": { "type": "array", "items": { "type": "object" }, "description": "Schema proposals generated during this run (JSONB)." },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["id", "tenant_id", "entity_id", "domain", "state", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "x-storage": "postgresql",
+  "x-table": "convergence_runs",
+  "x-indexes": [
+    { "name": "ix_convergence_runs_tenant_entity", "columns": ["tenant_id", "entity_id"] },
+    { "name": "ix_convergence_runs_state", "columns": ["state"] }
+  ],
+  "x-source-file": "app/services/pg_models.py:93",
+  "examples": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "tenant_id": "acme-corp",
+      "entity_id": "001B000000LpT1FIAV",
+      "domain": "plasticos",
+      "state": "converged",
+      "convergence_reason": "confidence_plateau",
+      "current_pass": 3,
+      "max_passes": 5,
+      "total_tokens": 12600,
+      "total_cost_usd": 0.063,
+      "max_budget_tokens": 50000,
+      "created_at": "2026-04-05T19:00:00Z",
+      "updated_at": "2026-04-05T19:01:30Z",
+      "completed_at": "2026-04-05T19:01:30Z"
+    }
+  ]
+}
