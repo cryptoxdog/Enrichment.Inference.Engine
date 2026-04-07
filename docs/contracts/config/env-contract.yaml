@@ -53,6 +53,24 @@ variables:
     source: env
     example: enrichment
 
+  - name: HOST
+    type: string
+    required: false
+    default: "0.0.0.0"
+    description: Host address to bind the server to.
+    sensitive: false
+    source: env
+    example: "0.0.0.0"
+
+  - name: PORT
+    type: integer
+    required: false
+    default: "8000"
+    description: Port number for the server.
+    sensitive: false
+    source: env
+    example: "8000"
+
   # ── Authentication ──────────────────────────────────────────
   - name: API_SECRET_KEY
     type: secret
@@ -85,6 +103,14 @@ variables:
     source: env
     example: /app/kb
 
+  - name: KB_FILES_PATH
+    type: string
+    required: false
+    default: null
+    description: Alternative path to knowledge base files.
+    sensitive: false
+    source: env
+
   # ── Redis ───────────────────────────────────────────────────
   - name: REDIS_URL
     type: url
@@ -101,6 +127,13 @@ variables:
     required: false
     default: 0.65
     description: Default minimum consensus ratio for field acceptance.
+    validation: "0.0 ≤ value ≤ 1.0"
+
+  - name: CONSENSUS_THRESHOLD
+    type: float
+    required: false
+    default: "0.7"
+    description: Consensus threshold (alias for DEFAULT_CONSENSUS_THRESHOLD).
     validation: "0.0 ≤ value ≤ 1.0"
 
   - name: DEFAULT_MAX_VARIATIONS
@@ -170,6 +203,13 @@ variables:
     description: Odoo authentication password.
     sensitive: true
 
+  - name: ODOO_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: Odoo API key for authentication.
+    sensitive: true
+
   - name: CRM_MAPPING_PATH
     type: string
     required: false
@@ -211,6 +251,13 @@ variables:
     description: Salesforce security token (appended to password for non-IP-whitelisted access).
     sensitive: true
 
+  - name: SALESFORCE_DOMAIN
+    type: string
+    required: false
+    default: ""
+    description: Salesforce domain (e.g., login.salesforce.com or custom domain).
+    sensitive: false
+
   # ── HubSpot CRM ─────────────────────────────────────────────
   - name: HUBSPOT_ACCESS_TOKEN
     type: secret
@@ -248,6 +295,20 @@ variables:
     description: Hunter.io email finder API key.
     sensitive: true
 
+  - name: OPENAI_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: OpenAI API key for GPT models.
+    sensitive: true
+
+  - name: ANTHROPIC_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: Anthropic API key for Claude models.
+    sensitive: true
+
   # ── Constellation Nodes ─────────────────────────────────────
   - name: CEG_BASE_URL
     type: url
@@ -281,6 +342,13 @@ variables:
     sensitive: true
 
   # ── Neo4j Graph ─────────────────────────────────────────────
+  - name: ENABLE_GRAPH_MEMORY
+    type: boolean
+    required: false
+    default: "false"
+    description: Enable graph-based memory storage in Neo4j.
+    sensitive: false
+
   - name: NEO4J_URI
     type: url
     required: false
@@ -292,6 +360,12 @@ variables:
     required: false
     default: neo4j
     description: Neo4j username.
+
+  - name: NEO4J_USERNAME
+    type: string
+    required: false
+    default: neo4j
+    description: Neo4j username (alias for NEO4J_USER).
 
   - name: NEO4J_PASSWORD
     type: secret
@@ -308,6 +382,27 @@ variables:
     description: PostgreSQL async connection URL (asyncpg driver).
     sensitive: true
     example: postgresql+asyncpg://enrich:secret@db:5432/enrich
+
+  - name: ASYNC_DATABASE_URL
+    type: url
+    required: false
+    default: null
+    description: Async PostgreSQL connection URL (alternative to DATABASE_URL).
+    sensitive: true
+
+  - name: DB_POOL_MIN_SIZE
+    type: integer
+    required: false
+    default: "2"
+    description: Minimum database connection pool size.
+    sensitive: false
+
+  - name: DB_POOL_MAX_SIZE
+    type: integer
+    required: false
+    default: "10"
+    description: Maximum database connection pool size.
+    sensitive: false
 
   # ── Domain Configuration ────────────────────────────────────
   - name: DOMAINS_DIR
