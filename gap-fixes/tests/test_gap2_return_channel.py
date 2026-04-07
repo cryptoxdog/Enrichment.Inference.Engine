@@ -1,5 +1,9 @@
 """Gap-2 tests: GRAPH→ENRICH bidirectional return channel."""
-import pytest, asyncio
+
+import math
+
+import pytest
+
 from engine.graph_return_channel import (
     GraphToEnrichReturnChannel,
     build_graph_inference_result_envelope,
@@ -17,27 +21,37 @@ def reset_channel():
 async def test_submit_and_drain():
     env = build_graph_inference_result_envelope(
         tenant_id="acme",
-        inference_outputs=[{
-            "entity_id": "e1", "field": "facility_tier",
-            "value": "large", "confidence": 0.88, "rule": "louvain",
-        }],
+        inference_outputs=[
+            {
+                "entity_id": "e1",
+                "field": "facility_tier",
+                "value": "large",
+                "confidence": 0.88,
+                "rule": "louvain",
+            }
+        ],
     )
     ch = GraphToEnrichReturnChannel.get_instance()
     assert await ch.submit(env) == 1
     targets = await ch.drain("acme", timeout=0.1)
     assert len(targets) == 1
     assert targets[0].field_name == "facility_tier"
-    assert targets[0].source_confidence == 0.88
+    assert math.isclose(targets[0].source_confidence, 0.88, rel_tol=1e-9)
 
 
 @pytest.mark.asyncio
 async def test_low_confidence_filtered():
     env = build_graph_inference_result_envelope(
         tenant_id="acme",
-        inference_outputs=[{
-            "entity_id": "e1", "field": "x",
-            "value": "v", "confidence": 0.30, "rule": "r",
-        }],
+        inference_outputs=[
+            {
+                "entity_id": "e1",
+                "field": "x",
+                "value": "v",
+                "confidence": 0.30,
+                "rule": "r",
+            }
+        ],
     )
     ch = GraphToEnrichReturnChannel.get_instance()
     assert await ch.submit(env) == 0
@@ -56,10 +70,15 @@ async def test_tenant_isolation():
     for tid in ("acme", "globex"):
         env = build_graph_inference_result_envelope(
             tenant_id=tid,
-            inference_outputs=[{
-                "entity_id": "e1", "field": "tier",
-                "value": tid, "confidence": 0.9, "rule": "r",
-            }],
+            inference_outputs=[
+                {
+                    "entity_id": "e1",
+                    "field": "tier",
+                    "value": tid,
+                    "confidence": 0.9,
+                    "rule": "r",
+                }
+            ],
         )
         await ch.submit(env)
     acme_targets = await ch.drain("acme", timeout=0.05)
