@@ -1,0 +1,266 @@
+node:
+  id: enrichment-engine
+  name: L9 Enrichment Inference Engine
+  version: "2.3.0"
+  contract_version: "1.0.0"
+  contract_pack_root: docs/contracts
+  tracked_contracts:
+    - docs/contracts/api/openapi.yaml
+    - docs/contracts/agents/protocols/packet-envelope.yaml
+    - docs/contracts/agents/tool-schemas/_index.yaml
+    - docs/contracts/events/asyncapi.yaml
+    - docs/contracts/dependencies/_index.yaml
+    - docs/contracts/config/env-contract.yaml
+    - docs/contracts/data/models/_index.yaml
+    - docs/contracts/runtime-attestation.schema.json
+
+ingress:
+  rest:
+    enabled: true
+    base_paths:
+      - /api/v1
+      - /v1
+  packet:
+    enabled: true
+    endpoint: /v1/execute
+    protocol: L9PacketEnvelope
+  mcp:
+    enabled: true
+    methods:
+      - tools/list
+      - tools/call
+      - resources/list
+      - resources/read
+
+actions:
+  enrich:
+    mutation_class: enrich_only
+    approval_mode: autonomous
+    idempotency_mode: caller_key_supported
+    replay_safe: true
+    required_dependencies:
+      - PerplexitySONAR
+    optional_dependencies:
+      - Redis
+      - PostgreSQL
+    event_class: telemetry
+    required_provenance:
+      - kb_content_hash
+      - inference_version
+      - kb_fragment_ids
+
+  enrichbatch:
+    mutation_class: enrich_only
+    approval_mode: autonomous
+    idempotency_mode: caller_key_supported
+    replay_safe: true
+    required_dependencies:
+      - PerplexitySONAR
+    optional_dependencies:
+      - Redis
+      - PostgreSQL
+    event_class: telemetry
+    required_provenance:
+      - kb_content_hash
+      - inference_version
+      - kb_fragment_ids
+
+  converge:
+    mutation_class: internal_state
+    approval_mode: autonomous
+    idempotency_mode: caller_key_supported
+    replay_safe: true
+    required_dependencies:
+      - PerplexitySONAR
+      - PostgreSQL
+    optional_dependencies:
+      - Redis
+    event_class: governance
+    required_provenance:
+      - inference_version
+      - kb_fragment_ids
+
+  discover:
+    mutation_class: propose_only
+    approval_mode: autonomous
+    idempotency_mode: caller_key_supported
+    replay_safe: true
+    required_dependencies:
+      - PerplexitySONAR
+      - PostgreSQL
+    optional_dependencies: []
+    event_class: governance
+    required_provenance:
+      - inference_version
+
+  enrich_and_sync:
+    mutation_class: internal_plus_graph_sync
+    approval_mode: autonomous
+    idempotency_mode: caller_key_supported
+    replay_safe: true
+    required_dependencies:
+      - PerplexitySONAR
+    optional_dependencies:
+      - Neo4j
+      - Redis
+      - PostgreSQL
+    event_class: coordination
+    required_provenance:
+      - kb_content_hash
+      - inference_version
+      - kb_fragment_ids
+
+  writeback:
+    mutation_class: external_mutation
+    approval_mode: threshold_or_human
+    idempotency_mode: required_for_safe_replay
+    replay_safe: conditional
+    required_dependencies:
+      - Redis
+    optional_dependencies:
+      - OdooCRM
+      - SalesforceCRM
+      - HubSpotCRM
+    event_class: authoritative_state_change
+    required_provenance:
+      - correlation_id
+      - content_hash
+
+tools:
+  enrich_contact:
+    chassis_action: enrich
+    mutation_class: enrich_only
+    approval_mode: autonomous
+
+  lead_router:
+    chassis_action: enrich
+    mutation_class: enrich_only
+    approval_mode: autonomous
+
+  deal_risk:
+    chassis_action: enrich
+    mutation_class: enrich_only
+    approval_mode: autonomous
+
+  data_hygiene:
+    chassis_action: enrich
+    mutation_class: enrich_only
+    approval_mode: autonomous
+
+  writeback:
+    chassis_action: writeback
+    mutation_class: external_mutation
+    approval_mode: threshold_or_human
+
+events:
+  enrichment_completed:
+    class: telemetry
+    delivery: at_most_once
+
+  enrichment_failed:
+    class: telemetry
+    delivery: at_most_once
+
+  convergence_completed:
+    class: governance
+    delivery: at_most_once
+
+  schema_proposed:
+    class: governance
+    delivery: at_most_once
+
+  score_invalidated:
+    class: coordination
+    delivery: at_most_once
+
+  entity_updated:
+    class: authoritative_state_change
+    delivery: at_most_once
+
+dependencies:
+  PerplexitySONAR:
+    required: true
+    used_by:
+      - enrich
+      - enrichbatch
+      - converge
+      - discover
+      - enrich_and_sync
+    degraded_modes: []
+
+  OpenAI:
+    required: false
+    used_by: []
+    degraded_modes: []
+
+  Anthropic:
+    required: false
+    used_by: []
+    degraded_modes: []
+
+  OdooCRM:
+    required: false
+    used_by:
+      - writeback
+    degraded_modes:
+      - crm_unavailable
+
+  SalesforceCRM:
+    required: false
+    used_by:
+      - writeback
+    degraded_modes:
+      - crm_unavailable
+
+  HubSpotCRM:
+    required: false
+    used_by:
+      - writeback
+    degraded_modes:
+      - crm_unavailable
+
+  Redis:
+    required: false
+    used_by:
+      - enrich
+      - enrichbatch
+      - converge
+      - writeback
+    degraded_modes:
+      - idempotency
+      - event_publishing
+
+  PostgreSQL:
+    required: false
+    used_by:
+      - enrich
+      - enrichbatch
+      - converge
+      - discover
+    degraded_modes:
+      - persistence
+      - not_resumable
+
+  Neo4j:
+    required: false
+    used_by:
+      - enrich_and_sync
+    degraded_modes:
+      - graph_sync
+
+runtime_attestation:
+  endpoint: /v1/attestation
+  policy_mode: enforced
+  required_fields:
+    - node_id
+    - node_version
+    - contract_version
+    - contract_digest
+    - generated_at
+    - tracked_contract_hashes
+    - action_inventory
+    - tool_inventory
+    - event_inventory
+    - dependency_readiness
+    - degraded_modes
+    - policy_mode
