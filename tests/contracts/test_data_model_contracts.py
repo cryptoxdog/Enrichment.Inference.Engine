@@ -4,9 +4,11 @@ Source: app/services/pg_models.py, migrations/versions/001_initial_schema.py
 Markers: unit
 """
 from __future__ import annotations
-import json
-import pytest
+
 from pathlib import Path
+
+import pytest
+
 from tests.contracts.conftest_contracts import DATA_DIR, load_json, load_yaml
 
 MODEL_FILES = {
@@ -34,7 +36,7 @@ CONVERGENCE_RUN_FIELDS = {
 
 FIELD_CONFIDENCE_HISTORY_FIELDS = {
     "id": {}, "entity_id": {}, "field_name": {},
-    "value": {}, "confidence": {}, "inference_version": {},
+    "field_value": {}, "confidence": {}, "source": {},
 }
 
 SCHEMA_PROPOSAL_FIELDS = {
