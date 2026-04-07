@@ -1,13 +1,15 @@
 # ═══════════════════════════════════════════════════════════════
 # Contract: Environment Variable Contract
-# Source:   app/core/config.py:Settings, .env.example
-# Version:  2.3.0
-# Updated:  2026-04-05
+# Source:   app/core/config.py:Settings, .env.example, .env.local.example
+# Version:  2.4.0
+# Updated:  2026-04-07
 # ═══════════════════════════════════════════════════════════════
 
 # All variables are loaded via pydantic-settings (BaseSettings).
 # Source: app/core/config.py
 # Loaded once at startup via @lru_cache get_settings().
+# Files: .env then .env.local (later wins). .env.local is gitignored — use for secrets locally;
+#        use the SAME variable names when creating GitHub Actions secrets (see github_actions below).
 
 variables:
   # ── Perplexity Sonar ────────────────────────────────────────
@@ -31,6 +33,15 @@ variables:
     example: sonar-reasoning
 
   # ── Engine Core ─────────────────────────────────────────────
+  - name: APP_ENV
+    type: string
+    required: false
+    default: development
+    description: Application environment (development, staging, production).
+    sensitive: false
+    source: env
+    example: development
+
   - name: ENRICHMENT_ENGINE_API_KEY
     type: secret
     required: true
@@ -461,3 +472,63 @@ required_for_salesforce_integration:
   - SALESFORCE_USERNAME
   - SALESFORCE_PASSWORD
   - SALESFORCE_SECURITY_TOKEN
+
+# ═══════════════════════════════════════════════════════════════
+# GitHub Actions — secrets & variables (CI / deploy / review bots)
+# ═══════════════════════════════════════════════════════════════
+# Local workflow: put values in .env.local (gitignored). When creating secrets in GitHub, use
+# the SAME secret NAME as the env var (e.g. PERPLEXITY_API_KEY in both places).
+#
+# Where to configure:
+#   Repository: GitHub → Settings → Secrets and variables → Actions
+#   Organization (share one key across repos): Org → Settings → Secrets → Actions
+#
+# Do NOT add GITHUB_TOKEN yourself — GitHub injects it automatically.
+#
+github_actions:
+  secrets:
+    - name: PERPLEXITY_API_KEY
+      map_to_env: PERPLEXITY_API_KEY
+      required: optional
+      workflows: [.github/workflows/perplexity-code-review.yml]
+      notes: |
+        PR advisory AI diff review. If unset, workflow skips. Same key as runtime enrichment.
+
+    - name: TELEGRAM_BOT_TOKEN
+      map_to_env: TELEGRAM_BOT_TOKEN
+      required: optional
+      workflows: [.github/workflows/coderabbit-notify.yml]
+      notes: Telegram ping when CodeRabbit requests changes. Job fails if missing when notify runs.
+
+    - name: KUBECONFIG
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/k8s-deploy.yml]
+      notes: Base64-encoded kubeconfig file contents (not a shell env var in app Settings).
+
+    - name: SLACK_WEBHOOK_URL
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/k8s-deploy.yml]
+      notes: Incoming webhook; only used when repo variable SLACK_NOTIFICATIONS_ENABLED=true.
+
+    - name: CODECOV_TOKEN
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/ci.yml]
+      notes: Optional; Codecov upload. ci.yml uses fail_ci_if_error false without token.
+
+  variables_non_secret:
+    - name: TELEGRAM_CHAT_ID
+      workflows: [.github/workflows/coderabbit-notify.yml]
+      notes: Repository variable (not a secret). Pair with TELEGRAM_BOT_TOKEN.
+
+  not_user_configurable:
+    - name: GITHUB_TOKEN
+      notes: Auto-provided to workflows; used by CI, docker-build, release, Codecov, etc.
+
+  runtime_overlap:
+    description: |
+      Any variable in `variables:` above can also be set as a GitHub **encrypted secret** if you
+      inject it into deploy workflows (e.g. Helm/Kustomize). Name the secret to match the env var
+      (PERPLEXITY_API_KEY, API_SECRET_KEY, DATABASE_URL, …) so .env.local and GitHub stay aligned.
