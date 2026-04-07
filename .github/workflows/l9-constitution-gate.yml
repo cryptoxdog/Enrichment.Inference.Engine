@@ -50,7 +50,7 @@ jobs:
         run: |
           pytest tests/contracts/tier2/test_node_constitution_contract.py \
             tests/contracts/tier2/test_runtime_attestation_contract.py \
-            -q --disable-warnings --maxfail=1 -p no:cov
+            -q --disable-warnings --maxfail=1 -o addopts=""
 
   contract-bound-change-gate:
     name: Contract-Bound Change Gate
