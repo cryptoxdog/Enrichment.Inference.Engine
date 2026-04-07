@@ -10,6 +10,7 @@ service_name: Redis
 type: internal
 protocol: redis
 version: "7"  # from docker-compose.yml: redis:7-alpine
+auth_method: none  # Local Redis, no auth required
 connection_env: REDIS_URL
 default_url: redis://localhost:6379/0
 
