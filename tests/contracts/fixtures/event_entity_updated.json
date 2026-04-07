@@ -1,0 +1,12 @@
+{
+ "event_type": "entity_updated",
+ "entity_id": "001B000000LpT1FIAV",
+ "tenant_id": "acme-corp",
+ "domain": "plasticos",
+ "payload": {
+  "crm_type": "salesforce",
+  "object_type": "Account"
+ },
+ "correlation_id": "e5f6a7b8-c901-2345-ef01-234567890123",
+ "occurred_at": "2026-04-05T20:03:00Z"
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/data/models/{model-name}.schema.json",
+  "title": "PascalCaseName",
+  "description": "One-line description. Table: {table_name}. Source: {source_file}:{line_number}",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key — PostgreSQL native UUID."
+    },
+    "tenant_id": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "Tenant identifier. Indexed."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Row creation timestamp. server_default=func.now()."
+    }
+  },
+  "required": ["id", "tenant_id", "created_at"],
+  "additionalProperties": false,
+  "x-storage": "postgresql",
+  "x-table": "{table_name}",
+  "x-indexes": [
+    { "name": "ix_{table_name}_tenant", "columns": ["tenant_id"] }
+  ],
+  "x-source-file": "{source_file}:{line_number}",
+  "examples": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "tenant_id": "acme-corp",
+      "created_at": "2026-04-05T19:54:14Z"
+    }
+  ]
+}

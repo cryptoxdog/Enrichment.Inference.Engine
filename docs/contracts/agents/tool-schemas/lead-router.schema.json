@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/agents/tool-schemas/lead-router.schema.json",
+  "title": "LeadRouter",
+  "description": "Route a lead to the best sales rep based on enrichment scores. Uses waterfall enrichment to score the lead before routing.",
+  "type": "object",
+  "properties": {
+    "lead_data": {
+      "type": "object",
+      "description": "Lead record data — all known CRM fields.",
+      "additionalProperties": true
+    },
+    "team_config": {
+      "type": "object",
+      "description": "Sales team routing configuration (optional). Overrides default routing rules.",
+      "additionalProperties": true
+    }
+  },
+  "required": ["lead_data"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "lead_data": {
+        "first_name": "John",
+        "last_name": "Smith",
+        "company": "Acme Plastics",
+        "industry": "Recycling",
+        "email": "john@acmeplastics.com"
+      },
+      "team_config": {
+        "region": "US-West",
+        "capacity_check": true
+      }
+    }
+  ],
+  "x-source-file": "app/agents/mcp_server.py:46",
+  "x-mcp-action": "enrich"
+}

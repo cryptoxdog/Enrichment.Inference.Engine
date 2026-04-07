@@ -1,0 +1,7 @@
+channels:
+  - name: "enrich:events:{tenant_id}"
+    file: enrichment-events.yaml
+    backend: redis_streams
+    direction: publish
+    description: All enrichment lifecycle events per tenant
+

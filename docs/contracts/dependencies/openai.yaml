@@ -1,0 +1,17 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: OpenAI API Dependency
+# Source:   app/services/openai_client.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: OpenAI
+type: external
+protocol: http
+auth_method: Bearer token (OPENAI_API_KEY)
+base_url: https://api.openai.com
+base_url_env: null  # standard openai SDK
+
+role: Secondary LLM provider (waterfall fallback or parallel variation mode).
+# TODO: Determine if OpenAI is used for enrichment or consensus only — verify from openai_client.py
+

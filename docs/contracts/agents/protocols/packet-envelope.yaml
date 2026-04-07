@@ -1,0 +1,220 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: L9 PacketEnvelope Protocol
+# Source:   chassis/envelope.py, chassis/router.py, chassis/registry.py
+#           app/api/v1/chassis_endpoint.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+protocol_name: L9PacketEnvelope
+version: "1.0.0"
+description: |
+  The L9 chassis node-to-node wire protocol. Every L9 constellation node
+  implements inflate_ingress / deflate_egress. The enrichment engine is the
+  destination node `enrichment-engine`.
+
+  Flow: raw HTTP body → inflate_ingress → route to handler → deflate_egress → wire-format result
+
+source_node_field: source_node
+destination_node: enrichment-engine
+transport: HTTP POST /v1/execute
+auth: X-API-Key header (same key as external API)
+
+# ── Ingress (inflate_ingress) ──────────────────────────────
+ingress_schema:
+  type: object
+  required:
+    - action
+    - payload
+  properties:
+    action:
+      type: string
+      description: |
+        Handler action to invoke. Must have a registered handler in chassis.registry.
+      enum: [enrich, enrichbatch, converge, discover, enrich_and_sync, writeback]
+    payload:
+      type: object
+      description: Action-specific payload. Must be a dict (not null, not array).
+    tenant:
+      oneOf:
+        - type: string
+        - type: object
+          properties:
+            actor:
+              type: string
+      description: |
+        Tenant identifier. String or {actor: string}.
+        Extracted as: tenant_str if isinstance(tenant_raw, str) else tenant_raw.get("actor")
+      default: unknown
+    content_hash:
+      type: string
+      description: |
+        SHA-256 of canonical JSON: {"action": ..., "payload": ..., "tenant": ...}
+        Computed with sort_keys=True, separators=(",", ":").
+        If provided and mismatches, raises ValueError (tamper detection).
+    source_node:
+      type: string
+      description: Originating node ID.
+    reply_to:
+      type: string
+      description: Node ID to receive the result. Defaults to source_node.
+    on_behalf_of:
+      type: string
+    originator:
+      type: string
+    org_id:
+      type: string
+    user_id:
+      type: string
+      nullable: true
+    lineage:
+      type: object
+      description: Packet lineage chain.
+      properties:
+        parent_ids:
+          type: array
+          items:
+            type: string
+        root_id:
+          type: string
+        generation:
+          type: integer
+        derivation_type:
+          type: string
+    governance:
+      type: object
+      properties:
+        intent:
+          type: string
+        audit_required:
+          type: boolean
+        compliance_tags:
+          type: array
+          items:
+            type: string
+    delegation_chain:
+      type: array
+      items:
+        type: object
+
+# ── Egress (deflate_egress) ────────────────────────────────
+egress_schema:
+  type: object
+  properties:
+    packet_id:
+      type: string
+      format: uuid
+      description: Freshly generated UUID for the response packet.
+    packet_type:
+      type: string
+      enum: [enrichment_result]
+    action:
+      type: string
+      description: Echoed from ingress envelope.
+    payload:
+      type: object
+      description: Engine handler response dict.
+    timestamp:
+      type: string
+      format: date-time
+    content_hash:
+      type: string
+      description: SHA-256 of canonical(action, response_data, tenant).
+    address:
+      type: object
+      properties:
+        source_node:
+          type: string
+          enum: [enrichment-engine]
+        destination_node:
+          type: string
+          description: Set to ingress reply_to.
+        reply_to:
+          type: string
+          enum: [enrichment-engine]
+    tenant:
+      type: object
+      description: Echoed from ingress envelope.
+    lineage:
+      type: object
+      description: |
+        parent_ids set to [ingress.packet_id].
+        generation incremented by 1.
+    governance:
+      type: object
+    hop_trace:
+      type: array
+      items:
+        type: object
+        properties:
+          node:
+            type: string
+          action:
+            type: string
+          status:
+            type: string
+          timestamp:
+            type: string
+      description: Appended with enrichment-engine respond entry.
+    delegation_chain:
+      type: array
+
+# ── Registered Handlers ────────────────────────────────────
+registered_handlers:
+  - action: enrich
+    handler: handle_enrich
+    source_file: app/engines/orchestration_layer.py
+    description: Single entity enrichment via waterfall + KB inference.
+
+  - action: enrichbatch
+    handler: handle_enrich_batch
+    source_file: app/engines/orchestration_layer.py
+    description: Batch enrichment for up to 50 entities.
+
+  - action: converge
+    handler: handle_converge
+    source_file: app/engines/orchestration_layer.py
+    description: Multi-pass convergence loop.
+
+  - action: discover
+    handler: handle_discover
+    source_file: app/engines/orchestration_layer.py
+    description: Schema discovery for a domain entity.
+
+  - action: enrich_and_sync
+    handler: handle_enrich_and_sync
+    source_file: app/engines/orchestration_layer.py
+    description: Enrich then sync result to GRAPH node.
+
+  - action: writeback
+    handler: handle_writeback
+    source_file: app/engines/orchestration_layer.py
+    description: Write enriched fields to CRM.
+
+# ── Error Modes ────────────────────────────────────────────
+error_modes:
+  - condition: action field missing
+    raises: ValueError
+    http_status: 422
+    message: "Missing required field: action"
+
+  - condition: payload not a dict
+    raises: ValueError
+    http_status: 422
+    message: "Missing or invalid field: payload (must be a dict)"
+
+  - condition: content_hash mismatch
+    raises: ValueError
+    http_status: 422
+    message: "content_hash verification failed: payload may be tampered"
+
+  - condition: no handler registered for action
+    raises: KeyError
+    http_status: 404
+    message: "No handler registered for action '{action}'. Registered: [...]"
+
+  - condition: handler raises unhandled exception
+    raises: Exception
+    http_status: 500
+    message: "Internal enrichment error"
+

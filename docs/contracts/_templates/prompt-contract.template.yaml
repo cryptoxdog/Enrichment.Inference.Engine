@@ -1,0 +1,39 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: {prompt_name} Prompt
+# Source:   {source_file}:{line_number}
+# Version:  1.0.0
+# Updated:  {ISO-8601-date}
+# ═══════════════════════════════════════════════════════════════
+
+prompt_name: {snake_case_name}
+role: system  # system | user | assistant
+description: One-line description of this prompt's purpose.
+model_target: sonar-reasoning  # minimum required model
+
+template: |
+  {Replace this with the exact prompt template text, including {variable} placeholders.}
+  This must be extracted from actual source code — do not guess.
+
+input_variables:
+  - name: variable_name
+    type: string  # string | dict | list | number | boolean
+    description: Description of this variable.
+    required: true
+
+output_format:
+  type: json  # json | text | markdown | structured
+  schema:
+    type: object
+    properties:
+      field_name:
+        type: string
+        description: Description of output field.
+
+constraints:
+  - description: Behavioral constraint or safety rail.
+  - token_limit: null  # TODO: determine from source
+
+model_requirements:
+  - structured_output: true  # if the model must support JSON mode
+  - min_context_window: 32000  # TODO: verify from source
+

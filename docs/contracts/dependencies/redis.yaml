@@ -1,0 +1,33 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Redis Dependency
+# Source:   app/services/idempotency.py, app/services/event_emitter.py,
+#           app/middleware/rate_limiter.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: Redis
+type: internal
+protocol: redis
+version: "7"  # from docker-compose.yml: redis:7-alpine
+connection_env: REDIS_URL
+default_url: redis://localhost:6379/0
+
+usages:
+  - purpose: Idempotency store
+    source_file: app/services/idempotency.py
+    pattern: Redis key per idempotency_key value
+
+  - purpose: Event streaming (publish)
+    source_file: app/services/event_emitter.py
+    pattern: XADD enrich:events:{tenant_id} MAXLEN ~10000
+
+  - purpose: Rate limiting
+    source_file: app/middleware/rate_limiter.py
+    description: |
+      Global 120 requests/minute per client IP.
+      Implementation uses Redis or in-memory counter.
+      # TODO: Verify exact rate limiter backend from middleware/rate_limiter.py
+
+health_check: "redis-cli ping"  # from docker-compose.yml healthcheck
+

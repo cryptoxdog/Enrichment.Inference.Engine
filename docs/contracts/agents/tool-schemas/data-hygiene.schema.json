@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/agents/tool-schemas/data-hygiene.schema.json",
+  "title": "DataHygiene",
+  "description": "Assess data quality and recommend hygiene actions for CRM records. Returns fill rate analysis, duplicate risk, and enrichment recommendations.",
+  "type": "object",
+  "properties": {
+    "records": {
+      "type": "array",
+      "description": "List of CRM records to assess.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "minItems": 1
+    },
+    "domain": {
+      "type": "string",
+      "description": "Domain type: company, contact, or opportunity.",
+      "enum": ["company", "contact", "opportunity"]
+    }
+  },
+  "required": ["records", "domain"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "records": [
+        { "id": "001", "name": "Acme Corp", "email": null, "phone": "+1-555-0100" },
+        { "id": "002", "name": "Globex", "email": "info@globex.com", "phone": null }
+      ],
+      "domain": "company"
+    }
+  ],
+  "x-source-file": "app/agents/mcp_server.py:64",
+  "x-mcp-action": "enrich"
+}

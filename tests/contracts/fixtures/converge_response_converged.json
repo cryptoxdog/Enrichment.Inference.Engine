@@ -1,0 +1,11 @@
+{
+ "run_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+ "status": "converged",
+ "pass_count": 3,
+ "final_fields": {
+  "polymer_type": "HDPE",
+  "material_grade": "Premium HDPE"
+ },
+ "total_tokens": 12600,
+ "total_cost_usd": 0.063
+}

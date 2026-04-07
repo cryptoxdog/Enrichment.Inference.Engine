@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/data/models/schema-proposal.schema.json",
+  "title": "SchemaProposalRecord",
+  "description": "Schema proposals from SchemaProposer with human approval workflow. Pending proposals are surfaced via GET /api/v1/proposals/{domain}. Table: schema_proposals. Source: app/services/pg_models.py:165",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "tenant_id": { "type": "string", "maxLength": 128 },
+    "domain": { "type": "string", "maxLength": 128 },
+    "batch_run_id": { "type": "string", "maxLength": 256, "description": "The convergence batch run that generated this proposal." },
+    "field_name": { "type": "string", "maxLength": 256 },
+    "field_type": { "type": "string", "maxLength": 64 },
+    "source": { "type": "string", "maxLength": 32, "description": "Which enrichment source surfaced this field." },
+    "fill_rate": { "type": "number", "description": "Fraction of entities where this field was populated. NUMERIC(5,4)." },
+    "avg_confidence": { "type": "number", "description": "Average confidence across observations. NUMERIC(5,4)." },
+    "sample_values": { "type": "array", "items": {}, "description": "Representative sample values from enrichment data (JSONB)." },
+    "value_distribution": { "type": "object", "additionalProperties": true, "description": "Value frequency distribution (JSONB)." },
+    "proposed_gate": { "type": ["string", "null"], "description": "Suggested gate condition YAML fragment." },
+    "proposed_scoring_dimension": { "type": ["string", "null"], "description": "Suggested scoring dimension assignment." },
+    "yaml_diff": { "type": ["string", "null"], "description": "Proposed domain YAML diff for human review." },
+    "approval_status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected"],
+      "default": "pending",
+      "description": "Approval workflow status. Indexed."
+    },
+    "reviewed_by": { "type": ["string", "null"], "maxLength": 256 },
+    "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "tenant_id", "domain", "batch_run_id", "field_name", "field_type", "source", "fill_rate", "avg_confidence", "approval_status", "created_at"],
+  "additionalProperties": false,
+  "x-storage": "postgresql",
+  "x-table": "schema_proposals",
+  "x-source-file": "app/services/pg_models.py:165",
+  "examples": [
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-012345678901",
+      "tenant_id": "acme-corp",
+      "domain": "plasticos",
+      "batch_run_id": "batch-2026-04-05",
+      "field_name": "recycler_certification",
+      "field_type": "string",
+      "source": "perplexity_sonar",
+      "fill_rate": 0.73,
+      "avg_confidence": 0.81,
+      "sample_values": ["ISO 14001", "R2v3", "eStewards"],
+      "value_distribution": { "ISO 14001": 120, "R2v3": 45, "eStewards": 22 },
+      "proposed_gate": "recycler_certification is not null",
+      "proposed_scoring_dimension": "fit",
+      "yaml_diff": "+  recycler_certification:\n+    type: string\n+    gate: required",
+      "approval_status": "pending",
+      "reviewed_by": null,
+      "reviewed_at": null,
+      "created_at": "2026-04-05T18:00:00Z"
+    }
+  ]
+}

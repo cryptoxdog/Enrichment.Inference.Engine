@@ -1,0 +1,28 @@
+{
+ "packet_id": "ingress-pkt-004",
+ "action": "enrich",
+ "payload": [
+  "not",
+  "a",
+  "dict"
+ ],
+ "tenant": "acme-corp",
+ "source_node": "score-engine",
+ "reply_to": "route-engine",
+ "lineage": {
+  "parent_ids": [
+   "root-pkt-000"
+  ],
+  "root_id": "root-pkt-000",
+  "generation": 2,
+  "derivation_type": "dispatch"
+ },
+ "governance": {
+  "intent": "enrichment",
+  "audit_required": true,
+  "compliance_tags": [
+   "tenant:acme-corp"
+  ]
+ },
+ "delegation_chain": []
+}

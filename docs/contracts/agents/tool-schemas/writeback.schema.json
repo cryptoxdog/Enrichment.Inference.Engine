@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/agents/tool-schemas/writeback.schema.json",
+  "title": "Writeback",
+  "description": "Write enriched data back to the CRM system. Supports Odoo, Salesforce, and HubSpot.",
+  "type": "object",
+  "properties": {
+    "crm_type": {
+      "type": "string",
+      "description": "CRM platform to write to.",
+      "enum": ["odoo", "salesforce", "hubspot"]
+    },
+    "object_type": {
+      "type": "string",
+      "description": "CRM object type (e.g., Account, res.partner, Contact).",
+      "minLength": 1
+    },
+    "record_id": {
+      "type": "string",
+      "description": "Target record ID in the CRM system.",
+      "minLength": 1
+    },
+    "enriched_data": {
+      "type": "object",
+      "description": "Enriched field values to write back. Keys are CRM field API names.",
+      "additionalProperties": true
+    },
+    "confidence_threshold": {
+      "type": "number",
+      "description": "Minimum confidence required to write a field (0-1). Fields below threshold are skipped.",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.65
+    }
+  },
+  "required": ["crm_type", "object_type", "record_id", "enriched_data"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "crm_type": "odoo",
+      "object_type": "res.partner",
+      "record_id": "42",
+      "enriched_data": {
+        "recycling_grade": "HDPE",
+        "annual_tonnage": 50000,
+        "certifications": ["ISO 14001"]
+      },
+      "confidence_threshold": 0.70
+    }
+  ],
+  "x-source-file": "app/agents/mcp_server.py:73",
+  "x-mcp-action": "writeback"
+}

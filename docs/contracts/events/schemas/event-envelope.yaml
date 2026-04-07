@@ -1,0 +1,32 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Event Envelope Schema
+# Source:   app/services/event_emitter.py:EnrichmentEvent
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+# Redis Streams wire format (to_stream_dict() output):
+# All values are strings (Redis Streams requirement).
+redis_streams_wire_format:
+  event_type: string        # EventType enum value
+  entity_id: string
+  tenant_id: string
+  domain: string            # empty string if null
+  correlation_id: string    # UUID str
+  occurred_at: string       # ISO 8601 datetime
+  payload: string           # JSON-encoded payload dict
+
+stream_key_pattern: "enrich:events:{tenant_id}"
+maxlen: 10000
+approximate: true
+
+# NATS subject pattern (NATSBackend):
+nats_subject_pattern: "enrich.events.{tenant_id}.{event_type}"
+
+# Delivery guarantees:
+delivery:
+  guarantee: at_most_once
+  ordering: per_tenant_stream
+  retry_policy: none  # fire-and-forget, failures are logged as warnings
+  dead_letter: null   # no DLQ configured
+

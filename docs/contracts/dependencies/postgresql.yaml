@@ -1,0 +1,24 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: PostgreSQL Dependency
+# Source:   app/services/pg_models.py, app/services/pg_store.py,
+#           migrations/versions/001_initial_schema.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: PostgreSQL
+type: internal
+protocol: postgresql+asyncpg
+connection_env: DATABASE_URL
+default_url: postgresql+asyncpg://enrich:changeme@localhost:5432/enrich
+
+tables:
+  - enrichment_results
+  - convergence_runs
+  - field_confidence_history
+  - schema_proposals
+
+orm: SQLAlchemy async (mapped_column, DeclarativeBase)
+migrations: Alembic (alembic.ini, migrations/env.py)
+baseline: migrations/versions/001_initial_schema.py
+

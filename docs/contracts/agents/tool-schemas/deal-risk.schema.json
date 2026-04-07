@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/agents/tool-schemas/deal-risk.schema.json",
+  "title": "DealRisk",
+  "description": "Assess risk score for a deal/opportunity based on enrichment data. Returns risk tier and contributing factors.",
+  "type": "object",
+  "properties": {
+    "deal_data": {
+      "type": "object",
+      "description": "Deal/opportunity record data from CRM.",
+      "additionalProperties": true
+    },
+    "historical_context": {
+      "type": "object",
+      "description": "Historical deal context (prior wins/losses with similar profiles). Optional.",
+      "additionalProperties": true
+    }
+  },
+  "required": ["deal_data"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "deal_data": {
+        "opportunity_name": "Acme 2026 Expansion",
+        "amount": 150000,
+        "stage": "Proposal",
+        "close_date": "2026-06-30"
+      },
+      "historical_context": {
+        "avg_deal_size": 120000,
+        "win_rate": 0.42
+      }
+    }
+  ],
+  "x-source-file": "app/agents/mcp_server.py:55",
+  "x-mcp-action": "enrich"
+}

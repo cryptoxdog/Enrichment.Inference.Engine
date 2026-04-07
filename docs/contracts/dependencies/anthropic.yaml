@@ -1,0 +1,17 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Anthropic Claude API Dependency
+# Source:   app/services/anthropic_client.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: AnthropicClaude
+type: external
+protocol: http
+auth_method: Bearer token (ANTHROPIC_API_KEY)
+base_url: https://api.anthropic.com
+base_url_env: null  # standard anthropic SDK
+
+role: Secondary LLM provider (waterfall fallback or parallel variation mode).
+# TODO: Determine usage scope from app/services/anthropic_client.py
+

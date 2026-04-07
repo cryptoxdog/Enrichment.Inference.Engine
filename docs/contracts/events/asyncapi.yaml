@@ -1,0 +1,303 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Unified AsyncAPI Specification
+# Source:   app/services/event_emitter.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+asyncapi: "3.0.0"
+
+info:
+  title: L9 Enrichment Engine — Event Contracts
+  version: "1.0.0"
+  description: |
+    All events emitted by the Enrichment Inference Engine via Redis Streams.
+    Stream key pattern: `enrich:events:{tenant_id}`
+    Max stream length: 10,000 entries per tenant (approximate MAXLEN).
+
+    Events are fire-and-forget (asyncio.create_task). The enrichment hot path
+    is never blocked by event delivery failures.
+
+    Source: app/services/event_emitter.py
+
+servers:
+  redis:
+    host: redis:6379
+    protocol: redis
+    description: Redis Streams backend (default). XADD with MAXLEN ~10000.
+    bindings:
+      redis:
+        command: XADD
+
+  nats:
+    host: nats:4222
+    protocol: nats
+    description: |
+      Optional NATS backend (requires nats-py).
+      Subject pattern: enrich.events.{tenant_id}.{event_type}
+    bindings:
+      nats:
+        subject: "enrich.events.{tenant_id}.{event_type}"
+
+channels:
+  "enrich:events:{tenant_id}":
+    address: "enrich:events:{tenant_id}"
+    description: |
+      Tenant-scoped Redis Stream for all enrichment lifecycle events.
+      Consumers: SCORE node, ROUTE node, downstream analytics.
+    messages:
+      EnrichmentCompleted:
+        $ref: "#/components/messages/EnrichmentCompleted"
+      EnrichmentFailed:
+        $ref: "#/components/messages/EnrichmentFailed"
+      ConvergenceCompleted:
+        $ref: "#/components/messages/ConvergenceCompleted"
+      SchemaProposed:
+        $ref: "#/components/messages/SchemaProposed"
+      ScoreInvalidated:
+        $ref: "#/components/messages/ScoreInvalidated"
+      EntityUpdated:
+        $ref: "#/components/messages/EntityUpdated"
+    bindings:
+      redis:
+        command: XADD
+        maxLength: 10000
+        approximate: true
+
+operations:
+  publishEnrichmentCompleted:
+    action: send
+    channel:
+      $ref: "#/channels/enrich:events:{tenant_id}"
+    messages:
+      - $ref: "#/components/messages/EnrichmentCompleted"
+    description: |
+      Emitted after each successful enrichment.
+      Source: event_emitter.emit_enrichment_completed()
+
+  publishEnrichmentFailed:
+    action: send
+    channel:
+      $ref: "#/channels/enrich:events:{tenant_id}"
+    messages:
+      - $ref: "#/components/messages/EnrichmentFailed"
+
+  publishConvergenceCompleted:
+    action: send
+    channel:
+      $ref: "#/channels/enrich:events:{tenant_id}"
+    messages:
+      - $ref: "#/components/messages/ConvergenceCompleted"
+    description: |
+      Emitted when a convergence loop finishes.
+      Source: event_emitter.emit_convergence_completed()
+
+  publishSchemaProposed:
+    action: send
+    channel:
+      $ref: "#/channels/enrich:events:{tenant_id}"
+    messages:
+      - $ref: "#/components/messages/SchemaProposed"
+    description: |
+      Emitted when SchemaProposer generates new proposals.
+      Source: event_emitter.emit_schema_proposed()
+
+components:
+  messages:
+    EnrichmentCompleted:
+      name: enrichment_completed
+      contentType: application/json
+      description: Emitted after successful entity enrichment.
+      payload:
+        $ref: "#/components/schemas/EnrichmentCompletedPayload"
+      headers:
+        type: object
+        properties:
+          event_type:
+            type: string
+            const: enrichment_completed
+          entity_id:
+            type: string
+          tenant_id:
+            type: string
+          domain:
+            type: string
+          correlation_id:
+            type: string
+            format: uuid
+          occurred_at:
+            type: string
+            format: date-time
+      examples:
+        - payload:
+            event_type: enrichment_completed
+            entity_id: "001B000000LpT1FIAV"
+            tenant_id: acme-corp
+            domain: plasticos
+            correlation_id: "550e8400-e29b-41d4-a716-446655440000"
+            occurred_at: "2026-04-05T19:54:14Z"
+            payload:
+              fields_count: 8
+              confidence: 0.87
+              tokens_used: 4200
+
+    EnrichmentFailed:
+      name: enrichment_failed
+      contentType: application/json
+      description: Emitted when enrichment fails (state=failed).
+      payload:
+        $ref: "#/components/schemas/EnrichmentEventBase"
+      examples:
+        - payload:
+            event_type: enrichment_failed
+            entity_id: "001B000000LpT1FIAV"
+            tenant_id: acme-corp
+            domain: plasticos
+            correlation_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            occurred_at: "2026-04-05T19:54:14Z"
+            payload:
+              failure_reason: "Circuit breaker open"
+
+    ConvergenceCompleted:
+      name: convergence_completed
+      contentType: application/json
+      description: Emitted when a multi-pass convergence loop finishes.
+      payload:
+        $ref: "#/components/schemas/ConvergenceCompletedPayload"
+      examples:
+        - payload:
+            event_type: convergence_completed
+            entity_id: "001B000000LpT1FIAV"
+            tenant_id: acme-corp
+            domain: plasticos
+            correlation_id: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+            occurred_at: "2026-04-05T19:56:14Z"
+            payload:
+              pass_count: 3
+              convergence_reason: confidence_plateau
+              total_tokens: 12600
+              total_cost_usd: 0.063
+
+    SchemaProposed:
+      name: schema_proposed
+      contentType: application/json
+      description: Emitted when SchemaProposer surfaces new field candidates.
+      payload:
+        $ref: "#/components/schemas/SchemaProposedPayload"
+      examples:
+        - payload:
+            event_type: schema_proposed
+            entity_id: "batch-2026-04-05"
+            tenant_id: acme-corp
+            domain: plasticos
+            correlation_id: "c3d4e5f6-a7b8-9012-cdef-012345678901"
+            occurred_at: "2026-04-05T18:00:00Z"
+            payload:
+              batch_run_id: "batch-2026-04-05"
+              proposals_count: 3
+
+    ScoreInvalidated:
+      name: score_invalidated
+      contentType: application/json
+      description: Emitted when enrichment data changes require score re-computation.
+      payload:
+        $ref: "#/components/schemas/EnrichmentEventBase"
+
+    EntityUpdated:
+      name: entity_updated
+      contentType: application/json
+      description: Emitted when entity data is updated after writeback.
+      payload:
+        $ref: "#/components/schemas/EnrichmentEventBase"
+
+  schemas:
+    EnrichmentEventBase:
+      description: Base event structure for all enrichment lifecycle events.
+      type: object
+      required:
+        - event_type
+        - entity_id
+        - tenant_id
+        - correlation_id
+        - occurred_at
+      properties:
+        event_type:
+          type: string
+          enum:
+            - enrichment_completed
+            - enrichment_failed
+            - convergence_completed
+            - schema_proposed
+            - score_invalidated
+            - entity_updated
+          description: Event type discriminator.
+        entity_id:
+          type: string
+          description: CRM entity ID or batch run ID.
+        tenant_id:
+          type: string
+          description: Tenant identifier. Used in Redis stream key.
+        domain:
+          type: ["string", "null"]
+          description: Domain YAML profile identifier.
+        payload:
+          type: object
+          additionalProperties: true
+          description: Event-specific payload data.
+        correlation_id:
+          type: string
+          format: uuid
+          description: Correlation UUID for distributed tracing.
+        occurred_at:
+          type: string
+          format: date-time
+          description: UTC timestamp of event occurrence.
+      additionalProperties: false
+
+    EnrichmentCompletedPayload:
+      allOf:
+        - $ref: "#/components/schemas/EnrichmentEventBase"
+        - type: object
+          properties:
+            payload:
+              type: object
+              properties:
+                fields_count:
+                  type: integer
+                  description: Number of fields populated.
+                confidence:
+                  type: number
+                  description: Overall confidence score.
+                tokens_used:
+                  type: integer
+
+    ConvergenceCompletedPayload:
+      allOf:
+        - $ref: "#/components/schemas/EnrichmentEventBase"
+        - type: object
+          properties:
+            payload:
+              type: object
+              properties:
+                pass_count:
+                  type: integer
+                convergence_reason:
+                  type: string
+                total_tokens:
+                  type: integer
+                total_cost_usd:
+                  type: number
+
+    SchemaProposedPayload:
+      allOf:
+        - $ref: "#/components/schemas/EnrichmentEventBase"
+        - type: object
+          properties:
+            payload:
+              type: object
+              properties:
+                batch_run_id:
+                  type: string
+                proposals_count:
+                  type: integer
+

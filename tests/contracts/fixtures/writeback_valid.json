@@ -1,0 +1,13 @@
+{
+ "crm_type": "salesforce",
+ "object_type": "Account",
+ "record_id": "001B000000LpT1FIAV",
+ "enriched_data": {
+  "recycling_grade": "HDPE",
+  "annual_tonnage": 50000,
+  "certifications": [
+   "ISO 14001"
+  ]
+ },
+ "confidence_threshold": 0.7
+}

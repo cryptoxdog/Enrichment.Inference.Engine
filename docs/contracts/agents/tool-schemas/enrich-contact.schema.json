@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/agents/tool-schemas/enrich-contact.schema.json",
+  "title": "EnrichContact",
+  "description": "Enrich a contact or company record using waterfall enrichment. MCP tool exposed by the Enrichment Inference Engine MCP server.",
+  "type": "object",
+  "properties": {
+    "domain": {
+      "type": "string",
+      "description": "Domain type: company, contact, or opportunity.",
+      "enum": ["company", "contact", "opportunity"]
+    },
+    "entity_name": {
+      "type": "string",
+      "description": "Name of the entity to enrich.",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "entity_data": {
+      "type": "object",
+      "description": "Known data fields for the entity (optional pre-existing values).",
+      "additionalProperties": true
+    },
+    "quality_threshold": {
+      "type": "number",
+      "description": "Minimum quality score (0-1). Enrichment stops when this threshold is met.",
+      "minimum": 0,
+      "maximum": 1
+    }
+  },
+  "required": ["domain", "entity_name"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "domain": "company",
+      "entity_name": "Acme Plastics Ltd",
+      "entity_data": {
+        "country": "US",
+        "industry": "Plastics Recycling"
+      },
+      "quality_threshold": 0.70
+    }
+  ],
+  "x-source-file": "app/agents/mcp_server.py:35",
+  "x-mcp-action": "enrich",
+  "x-returns": "EnrichResponse payload via chassis dispatch"
+}

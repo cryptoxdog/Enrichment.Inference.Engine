@@ -1,0 +1,28 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Salesforce CRM Dependency
+# Source:   app/services/crm/salesforce_client.py,
+#           config/crm/salesforce_mapping.yaml, app/models/schemas.py
+# Version:  1.0.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+service_name: SalesforceCRM
+type: external
+protocol: http  # simple-salesforce library
+auth_method: OAuth2 (client_credentials or password flow)
+auth_env_vars:
+  - SALESFORCE_CLIENT_ID
+  - SALESFORCE_CLIENT_SECRET
+  - SALESFORCE_USERNAME
+  - SALESFORCE_PASSWORD
+  - SALESFORCE_SECURITY_TOKEN
+
+role: |
+  CRM consumer #2. Salesforce integration:
+  - EnrichmentCalloutService.cls (Apex) calls POST /api/v1/enrich
+  - EnrichmentWriteBack.cls reads `fields` from response
+  - EnrichmentRunLogger.cls reads all provenance fields from response
+
+field_mapping: config/crm/salesforce_mapping.yaml
+source_file: app/services/crm/salesforce_client.py
+

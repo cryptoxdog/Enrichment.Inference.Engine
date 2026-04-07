@@ -1,0 +1,346 @@
+# ═══════════════════════════════════════════════════════════════
+# Contract: Environment Variable Contract
+# Source:   app/core/config.py:Settings, .env.example
+# Version:  2.3.0
+# Updated:  2026-04-05
+# ═══════════════════════════════════════════════════════════════
+
+# All variables are loaded via pydantic-settings (BaseSettings).
+# Source: app/core/config.py
+# Loaded once at startup via @lru_cache get_settings().
+
+variables:
+  # ── Perplexity Sonar ────────────────────────────────────────
+  - name: PERPLEXITY_API_KEY
+    type: secret
+    required: true
+    default: null
+    description: Perplexity Sonar API key. Primary enrichment source.
+    sensitive: true
+    source: env
+    example: pplx-xxxxxxxxxxxxxxxxxxxx
+    validation: "must start with pplx-"
+
+  - name: PERPLEXITY_MODEL
+    type: string
+    required: false
+    default: sonar-reasoning
+    description: Perplexity Sonar model identifier.
+    sensitive: false
+    source: env
+    example: sonar-reasoning
+
+  # ── Authentication ──────────────────────────────────────────
+  - name: API_SECRET_KEY
+    type: secret
+    required: true
+    default: null
+    description: |
+      Raw API secret key. Minimum 32 characters recommended.
+      Generate: python -c "import secrets; print(secrets.token_urlsafe(48))"
+    sensitive: true
+    source: env
+    validation: "min length 32"
+
+  - name: API_KEY_HASH
+    type: string
+    required: false
+    default: ""
+    description: |
+      SHA-256 hash of the client API key used for constant-time comparison.
+      Generate: python -c "import hashlib; print(hashlib.sha256(b'KEY').hexdigest())"
+    sensitive: false
+    source: env
+
+  # ── Knowledge Base ──────────────────────────────────────────
+  - name: KB_DIR
+    type: string
+    required: false
+    default: /app/kb
+    description: Path to the knowledge base YAML files directory.
+    sensitive: false
+    source: env
+    example: /app/kb
+
+  # ── Redis ───────────────────────────────────────────────────
+  - name: REDIS_URL
+    type: url
+    required: false
+    default: redis://localhost:6379/0
+    description: Redis connection URL. Used for idempotency store and event streams.
+    sensitive: false
+    source: env
+    example: redis://redis:6379/0
+
+  # ── Enrichment Defaults ─────────────────────────────────────
+  - name: DEFAULT_CONSENSUS_THRESHOLD
+    type: float
+    required: false
+    default: 0.65
+    description: Default minimum consensus ratio for field acceptance.
+    validation: "0.0 ≤ value ≤ 1.0"
+
+  - name: DEFAULT_MAX_VARIATIONS
+    type: integer
+    required: false
+    default: 5
+    description: Default number of parallel prompt variations per enrichment.
+    validation: "1 ≤ value ≤ 10"
+
+  - name: DEFAULT_TIMEOUT_SECONDS
+    type: integer
+    required: false
+    default: 120
+    description: Default enrichment request timeout in seconds.
+
+  - name: MAX_CONCURRENT_VARIATIONS
+    type: integer
+    required: false
+    default: 3
+    description: Maximum concurrent Perplexity requests per enrichment call.
+
+  - name: MAX_ENTITIES_PER_BATCH
+    type: integer
+    required: false
+    default: 50
+    description: Maximum entities in a single batch enrichment request.
+    validation: "max 50"
+
+  # ── Circuit Breaker ─────────────────────────────────────────
+  - name: CB_FAILURE_THRESHOLD
+    type: integer
+    required: false
+    default: 5
+    description: Number of failures before circuit breaker opens.
+
+  - name: CB_COOLDOWN_SECONDS
+    type: integer
+    required: false
+    default: 60
+    description: Seconds the circuit breaker stays open before half-open retry.
+
+  # ── Odoo CRM ────────────────────────────────────────────────
+  - name: ODOO_URL
+    type: url
+    required: false
+    default: ""
+    description: Odoo instance base URL (e.g., https://mycompany.odoo.com).
+    sensitive: false
+    example: https://your-instance.odoo.com
+
+  - name: ODOO_DB
+    type: string
+    required: false
+    default: ""
+    description: Odoo database name.
+
+  - name: ODOO_USERNAME
+    type: string
+    required: false
+    default: ""
+    description: Odoo authentication username.
+
+  - name: ODOO_PASSWORD
+    type: secret
+    required: false
+    default: ""
+    description: Odoo authentication password.
+    sensitive: true
+
+  - name: CRM_MAPPING_PATH
+    type: string
+    required: false
+    default: config/crm/odoo_mapping.yaml
+    description: Path to CRM field mapping YAML.
+
+  # ── Salesforce CRM ──────────────────────────────────────────
+  - name: SALESFORCE_CLIENT_ID
+    type: secret
+    required: false
+    default: ""
+    description: Salesforce Connected App client ID.
+    sensitive: true
+
+  - name: SALESFORCE_CLIENT_SECRET
+    type: secret
+    required: false
+    default: ""
+    description: Salesforce Connected App client secret.
+    sensitive: true
+
+  - name: SALESFORCE_USERNAME
+    type: string
+    required: false
+    default: ""
+    description: Salesforce username.
+
+  - name: SALESFORCE_PASSWORD
+    type: secret
+    required: false
+    default: ""
+    description: Salesforce password.
+    sensitive: true
+
+  - name: SALESFORCE_SECURITY_TOKEN
+    type: secret
+    required: false
+    default: ""
+    description: Salesforce security token (appended to password for non-IP-whitelisted access).
+    sensitive: true
+
+  # ── HubSpot CRM ─────────────────────────────────────────────
+  - name: HUBSPOT_ACCESS_TOKEN
+    type: secret
+    required: false
+    default: ""
+    description: HubSpot private app access token.
+    sensitive: true
+
+  # ── Enrichment Sources (waterfall) ──────────────────────────
+  - name: CLEARBIT_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: Clearbit enrichment API key.
+    sensitive: true
+
+  - name: ZOOMINFO_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: ZoomInfo enrichment API key.
+    sensitive: true
+
+  - name: APOLLO_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: Apollo.io enrichment API key.
+    sensitive: true
+
+  - name: HUNTER_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: Hunter.io email finder API key.
+    sensitive: true
+
+  # ── Constellation Nodes ─────────────────────────────────────
+  - name: CEG_BASE_URL
+    type: url
+    required: false
+    default: http://localhost:8001
+    description: Cognitive Engine Graph (sibling L9 node) base URL.
+
+  - name: GRAPH_NODE_URL
+    type: url
+    required: false
+    default: http://localhost:8001
+    description: GRAPH constellation node URL for PacketEnvelope routing.
+
+  - name: SCORE_NODE_URL
+    type: url
+    required: false
+    default: http://localhost:8002
+    description: SCORE constellation node URL.
+
+  - name: ROUTE_NODE_URL
+    type: url
+    required: false
+    default: http://localhost:8003
+    description: ROUTE constellation node URL.
+
+  - name: INTER_NODE_SECRET
+    type: secret
+    required: false
+    default: dev-inter-node-secret
+    description: Shared secret for node-to-node authentication.
+    sensitive: true
+
+  # ── Neo4j Graph ─────────────────────────────────────────────
+  - name: NEO4J_URI
+    type: url
+    required: false
+    default: bolt://localhost:7687
+    description: Neo4j connection URI.
+
+  - name: NEO4J_USER
+    type: string
+    required: false
+    default: neo4j
+    description: Neo4j username.
+
+  - name: NEO4J_PASSWORD
+    type: secret
+    required: false
+    default: changeme
+    description: Neo4j password.
+    sensitive: true
+
+  # ── PostgreSQL ───────────────────────────────────────────────
+  - name: DATABASE_URL
+    type: url
+    required: false
+    default: postgresql+asyncpg://enrich:changeme@localhost:5432/enrich
+    description: PostgreSQL async connection URL (asyncpg driver).
+    sensitive: true
+    example: postgresql+asyncpg://enrich:secret@db:5432/enrich
+
+  # ── Domain Configuration ────────────────────────────────────
+  - name: DOMAINS_DIR
+    type: string
+    required: false
+    default: ./domains
+    description: Directory containing domain YAML spec files.
+
+  - name: DEFAULT_DOMAIN
+    type: string
+    required: false
+    default: plasticos
+    description: Default domain profile when not specified in request.
+
+  # ── Token Budget ─────────────────────────────────────────────
+  - name: MAX_BUDGET_TOKENS_DEFAULT
+    type: integer
+    required: false
+    default: 50000
+    description: Default token budget per convergence run.
+
+  - name: TOKEN_RATE_USD_PER_1K
+    type: float
+    required: false
+    default: 0.005
+    description: Token cost rate in USD per 1,000 tokens for cost tracking.
+
+  # ── Logging ──────────────────────────────────────────────────
+  - name: LOG_LEVEL
+    type: string
+    required: false
+    default: INFO
+    description: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+    validation: "enum: DEBUG | INFO | WARNING | ERROR | CRITICAL"
+
+# ── Required Variables Checklist ─────────────────────────────
+required_for_startup:
+  - PERPLEXITY_API_KEY
+  - API_SECRET_KEY
+
+required_for_caching:
+  - REDIS_URL
+
+required_for_persistence:
+  - DATABASE_URL
+
+required_for_odoo_integration:
+  - ODOO_URL
+  - ODOO_DB
+  - ODOO_USERNAME
+  - ODOO_PASSWORD
+
+required_for_salesforce_integration:
+  - SALESFORCE_CLIENT_ID
+  - SALESFORCE_CLIENT_SECRET
+  - SALESFORCE_USERNAME
+  - SALESFORCE_PASSWORD
+  - SALESFORCE_SECURITY_TOKEN
+
