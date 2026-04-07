@@ -79,16 +79,22 @@ def test_event_channel_has_example(asyncapi_spec: dict, event_name: str) -> None
     spec_str = str(asyncapi_spec)
     if event_name not in spec_str:
         pytest.skip(f"{event_name} not in spec")
-    channels = asyncapi_spec.get("channels", {})
-    channel_data = channels.get(event_name, {})
-    if not channel_data:
-        for v in channels.values():
-            if event_name in str(v):
-                channel_data = v
+    # Check for examples in components/messages (AsyncAPI 3.0 structure)
+    # Examples can be in message definitions, not necessarily in channel data
+    components = asyncapi_spec.get("components", {})
+    messages = components.get("messages", {})
+    
+    # Find message that matches this event name
+    has_example = False
+    for msg_name, msg_data in messages.items():
+        msg_name_lower = msg_data.get("name", "").lower()
+        if event_name == msg_name_lower or event_name.replace("_", "") in msg_name.lower():
+            if "examples" in msg_data or "example" in str(msg_data).lower():
+                has_example = True
                 break
-    has_example = "example" in str(channel_data).lower()
+    
     assert has_example, (
-        f"Channel '{event_name}' has no examples. "
+        f"Event '{event_name}' has no examples in asyncapi.yaml. "
         "Phase 3.4: message examples required for every channel."
     )
 
