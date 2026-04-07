@@ -1,0 +1,18 @@
+{
+ "entity": {
+  "Name": "PlasticOS Supply Ltd",
+  "BillingCountry": "DE",
+  "Industry": "Plastics Recycling",
+  "AnnualRevenue": 4500000
+ },
+ "object_type": "Account",
+ "objective": "Determine polymer type, contamination percentage, and material grade",
+ "schema": {
+  "polymer_type": "string",
+  "contamination_pct": "float",
+  "material_grade": "string"
+ },
+ "consensus_threshold": 0.8,
+ "max_variations": 5,
+ "idempotency_key": "idem-same-key-001"
+}
