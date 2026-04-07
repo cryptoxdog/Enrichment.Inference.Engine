@@ -52,8 +52,8 @@ SCHEMA_PROPOSAL_FIELDS = {
     "id": {},
     "domain": {},
     "field_name": {},
-    "proposed_type": {},
-    "status": {},
+    "field_type": {},
+    "approval_status": {},
 }
 
 FIELD_GROUND_TRUTH = {
