@@ -74,3 +74,49 @@ This pack wires the next runtime-facing L9 contract surfaces into repo-shaped mo
 3. Milestone 3 after Milestones 1 and 2
 4. Milestone 4 after Milestone 1
 5. Milestone 5 after Milestones 1–4 are merged and green
+
+## Final system completion checklist
+
+### Runtime completeness
+- startup fails if constitution or attestation is invalid
+- `/v1/attestation` is mounted and live
+- packet ingress and egress are enforced by runtime code
+- action authority is enforced by runtime code
+- dependency gating is enforced by runtime code
+- event contract is enforced by runtime code
+
+### Test completeness
+Run exactly:
+
+```bash
+python scripts/l9_contract_control.py verify-constitution
+python scripts/l9_contract_control.py verify-attestation
+
+pytest tests/contracts/tier2/test_node_constitution_contract.py \
+ tests/contracts/tier2/test_runtime_attestation_contract.py \
+ tests/contracts/tier2/test_packet_enforcement_module.py \
+ tests/contracts/tier2/test_action_dependency_authority_module.py \
+ tests/contracts/tier2/test_event_contract_guard_module.py \
+ tests/contracts/tier2/test_l9_contract_runtime_bootstrap.py \
+ tests/contracts/tier2/test_enforcement_behavior.py \
+ tests/contracts/tier2/test_enforcement_authority.py \
+ tests/contracts/tier2/test_enforcement_packet_runtime.py \
+ tests/contracts/tier2/test_enforcement_events.py \
+ tests/contracts/tier2/test_enforcement_provenance.py \
+ tests/contracts/tier2/test_enforcement_replay_idempotency.py \
+ tests/contracts/tier2/test_enforcement_dependency_failures.py \
+ -q --disable-warnings --maxfail=1
+```
+
+### CI completeness
+- L9 Constitution Gate passes
+- L9 Contract Control passes
+- changed-surface gate selection produces a deterministic command list
+- review-signal fails for contract-bound drift
+
+### Operational completeness
+- packet tamper attempt is rejected
+- writeback without policy clearance is rejected
+- event with unsupported type is rejected
+- degraded dependency state is visible in attestation
+- contract runtime state is accessible through app state
