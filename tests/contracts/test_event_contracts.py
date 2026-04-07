@@ -3,14 +3,20 @@ Event Contract Tests
 Source: app/services/event_emitter.py
 Markers: unit
 """
+
 from __future__ import annotations
+
 import pytest
-import yaml
+
 from tests.contracts.conftest_contracts import EVENTS_DIR, load_yaml
 
 CONTRACTED_EVENTS = [
-    "enrichment.completed", "enrichment.failed", "enrichment.started",
-    "convergence.completed", "convergence.started", "writeback.completed",
+    "enrichment.completed",
+    "enrichment.failed",
+    "enrichment.started",
+    "convergence.completed",
+    "convergence.started",
+    "writeback.completed",
 ]
 
 

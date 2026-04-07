@@ -1,7 +1,7 @@
 # CI/CD Pipeline — Enrichment.Inference.Engine
 
-**Version:** 1.1.0
-**Date:** 2026-03-30
+**Version:** 1.2.0
+**Date:** 2026-04-01
 **Status:** Active
 **Sibling Parity:** Cognitive.Engine.Graphs
 
@@ -10,6 +10,10 @@
 ## Overview
 
 This document describes the production-grade CI/CD pipeline for the Enrichment.Inference.Engine. The pipeline enforces code quality, security, architecture compliance, and deployment automation as a unified governance layer. It is designed for **sibling uniformity** with the Cognitive.Engine.Graphs pipeline so that all L9 constellation nodes share identical engineering standards.
+
+### Local `make pr`
+
+Run **`make pr`** before opening a PR for parity with CI (validate → lint → semgrep → test with Docker Postgres/Redis → security → compliance → L9 → docs). **`make pr-quick`** sets `PR_SKIP_INTEGRATION=1` and `PR_L9_MINIMAL=1` (no full pytest-with-services, no `select-gates` runner). See `local_pr_pipeline/pr_pipeline.sh` for env vars (`PR_SKIP_SEMGREP`, `PR_SKIP_GITLEAKS`, `PR_MYPY_STRICT`, `ORDER=gate|failfast`, etc.). **`ci-gate`** in `ci.yml` fails when **validate, lint, semgrep, test, or security** fails; SBOM and Scorecard jobs do not participate in that fan-in today.
 
 ---
 
@@ -29,6 +33,11 @@ This document describes the production-grade CI/CD pipeline for the Enrichment.I
 | `refactoring-validation.yml` | refactor/* branches | Hard gate for refactoring PRs | Yes |
 | `release-drafter.yml` | Push to main | Auto-draft release notes | No |
 | `docs-sync.yml` | Docs changes | Validate documentation links | No |
+| `docs-consistency.yml` | Docs / governance | ADR + INVARIANTS + governance markdown | Yes (if required) |
+| `l9-constitution-gate.yml` | PR | Constitution + tier2 contract tests + optional PR-bound diff | Yes (if required) |
+| `l9-contract-control.yml` | PR | `l9_contract_control.py` verify / select-gates | Yes (if required) |
+| `release.yml` | Tags / manual | Releases | Varies |
+| `perplexity-code-review.yml` | PR (optional) | Perplexity-assisted review | No |
 | `coderabbit-notify.yml` | PR review | CodeRabbit review notifications | No |
 
 ### CI Pipeline Phases (ci.yml)

@@ -7,13 +7,14 @@ Usage: Drop this over GraphSyncClient in graph/sync/client.py and update
 the import at the call site.
 """
 from __future__ import annotations
+
 import logging
 from typing import Any
 
 from engine.contract_enforcement import (
+    ContractViolationError,
     build_graph_sync_packet,
     enforce_packet_envelope,
-    ContractViolationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ class GraphSyncClient:
 
         except ContractViolationError:
             raise
-        except Exception as exc:
+        except Exception:
             logger.exception(
                 "GraphSyncClient: write failed for packet_id=%s", envelope.get("packet_id")
             )

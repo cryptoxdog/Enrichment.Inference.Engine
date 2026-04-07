@@ -6,6 +6,7 @@ Anthropic Claude client for consensus variation diversity.
 Same interface as OpenAIClient — consensus engine can dispatch to either
 provider without branching. Uses httpx.AsyncClient directly.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -84,7 +85,11 @@ class AnthropicClient:
         try:
             resp = await self._http.post(
                 "/v1/messages",
-                json={"model": self._model, "max_tokens": 1, "messages": [{"role": "user", "content": "ping"}]},
+                json={
+                    "model": self._model,
+                    "max_tokens": 1,
+                    "messages": [{"role": "user", "content": "ping"}],
+                },
                 timeout=5,
             )
             available = resp.status_code in (200, 400)
@@ -111,7 +116,9 @@ class AnthropicClient:
                 latency_ms = int((time.monotonic() - start) * 1000)
 
                 if resp.status_code in _RETRYABLE_STATUS:
-                    last_exc = LLMResponseError(f"Anthropic {resp.status_code} on attempt {attempt}")
+                    last_exc = LLMResponseError(
+                        f"Anthropic {resp.status_code} on attempt {attempt}"
+                    )
                     await asyncio.sleep(delay)
                     continue
 
@@ -138,4 +145,6 @@ class AnthropicClient:
             self._circuit_open = True
             logger.error("anthropic_circuit_breaker_opened", failures=self._failure_count)
 
-        raise LLMResponseError(f"Anthropic call failed after {len(_RETRY_DELAYS)} attempts") from last_exc
+        raise LLMResponseError(
+            f"Anthropic call failed after {len(_RETRY_DELAYS)} attempts"
+        ) from last_exc

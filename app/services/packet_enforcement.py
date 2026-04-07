@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import yaml
 
@@ -23,7 +24,7 @@ class PacketPolicyError(PermissionError):
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -145,15 +146,11 @@ def enforce_action_policy(
     policy = action_policy(action)
 
     if action == "writeback" and not policy_cleared:
-        raise PacketPolicyError(
-            "writeback requires threshold_or_human approval before execution"
-        )
+        raise PacketPolicyError("writeback requires threshold_or_human approval before execution")
 
     approval_mode = policy.get("approval_mode")
     if approval_mode == "threshold_or_human" and not policy_cleared:
-        raise PacketPolicyError(
-            f"{action} requires {approval_mode} approval before execution"
-        )
+        raise PacketPolicyError(f"{action} requires {approval_mode} approval before execution")
 
 
 def build_egress_packet(

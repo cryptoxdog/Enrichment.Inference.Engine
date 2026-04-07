@@ -143,7 +143,7 @@ class GraphToEnrichReturnChannel:
         targets = await channel.drain(tenant_id="acme", timeout=0.5)
     """
 
-    _instance: "GraphToEnrichReturnChannel | None" = None
+    _instance: GraphToEnrichReturnChannel | None = None
 
     def __init__(self, maxsize: int = 10_000) -> None:
         # Per-tenant queues: tenant_id → asyncio.Queue[EnrichmentTarget]
@@ -154,7 +154,7 @@ class GraphToEnrichReturnChannel:
         self._rejected: int = 0
 
     @classmethod
-    def get_instance(cls) -> "GraphToEnrichReturnChannel":
+    def get_instance(cls) -> GraphToEnrichReturnChannel:
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -223,7 +223,7 @@ class GraphToEnrichReturnChannel:
                 target = await asyncio.wait_for(q.get(), timeout=remaining)
                 targets.append(target)
                 q.task_done()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
         self._drained += len(targets)
         if targets:

@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-build dev-down dev-clean test test-unit test-integration test-compliance test-ci test-contracts test-all test-watch lint lint-fix audit audit-strict audit-json verify agent-check agent-fix agent-full build prod prod-build prod-down prod-logs deploy clean
+.PHONY: setup dev dev-build dev-down dev-clean test test-unit test-integration test-compliance test-ci test-contracts test-all test-watch lint lint-fix audit audit-strict audit-json verify agent-check agent-fix agent-full build prod prod-build prod-down prod-logs deploy clean pr pr-validate pr-lint pr-semgrep pr-test pr-security pr-compliance pr-l9 pr-docs pr-quick pr-services-up pr-services-down
 
 IMAGE_NAME ?= enrichment-api
 SERVICE_NAME ?= enrichment-api
@@ -100,6 +100,51 @@ agent-full:  ## Full agent workflow: fix → check → coverage
 	$(MAKE) agent-fix
 	$(MAKE) agent-check
 	pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
+
+# ============================================================
+# PR PIPELINE — local parity with GitHub CI + L9 + docs
+# See: readme/CICD_PIPELINE.md, local_pr_pipeline/pr_pipeline.sh
+# Env: ORDER=gate|failfast, COVERAGE_THRESHOLD, PR_MYPY_STRICT, PR_SKIP_SEMGREP,
+#      PR_SKIP_INTEGRATION, PR_L9_MINIMAL, PR_SKIP_L9, PR_SKIP_GITLEAKS, PR_SECURITY_STRICT
+# PYTHON: override to pin interpreter (default: .venv/bin/python if present, else python3)
+# ============================================================
+PR_PYTHON ?= $(shell if [ -x "$(CURDIR)/.venv/bin/python" ]; then printf '%s' "$(CURDIR)/.venv/bin/python"; else command -v python3; fi)
+
+pr:  ## Full local PR gate (validate → … → docs). Requires Docker for test phase; gitleaks for security.
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh all
+
+pr-validate:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh validate
+
+pr-lint:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh lint
+
+pr-semgrep:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh semgrep
+
+pr-test:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh test
+
+pr-security:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh security
+
+pr-compliance:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh compliance
+
+pr-l9:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh l9
+
+pr-docs:
+	PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh docs
+
+pr-quick:  ## Skips Docker test + select-gates runner; still runs lint through docs phases in gate order
+	PR_SKIP_INTEGRATION=1 PR_L9_MINIMAL=1 PYTHON=$(PR_PYTHON) bash local_pr_pipeline/pr_pipeline.sh all
+
+pr-services-up:
+	docker compose -f local_pr_pipeline/docker-compose.pr.yml -p enrich_pr up -d
+
+pr-services-down:
+	docker compose -f local_pr_pipeline/docker-compose.pr.yml -p enrich_pr down -v
 
 # ============================================================
 # BUILD / DEPLOY

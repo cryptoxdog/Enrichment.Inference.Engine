@@ -4,8 +4,10 @@ Add these calls to your application lifespan / startup handler in order.
 This file is a recipe — adapt paths to match your actual app entrypoint.
 """
 from __future__ import annotations
-import asyncpg
+
 import logging
+
+import asyncpg
 
 logger = logging.getLogger(__name__)
 

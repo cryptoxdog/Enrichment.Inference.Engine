@@ -8,7 +8,7 @@ allocates budget proportionally.
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class SelectionMode(str, Enum):
+class SelectionMode(StrEnum):
     NIGHTLY_STALE = "nightly_stale"
     HIGH_NULL = "high_null"
     FAILED_MATCH = "failed_match"

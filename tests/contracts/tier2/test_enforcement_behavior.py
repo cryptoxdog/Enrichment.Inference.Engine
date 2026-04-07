@@ -81,9 +81,7 @@ def enrich_response_example() -> dict[str, Any]:
         "feature_vector": None,
         "kb_files_consulted": ["kb/plastics_recycling.yaml"],
         "kb_fragment_ids": ["hdpe.mfi_range", "premium_hdpe_grade"],
-        "inferences": [
-            {"field": "material_grade", "value": "Premium HDPE", "confidence": 0.95}
-        ],
+        "inferences": [{"field": "material_grade", "value": "Premium HDPE", "confidence": 0.95}],
         "quality_tier": "gold",
         "grade_matches": [],
         "tokens_used": 1840,

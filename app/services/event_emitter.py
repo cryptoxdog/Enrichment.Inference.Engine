@@ -10,13 +10,14 @@ Backends:
 All emit calls are fire-and-forget via asyncio.create_task.
 The hot enrichment path is never blocked by event delivery.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from functools import lru_cache
 from typing import Any
 
@@ -28,7 +29,7 @@ logger = structlog.get_logger("event_emitter")
 _REDIS_STREAM_MAXLEN = 10_000
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     ENRICHMENT_COMPLETED = "enrichment_completed"
     ENRICHMENT_FAILED = "enrichment_failed"
     CONVERGENCE_COMPLETED = "convergence_completed"
@@ -44,7 +45,7 @@ class EnrichmentEvent(BaseModel):
     domain: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     correlation_id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def to_stream_dict(self) -> dict[str, str]:
         return {
@@ -63,6 +64,7 @@ class RedisStreamsBackend:
 
     def __init__(self, redis_url: str) -> None:
         import redis.asyncio as aioredis
+
         self._client = aioredis.from_url(redis_url, decode_responses=True)
 
     async def publish(self, event: EnrichmentEvent) -> None:
@@ -94,6 +96,7 @@ class NATSBackend:
     async def connect(self) -> None:
         try:
             import nats
+
             self._nc = await nats.connect(self._nats_url)
         except ImportError as exc:
             raise RuntimeError("nats-py not installed. Run: pip install nats-py") from exc
@@ -132,44 +135,69 @@ class EventEmitter:
         asyncio.create_task(self._publish_safe(event))
 
     async def emit_enrichment_completed(
-        self, tenant_id: str, entity_id: str, domain: str | None,
-        fields: dict[str, Any], confidence: float, tokens_used: int,
+        self,
+        tenant_id: str,
+        entity_id: str,
+        domain: str | None,
+        fields: dict[str, Any],
+        confidence: float,
+        tokens_used: int,
     ) -> None:
-        await self.emit(EnrichmentEvent(
-            event_type=EventType.ENRICHMENT_COMPLETED,
-            entity_id=entity_id,
-            tenant_id=tenant_id,
-            domain=domain,
-            payload={"fields_count": len(fields), "confidence": confidence, "tokens_used": tokens_used},
-        ))
+        await self.emit(
+            EnrichmentEvent(
+                event_type=EventType.ENRICHMENT_COMPLETED,
+                entity_id=entity_id,
+                tenant_id=tenant_id,
+                domain=domain,
+                payload={
+                    "fields_count": len(fields),
+                    "confidence": confidence,
+                    "tokens_used": tokens_used,
+                },
+            )
+        )
 
     async def emit_convergence_completed(
-        self, tenant_id: str, entity_id: str, domain: str | None,
-        pass_count: int, convergence_reason: str, total_tokens: int, total_cost_usd: float,
+        self,
+        tenant_id: str,
+        entity_id: str,
+        domain: str | None,
+        pass_count: int,
+        convergence_reason: str,
+        total_tokens: int,
+        total_cost_usd: float,
     ) -> None:
-        await self.emit(EnrichmentEvent(
-            event_type=EventType.CONVERGENCE_COMPLETED,
-            entity_id=entity_id,
-            tenant_id=tenant_id,
-            domain=domain,
-            payload={
-                "pass_count": pass_count,
-                "convergence_reason": convergence_reason,
-                "total_tokens": total_tokens,
-                "total_cost_usd": total_cost_usd,
-            },
-        ))
+        await self.emit(
+            EnrichmentEvent(
+                event_type=EventType.CONVERGENCE_COMPLETED,
+                entity_id=entity_id,
+                tenant_id=tenant_id,
+                domain=domain,
+                payload={
+                    "pass_count": pass_count,
+                    "convergence_reason": convergence_reason,
+                    "total_tokens": total_tokens,
+                    "total_cost_usd": total_cost_usd,
+                },
+            )
+        )
 
     async def emit_schema_proposed(
-        self, tenant_id: str, domain: str, batch_run_id: str, proposals_count: int,
+        self,
+        tenant_id: str,
+        domain: str,
+        batch_run_id: str,
+        proposals_count: int,
     ) -> None:
-        await self.emit(EnrichmentEvent(
-            event_type=EventType.SCHEMA_PROPOSED,
-            entity_id=batch_run_id,
-            tenant_id=tenant_id,
-            domain=domain,
-            payload={"batch_run_id": batch_run_id, "proposals_count": proposals_count},
-        ))
+        await self.emit(
+            EnrichmentEvent(
+                event_type=EventType.SCHEMA_PROPOSED,
+                entity_id=batch_run_id,
+                tenant_id=tenant_id,
+                domain=domain,
+                payload={"batch_run_id": batch_run_id, "proposals_count": proposals_count},
+            )
+        )
 
 
 @lru_cache(maxsize=1)

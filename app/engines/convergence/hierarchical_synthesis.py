@@ -21,14 +21,14 @@ L9 Compliance:
   - No routes, auth, or infra
   - Zero stubs; all imports resolve
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, FrozenSet, List, Optional, Tuple
+from dataclasses import dataclass
 
-from app.engines.convergence.config import ConvergenceConfig
+from app.engines.convergence.convergence_config import ConvergenceConfig
 from app.models.enrichment import ConvergenceState, EnrichResponse, FieldResult
 
 logger = logging.getLogger(__name__)
@@ -36,12 +36,13 @@ logger = logging.getLogger(__name__)
 # ── Constants ────────────────────────────────────────────────────────────────
 
 _COMPOSITE_NODES_KEY = "_composite_nodes"
-_MIN_COMPOSITE_CONFIDENCE: float = 0.75   # RAPTOR leaf threshold
-_MAX_FIELDS_PER_NODE: int = 4             # cap: prevents overloaded parent nodes
-_MIN_FIELDS_PER_NODE: int = 2             # single-field nodes are not composites
+_MIN_COMPOSITE_CONFIDENCE: float = 0.75  # RAPTOR leaf threshold
+_MAX_FIELDS_PER_NODE: int = 4  # cap: prevents overloaded parent nodes
+_MIN_FIELDS_PER_NODE: int = 2  # single-field nodes are not composites
 
 
 # ── Domain objects ────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class CompositeNode:
@@ -49,25 +50,24 @@ class CompositeNode:
     Immutable RAPTOR parent node representing a cluster of co-resolved fields.
     node_id is deterministic: SHA-256 of sorted constituent field names.
     """
+
     node_id: str
     resolved_pass: int
-    constituent_fields: Tuple[str, ...]
+    constituent_fields: tuple[str, ...]
     mean_confidence: float
-    semantic_label: str       # e.g. "identity_cluster_pass2"
-    is_derived_target: bool   # True if any constituent is a derived_from target
+    semantic_label: str  # e.g. "identity_cluster_pass2"
+    is_derived_target: bool  # True if any constituent is a derived_from target
 
     @classmethod
     def build(
         cls,
-        constituent_fields: List[str],
+        constituent_fields: list[str],
         resolved_pass: int,
         mean_confidence: float,
         is_derived_target: bool,
-    ) -> "CompositeNode":
+    ) -> CompositeNode:
         sorted_fields = tuple(sorted(constituent_fields))
-        node_id = hashlib.sha256(
-            ":".join(sorted_fields).encode()
-        ).hexdigest()[:16]
+        node_id = hashlib.sha256(":".join(sorted_fields).encode()).hexdigest()[:16]
         label = f"composite_pass{resolved_pass}_{node_id[:6]}"
         return cls(
             node_id=node_id,
@@ -91,7 +91,8 @@ class CompositeNode:
 
 # ── Field classification helpers ─────────────────────────────────────────────
 
-def _get_pass_resolved(field_result: FieldResult) -> Optional[int]:
+
+def _get_pass_resolved(field_result: FieldResult) -> int | None:
     """Extract the pass number at which this field first achieved confidence >= threshold."""
     return getattr(field_result, "resolved_pass", None)
 
@@ -102,21 +103,19 @@ def _is_derived_target(field_name: str, cfg: ConvergenceConfig) -> bool:
     These fields are excluded from composite constituents because they are
     already the synthesis output of earlier fields.
     """
-    derived_targets: FrozenSet[str] = frozenset(
-        getattr(cfg, "derived_field_targets", []) or []
-    )
+    derived_targets: frozenset[str] = frozenset(getattr(cfg, "derived_field_targets", []) or [])
     return field_name in derived_targets
 
 
 def _cluster_fields_by_pass(
-    high_confidence_fields: Dict[str, FieldResult],
+    high_confidence_fields: dict[str, FieldResult],
     cfg: ConvergenceConfig,
-) -> Dict[int, List[Tuple[str, float]]]:
+) -> dict[int, list[tuple[str, float]]]:
     """
     Group (field_name, confidence) pairs by the pass that first resolved them.
     Returns {pass_number: [(field_name, confidence), ...]}
     """
-    clusters: Dict[int, List[Tuple[str, float]]] = {}
+    clusters: dict[int, list[tuple[str, float]]] = {}
     for fname, fresult in high_confidence_fields.items():
         if _is_derived_target(fname, cfg):
             continue  # exclude synthesis outputs from being re-clustered
@@ -130,28 +129,26 @@ def _cluster_fields_by_pass(
 
 def _build_nodes_from_cluster(
     pass_num: int,
-    fields: List[Tuple[str, float]],
+    fields: list[tuple[str, float]],
     cfg: ConvergenceConfig,
-) -> List[CompositeNode]:
+) -> list[CompositeNode]:
     """
     Partition a single pass-cluster into CompositeNode objects of size
     [_MIN_FIELDS_PER_NODE, _MAX_FIELDS_PER_NODE].  Any remainder that
     falls below _MIN_FIELDS_PER_NODE is discarded.
     """
-    nodes: List[CompositeNode] = []
+    nodes: list[CompositeNode] = []
     # Sort by confidence desc so highest-confidence fields lead each node
     sorted_fields = sorted(fields, key=lambda x: x[1], reverse=True)
 
-    chunk: List[Tuple[str, float]] = []
+    chunk: list[tuple[str, float]] = []
     for fname, conf in sorted_fields:
         chunk.append((fname, conf))
         if len(chunk) == _MAX_FIELDS_PER_NODE:
             names = [f for f, _ in chunk]
             mean_conf = sum(c for _, c in chunk) / len(chunk)
             any_derived = any(_is_derived_target(n, cfg) for n in names)
-            nodes.append(
-                CompositeNode.build(names, pass_num, mean_conf, any_derived)
-            )
+            nodes.append(CompositeNode.build(names, pass_num, mean_conf, any_derived))
             chunk = []
 
     # Emit trailing chunk if large enough
@@ -159,18 +156,17 @@ def _build_nodes_from_cluster(
         names = [f for f, _ in chunk]
         mean_conf = sum(c for _, c in chunk) / len(chunk)
         any_derived = any(_is_derived_target(n, cfg) for n in names)
-        nodes.append(
-            CompositeNode.build(names, pass_num, mean_conf, any_derived)
-        )
+        nodes.append(CompositeNode.build(names, pass_num, mean_conf, any_derived))
     return nodes
 
 
 # ── Core synthesis ────────────────────────────────────────────────────────────
 
+
 def build_composite_nodes(
     convergence_state: ConvergenceState,
     cfg: ConvergenceConfig,
-) -> List[CompositeNode]:
+) -> list[CompositeNode]:
     """
     Main entry: walk all resolved fields in convergence_state, filter to
     high-confidence, cluster by pass, and produce CompositeNode objects.
@@ -178,9 +174,7 @@ def build_composite_nodes(
     if not cfg.synthesize_composites:
         return []
 
-    resolved: Dict[str, FieldResult] = (
-        getattr(convergence_state, "resolved_fields", {}) or {}
-    )
+    resolved: dict[str, FieldResult] = getattr(convergence_state, "resolved_fields", {}) or {}
     high_confidence = {
         fname: fresult
         for fname, fresult in resolved.items()
@@ -192,7 +186,7 @@ def build_composite_nodes(
         return []
 
     clusters = _cluster_fields_by_pass(high_confidence, cfg)
-    nodes: List[CompositeNode] = []
+    nodes: list[CompositeNode] = []
     for pass_num, fields in sorted(clusters.items()):
         nodes.extend(_build_nodes_from_cluster(pass_num, fields, cfg))
 
@@ -209,9 +203,10 @@ def build_composite_nodes(
 
 # ── EnrichResponse attachment ─────────────────────────────────────────────────
 
+
 def attach_composites_to_feature_vector(
     response: EnrichResponse,
-    nodes: List[CompositeNode],
+    nodes: list[CompositeNode],
 ) -> EnrichResponse:
     """
     Return a new EnrichResponse with composite nodes embedded in feature_vector.
@@ -232,6 +227,7 @@ def attach_composites_to_feature_vector(
 
 
 # ── High-level orchestration entry point ─────────────────────────────────────
+
 
 def synthesize_and_attach(
     convergence_state: ConvergenceState,

@@ -22,13 +22,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class FieldDifficulty(str, Enum):
+class FieldDifficulty(StrEnum):
     TRIVIAL = "trivial"
     PUBLIC = "public"
     FINDABLE = "findable"
@@ -255,12 +255,10 @@ def _normalise(name: str) -> str:
 
 def _classify_by_metadata_signals(meta: FieldMeta) -> FieldDifficulty | None:
     """Return INFERRABLE if metadata signals indicate derivation, else None."""
-    if meta.managed_by:
-        if f"managed_by:{meta.managed_by.lower()}" in INFERRABLE_SIGNALS:
-            return FieldDifficulty.INFERRABLE
-    if meta.source:
-        if f"source:{meta.source.lower()}" in INFERRABLE_SIGNALS:
-            return FieldDifficulty.INFERRABLE
+    if meta.managed_by and f"managed_by:{meta.managed_by.lower()}" in INFERRABLE_SIGNALS:
+        return FieldDifficulty.INFERRABLE
+    if meta.source and f"source:{meta.source.lower()}" in INFERRABLE_SIGNALS:
+        return FieldDifficulty.INFERRABLE
     if meta.derived_from:
         return FieldDifficulty.INFERRABLE
     return None
@@ -268,9 +266,8 @@ def _classify_by_metadata_signals(meta: FieldMeta) -> FieldDifficulty | None:
 
 def _classify_by_name_patterns(norm: str, is_gate: bool) -> FieldDifficulty | None:
     """Match field name against universal difficulty name patterns, return match or None."""
-    if any(p in norm for p in INFERRABLE_NAME_PATTERNS):
-        if not is_gate:
-            return FieldDifficulty.INFERRABLE
+    if any(p in norm for p in INFERRABLE_NAME_PATTERNS) and not is_gate:
+        return FieldDifficulty.INFERRABLE
     if any(p in norm for p in TRIVIAL_NAME_PATTERNS):
         return FieldDifficulty.TRIVIAL
     if any(p in norm for p in PUBLIC_NAME_PATTERNS):

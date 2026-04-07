@@ -215,7 +215,7 @@ class InferenceBridge:
         """Sort rules so producers run before consumers."""
         produces_map: dict[str, str] = {}
         for r in rules:
-            for f in r.get("produces", {}).keys():
+            for f in r.get("produces", {}):
                 produces_map[f] = r.get("name", "")
 
         sorted_rules: list[dict] = []

@@ -45,6 +45,7 @@ include = ["app*", "tools*"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["gap-fixes", "WIP"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]

@@ -3,15 +3,20 @@ Contract File Existence Tests
 Source: Phase 2 file tree — every generated docs/contracts/ file must exist.
 Markers: unit
 """
+
 from __future__ import annotations
-from pathlib import Path
+
 import pytest
+
 from tests.contracts.conftest_contracts import CONTRACTS_DIR
 
 EXPECTED_FILES = [
-    "README.md", "VERSIONING.md",
-    "api/README.md", "api/openapi.yaml",
-    "api/schemas/shared-models.yaml", "api/schemas/error-responses.yaml",
+    "README.md",
+    "VERSIONING.md",
+    "api/README.md",
+    "api/openapi.yaml",
+    "api/schemas/shared-models.yaml",
+    "api/schemas/error-responses.yaml",
     "agents/README.md",
     "agents/tool-schemas/_index.yaml",
     "agents/tool-schemas/enrich-contact.schema.json",
@@ -30,18 +35,27 @@ EXPECTED_FILES = [
     "data/models/schema-proposal.schema.json",
     "data/graph-schema.yaml",
     "data/migrations/migration-policy.md",
-    "events/README.md", "events/asyncapi.yaml",
+    "events/README.md",
+    "events/asyncapi.yaml",
     "events/channels/_index.yaml",
     "events/channels/enrichment-events.yaml",
     "events/schemas/event-envelope.yaml",
-    "config/README.md", "config/env-contract.yaml",
-    "dependencies/README.md", "dependencies/_index.yaml",
-    "dependencies/perplexity-sonar.yaml", "dependencies/openai.yaml",
-    "dependencies/anthropic.yaml", "dependencies/clearbit.yaml",
-    "dependencies/zoominfo.yaml", "dependencies/apollo.yaml",
-    "dependencies/hunter.yaml", "dependencies/odoo-crm.yaml",
-    "dependencies/salesforce-crm.yaml", "dependencies/hubspot-crm.yaml",
-    "dependencies/redis.yaml", "dependencies/postgresql.yaml",
+    "config/README.md",
+    "config/env-contract.yaml",
+    "dependencies/README.md",
+    "dependencies/_index.yaml",
+    "dependencies/perplexity-sonar.yaml",
+    "dependencies/openai.yaml",
+    "dependencies/anthropic.yaml",
+    "dependencies/clearbit.yaml",
+    "dependencies/zoominfo.yaml",
+    "dependencies/apollo.yaml",
+    "dependencies/hunter.yaml",
+    "dependencies/odoo-crm.yaml",
+    "dependencies/salesforce-crm.yaml",
+    "dependencies/hubspot-crm.yaml",
+    "dependencies/redis.yaml",
+    "dependencies/postgresql.yaml",
     "dependencies/neo4j.yaml",
     "_templates/api-endpoint.template.yaml",
     "_templates/tool-schema.template.json",

@@ -194,7 +194,8 @@ def build_graph_sync_packet(
     Previously GraphSyncClient sent a bare dict with no hashes.
     Use this factory everywhere instead.
     """
-    import uuid, time
+    import time
+    import uuid
 
     content_payload: dict[str, Any] = {
         "entity_type": entity_type,
@@ -242,7 +243,8 @@ def build_schema_proposal_packet(
     Gap-4 + Gap-10 fix: Build a valid schema_proposal PacketEnvelope.
     Previously SchemaProposal was computed but never emitted.
     """
-    import uuid, time
+    import time
+    import uuid
 
     content_payload: dict[str, Any] = {
         "proposed_fields": proposed_fields,

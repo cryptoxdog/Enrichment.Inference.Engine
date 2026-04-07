@@ -5,6 +5,7 @@ as known_fields context so convergence_controller uses them in Pass N+1.
 Attach to GDSScheduler post-job completion hook for "louvain" jobs.
 """
 from __future__ import annotations
+
 import logging
 from typing import Any
 

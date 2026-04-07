@@ -98,9 +98,7 @@ class MockEIEService:
                 "attempted_fields": list(enriched_data.keys()),
                 "written_fields": [],
                 "skipped_fields": list(enriched_data.keys()),
-                "skip_reasons": {
-                    key: "crm_unavailable" for key in enriched_data.keys()
-                },
+                "skip_reasons": dict.fromkeys(enriched_data.keys(), "crm_unavailable"),
             }
         return {
             "status": "completed",

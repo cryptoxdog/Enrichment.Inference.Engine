@@ -1,7 +1,10 @@
 """Gap-3 tests: inference function execution."""
 import pytest
+
 from engine.inference_rule_registry import (
-    execute_rule, list_registered_rules, InferenceContext,
+    InferenceContext,
+    execute_rule,
+    list_registered_rules,
 )
 
 CTX = InferenceContext(tenant_id="t1", domain_id="plastics", pass_number=1)

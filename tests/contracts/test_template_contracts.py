@@ -14,7 +14,6 @@ Markers: unit
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 import yaml
@@ -22,16 +21,16 @@ import yaml
 from tests.contracts.conftest_contracts import TEMPLATES_DIR
 
 TEMPLATE_FILES = {
-    "api-endpoint.template.yaml":    "yaml",
-    "tool-schema.template.json":     "json",
+    "api-endpoint.template.yaml": "yaml",
+    "tool-schema.template.json": "json",
     "prompt-contract.template.yaml": "yaml",
-    "event-channel.template.yaml":   "yaml",
-    "data-model.template.json":      "json",
+    "event-channel.template.yaml": "yaml",
+    "data-model.template.json": "json",
 }
 
 TEMPLATE_STRUCTURAL_REQUIREMENTS = {
     "api-endpoint.template.yaml": ["method", "path", "summary", "description"],
-    "tool-schema.template.json":  ["title", "description", "properties", "required"],
+    "tool-schema.template.json": ["title", "description", "properties", "required"],
     "prompt-contract.template.yaml": ["prompt_name", "role", "template"],
     "event-channel.template.yaml": ["event_name", "channel"],
     "data-model.template.json": ["title", "description", "properties", "required"],
@@ -74,9 +73,7 @@ def test_template_contains_required_structure(filename: str, required_fields: li
         pytest.skip(f"Missing: {filename}")
     content = path.read_text().lower()
     for field in required_fields:
-        assert field.lower() in content, (
-            f"{filename}: missing required element '{field}'"
-        )
+        assert field.lower() in content, f"{filename}: missing required element '{field}'"
 
 
 @pytest.mark.unit
@@ -99,8 +96,10 @@ def test_yaml_template_has_version_block(filename: str) -> None:
         pytest.skip(f"Missing: {filename}")
     content = path.read_text()
     has_version = (
-        "Version:" in content or "version:" in content.lower()
-        or "# Contract:" in content or "# ═══" in content
+        "Version:" in content
+        or "version:" in content.lower()
+        or "# Contract:" in content
+        or "# ═══" in content
     )
     assert has_version, f"{filename}: missing version block header (Phase 3.1)"
 

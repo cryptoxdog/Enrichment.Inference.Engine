@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -461,7 +462,7 @@ def _register_condition_rule(rule_name: str, spec: dict[str, Any]) -> None:
             confidence=confidence,
             rule_name=rule_name,
             provenance="domain_kb",
-            rationale=f"condition rule from KB",
+            rationale="condition rule from KB",
         )
 
     _RULE_REGISTRY[rule_name] = _rule

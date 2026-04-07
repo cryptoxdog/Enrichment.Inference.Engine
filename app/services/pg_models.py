@@ -15,6 +15,7 @@ All tables use:
   - Composite indexes for tenant-scoped queries
   - server_default=func.now() for created_at/updated_at
 """
+
 from __future__ import annotations
 
 import uuid
@@ -49,9 +50,7 @@ class EnrichmentResult(Base):
 
     __tablename__ = "enrichment_results"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     entity_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
     object_type: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -62,12 +61,8 @@ class EnrichmentResult(Base):
     fields: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     confidence: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
     uncertainty_score: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
-    quality_tier: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="unknown"
-    )
-    state: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="completed", index=True
-    )
+    quality_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="completed", index=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     tokens_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     processing_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -117,17 +112,13 @@ class ConvergenceRun(Base):
 
     __tablename__ = "convergence_runs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     entity_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
     domain: Mapped[str] = mapped_column(String(128), nullable=False)
     domain_yaml_version_before: Mapped[str | None] = mapped_column(String(64), nullable=True)
     domain_yaml_version_after: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    state: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="running", index=True
-    )
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
     convergence_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
     current_pass: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_passes: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
@@ -147,9 +138,7 @@ class ConvergenceRun(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     final_result: Mapped[EnrichmentResult | None] = relationship(
         "EnrichmentResult",
@@ -169,9 +158,7 @@ class FieldConfidenceHistory(Base):
 
     __tablename__ = "field_confidence_history"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     enrichment_result_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("enrichment_results.id", ondelete="CASCADE"),
@@ -205,9 +192,7 @@ class SchemaProposalRecord(Base):
 
     __tablename__ = "schema_proposals"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     domain: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     batch_run_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
@@ -225,16 +210,17 @@ class SchemaProposalRecord(Base):
         String(32), nullable=False, default="pending", index=True
     )
     reviewed_by: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    reviewed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
         UniqueConstraint(
-            "tenant_id", "domain", "batch_run_id", "field_name",
+            "tenant_id",
+            "domain",
+            "batch_run_id",
+            "field_name",
             name="uq_schema_proposal_batch_field",
         ),
         Index("ix_schema_proposals_domain_status", "domain", "approval_status"),

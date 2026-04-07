@@ -20,29 +20,30 @@ L9 Compliance:
   - All outputs are new frozen objects
   - Zero stubs; all imports resolve
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
+from app.models.common import EntityRef
 from app.models.enrichment import EnrichRequest
 from app.models.events import OutcomeEvent, OutcomeVerdict
-from app.models.common import EntityRef
 
 logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-_ELEVATED_CONSENSUS_THRESHOLD: float = 0.80   # vs. standard 0.65
-_ELEVATED_MAX_VARIATIONS: int = 4             # vs. standard 2–3
+_ELEVATED_CONSENSUS_THRESHOLD: float = 0.80  # vs. standard 0.65
+_ELEVATED_MAX_VARIATIONS: int = 4  # vs. standard 2–3
 _CORRECTIVE_PASS_LABEL: str = "outcome_corrective"
 
 
 # ── OutcomeEvent parsing ──────────────────────────────────────────────────────
 
-def parse_outcome_payload(payload: Dict[str, Any]) -> OutcomeEvent:
+
+def parse_outcome_payload(payload: dict[str, Any]) -> OutcomeEvent:
     """
     Boundary validator: converts the raw dict from handle_outcome into a typed
     OutcomeEvent.  Raises ValueError for malformed payloads so the handler can
@@ -54,18 +55,17 @@ def parse_outcome_payload(payload: Dict[str, Any]) -> OutcomeEvent:
     required_keys = {"entity_id", "run_id", "verdict", "failed_gates"}
     missing = required_keys - set(payload.keys())
     if missing:
-        raise ValueError(
-            f"OutcomeEvent payload missing required keys: {missing!r}"
-        )
+        raise ValueError(f"OutcomeEvent payload missing required keys: {missing!r}")
 
     verdict_raw = payload["verdict"]
     try:
         verdict = OutcomeVerdict(verdict_raw)
-    except ValueError:
-        raise ValueError(
+    except ValueError as err:
+        msg = (
             f"Unknown OutcomeVerdict value: {verdict_raw!r}. "
             f"Valid values: {[v.value for v in OutcomeVerdict]}"
         )
+        raise ValueError(msg) from err
 
     return OutcomeEvent(
         entity_id=str(payload["entity_id"]),
@@ -80,6 +80,7 @@ def parse_outcome_payload(payload: Dict[str, Any]) -> OutcomeEvent:
 
 # ── Idempotency ───────────────────────────────────────────────────────────────
 
+
 def _build_idempotency_key(entity_id: str, run_id: str) -> str:
     """
     Deterministic idempotency key scoped to (entity_id, run_id).
@@ -90,6 +91,7 @@ def _build_idempotency_key(entity_id: str, run_id: str) -> str:
 
 
 # ── Corrective request construction ──────────────────────────────────────────
+
 
 def _select_target_fields(event: OutcomeEvent) -> list[str]:
     """
@@ -122,7 +124,7 @@ def _select_target_fields(event: OutcomeEvent) -> list[str]:
     return targets
 
 
-def build_corrective_request(event: OutcomeEvent) -> Optional[EnrichRequest]:
+def build_corrective_request(event: OutcomeEvent) -> EnrichRequest | None:
     """
     Convert a GRAPH_REJECTED OutcomeEvent into a targeted EnrichRequest.
     Returns None for accepted / partial verdicts.

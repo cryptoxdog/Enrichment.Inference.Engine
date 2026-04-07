@@ -13,11 +13,9 @@ Markers: unit (pure Python, no network)
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from tests.contracts.conftest_contracts import AGENTS_DIR, load_yaml, load_json
+from tests.contracts.conftest_contracts import AGENTS_DIR, load_json
 
 # ---------------------------------------------------------------------------
 # Import MCP server — fail early if not importable
@@ -25,12 +23,11 @@ from tests.contracts.conftest_contracts import AGENTS_DIR, load_yaml, load_json
 
 try:
     from app.agents.mcp_server import (
-        TOOL_REGISTRY,
         RESOURCE_REGISTRY,
+        TOOL_REGISTRY,
         MCPServer,
-        MCPTool,
-        MCPToolParam,
     )
+
     MCP_AVAILABLE = True
 except ImportError:
     MCP_AVAILABLE = False
@@ -45,9 +42,7 @@ mcp_required = pytest.mark.skipif(
 # TOOL_REGISTRY live checks
 # ---------------------------------------------------------------------------
 
-CONTRACTED_TOOLS = {
-    "enrich_contact", "lead_router", "deal_risk", "data_hygiene", "writeback"
-}
+CONTRACTED_TOOLS = {"enrich_contact", "lead_router", "deal_risk", "data_hygiene", "writeback"}
 
 
 @mcp_required

@@ -22,14 +22,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUM: ${{ github.event.pull_request.number }}
         run: |
-          MESSAGE="🐰 CodeRabbit review ready
-
-Repo: ${REPO}
-PR #${PR_NUM}: ${PR_TITLE}
-${PR_URL}
-
-Implement fixes, verify CI, merge."
-
+          MESSAGE=$'🐰 CodeRabbit review ready\n\nRepo: '"${REPO}"$'\nPR #'"${PR_NUM}"$': '"${PR_TITLE}"$'\n'"${PR_URL}"$'\n\nImplement fixes, verify CI, merge.'
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=${MESSAGE}" \

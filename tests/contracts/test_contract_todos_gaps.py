@@ -34,10 +34,14 @@ from pathlib import Path
 import pytest
 
 from tests.contracts.conftest_contracts import (
-    CONTRACTS_DIR, API_DIR, AGENTS_DIR, DATA_DIR, EVENTS_DIR,
-    load_yaml, load_json,
+    AGENTS_DIR,
+    API_DIR,
+    CONTRACTS_DIR,
+    DATA_DIR,
+    EVENTS_DIR,
+    load_json,
+    load_yaml,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper: load contract only if file exists, skip otherwise
@@ -118,11 +122,7 @@ def test_todo_02_health_endpoint_response_schema_complete() -> None:
 
     get_op = paths["/api/v1/health"].get("get", {})
     response_200 = get_op.get("responses", {}).get("200", {})
-    schema = (
-        response_200.get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-    )
+    schema = response_200.get("content", {}).get("application/json", {}).get("schema", {})
 
     if not schema:
         pytest.xfail(
@@ -331,11 +331,7 @@ def test_todo_07_batch_enrich_response_schema_complete() -> None:
 
     post_op = paths["/api/v1/enrich/batch"].get("post", {})
     response_200 = post_op.get("responses", {}).get("200", {})
-    schema = (
-        response_200.get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-    )
+    schema = response_200.get("content", {}).get("application/json", {}).get("schema", {})
 
     if not schema:
         pytest.xfail(
@@ -465,11 +461,7 @@ def test_todo_10_converge_run_id_response_schema() -> None:
 
     get_op = paths[path_key].get("get", {})
     response_200 = get_op.get("responses", {}).get("200", {})
-    schema = (
-        response_200.get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-    )
+    schema = response_200.get("content", {}).get("application/json", {}).get("schema", {})
 
     if not schema:
         pytest.xfail(

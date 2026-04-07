@@ -119,25 +119,27 @@ async def test_handle_enrich_calls_persist_on_completed():
     async def mock_persist_and_sync(tenant, payload, result, object_type):
         persist_calls.append({"tenant": tenant, "payload": payload, "result": result})
 
-    with patch(
-        "app.engines.handlers.enrich_entity",
-        new_callable=AsyncMock,
-        return_value=mock_response,
-    ):
-        with patch(
+    with (
+        patch(
+            "app.engines.handlers.enrich_entity",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ),
+        patch(
             "app.engines.handlers._persist_and_sync",
             side_effect=mock_persist_and_sync,
-        ):
-            from app.engines.handlers import handle_enrich
+        ),
+    ):
+        from app.engines.handlers import handle_enrich
 
-            result = await handle_enrich(
-                "tenant-acme",
-                {
-                    "entity": {"id": "ent-003", "Name": "Acme Plastics"},
-                    "object_type": "Account",
-                    "objective": "Enrich plastics supplier",
-                },
-            )
+        result = await handle_enrich(
+            "tenant-acme",
+            {
+                "entity": {"id": "ent-003", "Name": "Acme Plastics"},
+                "object_type": "Account",
+                "objective": "Enrich plastics supplier",
+            },
+        )
 
     assert result["state"] == "completed"
     assert len(persist_calls) == 1
@@ -162,24 +164,26 @@ async def test_handle_enrich_skips_persist_on_failed():
     async def mock_persist_and_sync(tenant, payload, result, object_type):
         persist_calls.append(True)
 
-    with patch(
-        "app.engines.handlers.enrich_entity",
-        new_callable=AsyncMock,
-        return_value=mock_response,
-    ):
-        with patch(
+    with (
+        patch(
+            "app.engines.handlers.enrich_entity",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ),
+        patch(
             "app.engines.handlers._persist_and_sync",
             side_effect=mock_persist_and_sync,
-        ):
-            from app.engines.handlers import handle_enrich
+        ),
+    ):
+        from app.engines.handlers import handle_enrich
 
-            await handle_enrich(
-                "tenant-acme",
-                {
-                    "entity": {"id": "ent-fail"},
-                    "object_type": "Account",
-                    "objective": "test",
-                },
-            )
+        await handle_enrich(
+            "tenant-acme",
+            {
+                "entity": {"id": "ent-fail"},
+                "object_type": "Account",
+                "objective": "test",
+            },
+        )
 
     assert len(persist_calls) == 0, "persist_and_sync must not fire on failed enrichment"

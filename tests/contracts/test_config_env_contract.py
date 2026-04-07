@@ -3,48 +3,49 @@ Config / Env Contract Tests
 Source: app/core/config.py Settings, .env.example
 Markers: unit
 """
+
 from __future__ import annotations
-from pathlib import Path
+
 import pytest
-import yaml
+
 from tests.contracts.conftest_contracts import CONFIG_DIR, REPO_ROOT, load_yaml
 
 REQUIRED_ENV_VARS = {
     "ENRICHMENT_ENGINE_API_KEY": {"type": "secret", "required": True, "sensitive": True},
-    "ENRICHMENT_ENGINE_MODE":    {"type": "string", "required": False, "default": "enrichment"},
-    "HOST":       {"type": "string", "required": False, "default": "0.0.0.0"},
-    "PORT":       {"type": "integer", "required": False, "default": "8000"},
-    "LOG_LEVEL":  {"type": "string", "required": False, "default": "INFO"},
+    "ENRICHMENT_ENGINE_MODE": {"type": "string", "required": False, "default": "enrichment"},
+    "HOST": {"type": "string", "required": False, "default": "0.0.0.0"},
+    "PORT": {"type": "integer", "required": False, "default": "8000"},
+    "LOG_LEVEL": {"type": "string", "required": False, "default": "INFO"},
     "PERPLEXITY_API_KEY": {"type": "secret", "required": True, "sensitive": True},
-    "CLEARBIT_API_KEY":   {"type": "secret", "required": False, "sensitive": True},
-    "ZOOMINFO_API_KEY":   {"type": "secret", "required": False, "sensitive": True},
-    "APOLLO_API_KEY":     {"type": "secret", "required": False, "sensitive": True},
-    "HUNTER_API_KEY":     {"type": "secret", "required": False, "sensitive": True},
-    "OPENAI_API_KEY":     {"type": "secret", "required": False, "sensitive": True},
-    "ANTHROPIC_API_KEY":  {"type": "secret", "required": False, "sensitive": True},
-    "REDIS_URL":          {"type": "url", "required": True, "sensitive": False},
-    "NEO4J_URI":          {"type": "url", "required": False, "sensitive": False},
-    "NEO4J_USERNAME":     {"type": "string", "required": False, "sensitive": False},
-    "NEO4J_PASSWORD":     {"type": "secret", "required": False, "sensitive": True},
-    "KB_FILES_PATH":      {"type": "string", "required": False},
+    "CLEARBIT_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "ZOOMINFO_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "APOLLO_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "HUNTER_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "OPENAI_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "ANTHROPIC_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "REDIS_URL": {"type": "url", "required": True, "sensitive": False},
+    "NEO4J_URI": {"type": "url", "required": False, "sensitive": False},
+    "NEO4J_USERNAME": {"type": "string", "required": False, "sensitive": False},
+    "NEO4J_PASSWORD": {"type": "secret", "required": False, "sensitive": True},
+    "KB_FILES_PATH": {"type": "string", "required": False},
     "CB_FAILURE_THRESHOLD": {"type": "integer", "required": False, "default": "5"},
-    "CB_COOLDOWN_SECONDS":  {"type": "integer", "required": False, "default": "60"},
-    "CONSENSUS_THRESHOLD":  {"type": "float", "required": False, "default": "0.7"},
-    "ODOO_URL":             {"type": "url", "required": False, "sensitive": False},
-    "ODOO_DB":              {"type": "string", "required": False},
-    "ODOO_USERNAME":        {"type": "string", "required": False},
-    "ODOO_API_KEY":         {"type": "secret", "required": False, "sensitive": True},
-    "SALESFORCE_CLIENT_ID":     {"type": "secret", "required": False, "sensitive": True},
+    "CB_COOLDOWN_SECONDS": {"type": "integer", "required": False, "default": "60"},
+    "CONSENSUS_THRESHOLD": {"type": "float", "required": False, "default": "0.7"},
+    "ODOO_URL": {"type": "url", "required": False, "sensitive": False},
+    "ODOO_DB": {"type": "string", "required": False},
+    "ODOO_USERNAME": {"type": "string", "required": False},
+    "ODOO_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "SALESFORCE_CLIENT_ID": {"type": "secret", "required": False, "sensitive": True},
     "SALESFORCE_CLIENT_SECRET": {"type": "secret", "required": False, "sensitive": True},
-    "SALESFORCE_USERNAME":      {"type": "string", "required": False},
-    "SALESFORCE_PASSWORD":      {"type": "secret", "required": False, "sensitive": True},
-    "SALESFORCE_DOMAIN":        {"type": "string", "required": False},
-    "HUBSPOT_ACCESS_TOKEN":     {"type": "secret", "required": False, "sensitive": True},
-    "DATABASE_URL":             {"type": "url", "required": False, "sensitive": False},
-    "ASYNC_DATABASE_URL":       {"type": "url", "required": False, "sensitive": False},
-    "DB_POOL_MIN_SIZE":         {"type": "integer", "required": False, "default": "2"},
-    "DB_POOL_MAX_SIZE":         {"type": "integer", "required": False, "default": "10"},
-    "ENABLE_GRAPH_MEMORY":      {"type": "boolean", "required": False, "default": "false"},
+    "SALESFORCE_USERNAME": {"type": "string", "required": False},
+    "SALESFORCE_PASSWORD": {"type": "secret", "required": False, "sensitive": True},
+    "SALESFORCE_DOMAIN": {"type": "string", "required": False},
+    "HUBSPOT_ACCESS_TOKEN": {"type": "secret", "required": False, "sensitive": True},
+    "DATABASE_URL": {"type": "url", "required": False, "sensitive": False},
+    "ASYNC_DATABASE_URL": {"type": "url", "required": False, "sensitive": False},
+    "DB_POOL_MIN_SIZE": {"type": "integer", "required": False, "default": "2"},
+    "DB_POOL_MAX_SIZE": {"type": "integer", "required": False, "default": "10"},
+    "ENABLE_GRAPH_MEMORY": {"type": "boolean", "required": False, "default": "false"},
 }
 
 
@@ -99,8 +100,11 @@ def test_env_contract_has_examples(env_contract: dict) -> None:
 
 
 CRITICAL_REQUIRED_VARS = [
-    "ENRICHMENT_ENGINE_API_KEY", "PERPLEXITY_API_KEY", "REDIS_URL",
+    "ENRICHMENT_ENGINE_API_KEY",
+    "PERPLEXITY_API_KEY",
+    "REDIS_URL",
 ]
+
 
 @pytest.mark.unit
 @pytest.mark.parametrize("var_name", CRITICAL_REQUIRED_VARS)
@@ -109,7 +113,7 @@ def test_critical_vars_marked_required(var_name: str, env_contract: dict) -> Non
     if var_name not in s:
         pytest.skip(f"{var_name} not in contract")
     idx = s.find(var_name)
-    surrounding = s[max(0, idx-20):idx+200]
+    surrounding = s[max(0, idx - 20) : idx + 200]
     assert "required" in surrounding.lower() and (
         "true" in surrounding.lower() or ": true" in surrounding.lower()
     ), f"{var_name}: must be marked required: true in env-contract.yaml"

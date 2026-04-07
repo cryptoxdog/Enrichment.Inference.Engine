@@ -64,7 +64,7 @@ def _evaluate_grade_condition(cond: GradeCondition, entity: dict[str, Any]) -> b
             return False
     if cond.values is not None:
         if isinstance(val, (list, tuple, set)):
-            return bool(set(str(v).lower() for v in val) & set(str(v).lower() for v in cond.values))
+            return bool({str(v).lower() for v in val} & {str(v).lower() for v in cond.values})
         return str(val).lower() in {str(v).lower() for v in cond.values}
     if cond.value is not None:
         return str(val).strip().lower() == str(cond.value).strip().lower()
@@ -113,9 +113,8 @@ def classify(
             confidence=round(score, 4),
         )
 
-        if score >= threshold:
-            if best is None or score > best.match_score:
-                best = candidate
+        if score >= threshold and (best is None or score > best.match_score):
+            best = candidate
         if closest is None or score > closest.match_score:
             closest = candidate
 

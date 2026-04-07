@@ -19,13 +19,12 @@ Markers: unit
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
-
 import pytest
 
 from tests.contracts.conftest_contracts import (
-    CONTRACTS_DIR, API_DIR, load_yaml,
+    API_DIR,
+    CONTRACTS_DIR,
+    load_yaml,
 )
 
 # ---------------------------------------------------------------------------
@@ -49,9 +48,7 @@ def test_shared_models_has_pagination_envelope(shared_models: dict) -> None:
     """
     models_str = str(shared_models).lower()
     has_pagination = (
-        "pagination" in models_str
-        or "paginatedresponse" in models_str
-        or "total" in models_str
+        "pagination" in models_str or "paginatedresponse" in models_str or "total" in models_str
     )
     assert has_pagination, (
         "shared-models.yaml must define a pagination envelope. "
@@ -64,9 +61,7 @@ def test_shared_models_has_error_envelope(shared_models: dict) -> None:
     """Phase 4.1: shared-models.yaml must define the common error format."""
     models_str = str(shared_models).lower()
     has_error = "error" in models_str
-    assert has_error, (
-        "shared-models.yaml must define an error type. Phase 4.1."
-    )
+    assert has_error, "shared-models.yaml must define an error type. Phase 4.1."
 
 
 @pytest.mark.unit
@@ -74,9 +69,7 @@ def test_shared_models_has_timestamp_format(shared_models: dict) -> None:
     """Phase 4.1: timestamp format must be standardized."""
     models_str = str(shared_models).lower()
     has_timestamp = "timestamp" in models_str or "date-time" in models_str
-    assert has_timestamp, (
-        "shared-models.yaml must document timestamp format. Phase 4.1."
-    )
+    assert has_timestamp, "shared-models.yaml must document timestamp format. Phase 4.1."
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +189,7 @@ def test_versioning_md_defines_semver_policy() -> None:
 
     content = path.read_text().lower()
     has_semver = (
-        "semver" in content
-        or "semantic" in content
-        or "major" in content and "minor" in content
+        "semver" in content or "semantic" in content or "major" in content and "minor" in content
     )
     assert has_semver, (
         "VERSIONING.md must define semantic versioning policy for contract evolution."
@@ -214,9 +205,7 @@ def test_versioning_md_defines_changelog_format() -> None:
 
     content = path.read_text().lower()
     has_changelog = "changelog" in content or "change" in content
-    assert has_changelog, (
-        "VERSIONING.md must define changelog format. Phase 2 requirement."
-    )
+    assert has_changelog, "VERSIONING.md must define changelog format. Phase 2 requirement."
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +227,5 @@ def test_openapi_uses_ref_for_error_responses() -> None:
     # Should contain at least one $ref to a shared error response
     ref_count = content.count("$ref")
     assert ref_count >= 1, (
-        "openapi.yaml must use $ref for shared schemas. "
-        "Phase 4.1 — DRY: never duplicate schemas."
+        "openapi.yaml must use $ref for shared schemas. Phase 4.1 — DRY: never duplicate schemas."
     )

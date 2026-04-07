@@ -1,6 +1,7 @@
 """Gap-5 tests: PostgreSQL audit persistence."""
-import asyncio, pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 import shared.audit_persistence as ap
 
 

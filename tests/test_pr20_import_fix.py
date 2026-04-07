@@ -17,7 +17,7 @@ import pathlib
 
 def test_rule_loader_import_resolves():
     """PR#20: rank_fields_by_unlock must be importable from the corrected path."""
-    from app.engines.inference.rule_loader import rank_fields_by_unlock, RuleRegistry  # noqa: F401
+    from app.engines.inference.rule_loader import RuleRegistry, rank_fields_by_unlock  # noqa: F401
 
     assert callable(rank_fields_by_unlock)
     assert RuleRegistry is not None
@@ -25,7 +25,7 @@ def test_rule_loader_import_resolves():
 
 def test_rank_fields_by_unlock_returns_list():
     """rank_fields_by_unlock must return a list given a registry and entity dict."""
-    from app.engines.inference.rule_loader import rank_fields_by_unlock, RuleRegistry
+    from app.engines.inference.rule_loader import RuleRegistry, rank_fields_by_unlock
 
     registry = RuleRegistry(rules=[])
     result = rank_fields_by_unlock(
@@ -53,11 +53,11 @@ def test_meta_prompt_planner_no_stale_import():
     path = pathlib.Path("app/engines/meta_prompt_planner.py")
     if not path.exists():
         import pytest
+
         pytest.skip("meta_prompt_planner.py not found in cwd")
     lines = _find_stale_import(path.read_text(), "inference_rule_loader")
     assert lines == [], (
-        f"Stale import 'inference_rule_loader' found in meta_prompt_planner.py "
-        f"at lines: {lines}"
+        f"Stale import 'inference_rule_loader' found in meta_prompt_planner.py at lines: {lines}"
     )
 
 
@@ -66,6 +66,7 @@ def test_inference_unlock_scorer_no_stale_import():
     path = pathlib.Path("app/engines/inference_unlock_scorer.py")
     if not path.exists():
         import pytest
+
         pytest.skip("inference_unlock_scorer.py not found in cwd")
     lines = _find_stale_import(path.read_text(), "inference_rule_loader")
     assert lines == [], (
@@ -91,6 +92,4 @@ def test_no_module_level_import_of_stale_path_in_pkg():
         if "inference_rule_loader" in src:
             offenders.append(str(py_file))
 
-    assert offenders == [], (
-        f"Files still reference stale 'inference_rule_loader': {offenders}"
-    )
+    assert offenders == [], f"Files still reference stale 'inference_rule_loader': {offenders}"

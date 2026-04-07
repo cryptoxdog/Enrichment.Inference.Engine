@@ -1,10 +1,11 @@
 """Gap-1 tests: PacketEnvelope strict enforcement."""
 import pytest
+
 from engine.contract_enforcement import (
     ContractViolationError,
-    enforce_packet_envelope,
     build_graph_sync_packet,
     build_schema_proposal_packet,
+    enforce_packet_envelope,
 )
 
 
