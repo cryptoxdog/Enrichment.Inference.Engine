@@ -68,7 +68,8 @@ def test_event_envelope_exists_and_has_required_fields() -> None:
         pytest.skip("event-envelope.yaml missing")
     schema = load_yaml(path)
     s = str(schema)
-    for field in ["event_id", "event_type", "timestamp", "payload", "tenant"]:
+    # Fields from actual event-envelope.yaml (redis_streams_wire_format)
+    for field in ["event_type", "entity_id", "tenant_id", "correlation_id", "occurred_at", "payload"]:
         assert field in s, f"event-envelope.yaml missing field: {field}"
 
 
