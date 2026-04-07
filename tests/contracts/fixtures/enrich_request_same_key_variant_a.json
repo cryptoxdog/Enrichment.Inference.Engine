@@ -1,0 +1,16 @@
+{
+ "entity": {
+  "Name": "PlasticOS Supply Ltd",
+  "BillingCountry": "DE",
+  "Industry": "Plastics Recycling"
+ },
+ "object_type": "Account",
+ "objective": "Determine polymer type and material grade",
+ "schema": {
+  "polymer_type": "string",
+  "material_grade": "string"
+ },
+ "consensus_threshold": 0.75,
+ "max_variations": 3,
+ "idempotency_key": "idem-same-key-001"
+}
