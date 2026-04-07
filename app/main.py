@@ -1,11 +1,15 @@
 """
 Domain Enrichment API v2.3.0 — Constellation-wired
-====================================================
-POST /api/v1/enrich        — single entity (Salesforce + Odoo)
-POST /api/v1/enrich/batch  — batch up to 50 (Odoo nightly cron)
-GET  /api/v1/health        — health + KB + circuit breaker status
-POST /v1/execute           — L9 chassis PacketEnvelope (node-to-node)
-POST /v1/outcomes          — match outcome feedback loop
+===================================================
+POST /api/v1/enrich         single entity (Salesforce + Odoo)
+POST /api/v1/enrich/batch   batch up to 50
+GET  /api/v1/health         health + KB + circuit breaker
+POST /v1/execute            L9 chassis PacketEnvelope
+POST /v1/outcomes           match outcome feedback
+
+Integration fix applied (PR#22 merge pass):
+    GAP-3: converge.configure() called in lifespan with LoopStateStore,
+           ProfileRegistry, domain_specs, kb_resolver, and idem_store.
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ _idem: IdempotencyStore | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load KB + connect Redis. Shutdown: close connections."""
+    """Startup: load KB, connect Redis, init persistence, configure converge module."""
     global _kb, _idem
 
     settings = get_settings()
@@ -63,39 +67,83 @@ async def lifespan(app: FastAPI):
 
     register_orchestration(kb=_kb, idem_store=_idem)
 
-    # ── Persistence layer ──────────────────────────────────────────
+    # Persistence layer
     from .services import pg_store
     from .services.event_emitter import get_emitter
-    pg_store.init_engine(settings.database_url)
-    get_emitter(settings)  # warm singleton
-    logger.info("pg_store_initialized", database_url=settings.database_url[:40])
 
-    logger.info(
-        "api_started",
-        version="2.3.0",
-        kb_files=len(_kb.index.files_loaded),
-        kb_polymers=len(_kb.index.polymers),
-        constellation_handlers=["enrich", "enrichbatch", "converge", "discover", "enrich_and_sync"],
+    pg_store.init_engine(settings.database_url)
+    get_emitter(settings)
+    logger.info("pg_store_initialized")
+
+    # GAP-3: Converge endpoint dependency injection
+    from .api.v1 import converge as converge_module
+    from .services.enrichment_profile import ProfileRegistry
+
+    try:
+        from .engines.convergence.loop_state import RedisLoopStateStore
+
+        loop_state_store = (
+            RedisLoopStateStore(redis_client=_idem.client) if _idem else _fallback_loop_store()
+        )
+    except Exception:
+        loop_state_store = _fallback_loop_store()
+
+    profile_registry = ProfileRegistry()
+    converge_module.configure(
+        state_store=loop_state_store,
+        profile_registry=profile_registry,
+        domain_specs={},
+        kb_resolver=_kb,
+        idem_store=_idem,
     )
+    logger.info(
+        "converge_module_configured",
+        profiles=profile_registry.list_profiles(),
+        state_backend="redis" if _idem else "memory",
+    )
+
+    logger.info("api_started", version="2.3.0")
 
     yield
 
     if _idem:
         await _idem.close()
     from .services import pg_store as _pg
+
     await _pg.close_engine()
     _kb = None
     _idem = None
 
 
+def _fallback_loop_store():
+    """In-memory LoopStateStore used when Redis is unavailable."""
+    from .engines.convergence.loop_state import LoopState, LoopStateStore
+
+    class _InMemory(LoopStateStore):
+        __slots__ = ("_data",)
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._data: dict[str, LoopState] = {}
+
+        async def save(self, state: LoopState) -> None:
+            self._data[state.run_id] = state
+
+        async def load(self, run_id: str) -> LoopState | None:
+            return self._data.get(run_id)
+
+        async def list_active(self, domain: str | None = None) -> list[LoopState]:
+            return [s for s in self._data.values() if domain is None or s.domain == domain]
+
+    return _InMemory()
+
+
 app = FastAPI(
-    title="L9 ENRICH — Domain Enrichment API",
+    title="L9 ENRICH - Domain Enrichment API",
     version="2.3.0",
     description=(
         "Universal domain-aware entity enrichment. "
-        "Layer 2 of the L9 three-layer intelligence stack. "
-        "Serves Salesforce Apex callouts, Odoo async_executor, "
-        "and any L9 constellation node via PacketEnvelope."
+        "Layer 2 of the L9 three-layer intelligence stack."
     ),
     lifespan=lifespan,
 )
@@ -103,11 +151,10 @@ app = FastAPI(
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 setup_telemetry(app)
 
-# ── Routers ────────────────────────────────────────────────────────
-app.include_router(chassis_router)   # PacketEnvelope node-to-node
-app.include_router(converge_router)  # POST /api/v1/converge
-app.include_router(discover_router)  # POST /api/v1/discover, /api/v1/scan, /api/v1/proposals
-app.include_router(fields_router)    # GET  /api/v1/fields
+app.include_router(chassis_router)
+app.include_router(converge_router)
+app.include_router(discover_router)
+app.include_router(fields_router)
 
 
 @app.get("/api/v1/health", response_model=HealthCheckResponse)
@@ -148,11 +195,9 @@ async def enrich_batch_endpoint(
     start = time.monotonic()
     results = await enrich_batch(request.entities, settings, _kb, _idem)
     elapsed = int((time.monotonic() - start) * 1000)
-
     succeeded = sum(1 for r in results if r.state == "completed")
     failed = sum(1 for r in results if r.state == "failed")
     tokens = sum(r.tokens_used for r in results)
-
     return BatchEnrichResponse(
         results=results,
         total=len(results),

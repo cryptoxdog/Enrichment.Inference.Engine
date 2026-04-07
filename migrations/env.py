@@ -1,11 +1,21 @@
-"""Alembic async migration environment."""
+"""Alembic async migration environment.
+
+Integration fix applied (PR#22 merge pass):
+    GAP-10: PERPLEXITY_API_KEY and API_SECRET_KEY are set to placeholder
+            defaults before Settings() is instantiated so that alembic
+            upgrade head does not require runtime secrets in CI/CD.
+"""
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
+
+os.environ.setdefault("PERPLEXITY_API_KEY", "alembic-placeholder")
+os.environ.setdefault("API_SECRET_KEY", "alembic-placeholder")
 
 from app.core.config import get_settings
 from app.services.pg_models import Base
