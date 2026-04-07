@@ -30,6 +30,29 @@ variables:
     source: env
     example: sonar-reasoning
 
+  # ── Engine Core ─────────────────────────────────────────────
+  - name: ENRICHMENT_ENGINE_API_KEY
+    type: secret
+    required: true
+    default: null
+    description: |
+      API key for authenticating requests to the Enrichment Engine.
+      Generate: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    sensitive: true
+    source: env
+    validation: "min length 32"
+
+  - name: ENRICHMENT_ENGINE_MODE
+    type: string
+    required: false
+    default: enrichment
+    description: |
+      Operating mode of the engine. Controls behavior and feature flags.
+      Values: enrichment, inference, hybrid
+    sensitive: false
+    source: env
+    example: enrichment
+
   # ── Authentication ──────────────────────────────────────────
   - name: API_SECRET_KEY
     type: secret
@@ -343,4 +366,3 @@ required_for_salesforce_integration:
   - SALESFORCE_USERNAME
   - SALESFORCE_PASSWORD
   - SALESFORCE_SECURITY_TOKEN
-
