@@ -1,0 +1,34 @@
+{
+ "packet_id": "ingress-pkt-005",
+ "action": "writeback",
+ "payload": {
+  "crm_type": "salesforce",
+  "object_type": "Account",
+  "record_id": "001B000000LpT1FIAV",
+  "enriched_data": {
+   "recycling_grade": "HDPE",
+   "annual_tonnage": 50000
+  },
+  "confidence_threshold": 0.75
+ },
+ "tenant": "acme-corp",
+ "source_node": "score-engine",
+ "reply_to": "route-engine",
+ "lineage": {
+  "parent_ids": [
+   "root-pkt-000"
+  ],
+  "root_id": "root-pkt-000",
+  "generation": 2,
+  "derivation_type": "dispatch"
+ },
+ "governance": {
+  "intent": "writeback",
+  "audit_required": true,
+  "compliance_tags": [
+   "tenant:acme-corp",
+   "external-mutation"
+  ]
+ },
+ "delegation_chain": []
+}
