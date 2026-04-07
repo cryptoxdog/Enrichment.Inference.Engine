@@ -73,38 +73,69 @@ jobs:
           import subprocess
           import sys
 
-          base_ref = os.environ['BASE_REF']
-          head_ref = os.environ['HEAD_REF']
+          base_ref = os.environ["BASE_REF"]
+          head_ref = os.environ["HEAD_REF"]
 
           diff = subprocess.check_output(
-              ['git', 'diff', '--name-only', base_ref, head_ref],
+              ["git", "diff", "--name-only", base_ref, head_ref],
               text=True,
           ).splitlines()
 
           contract_bound_prefixes = (
-              'app/api/v1/',
-              'app/agents/',
-              'app/engines/',
-              'app/services/',
-              'chassis/',
+              "app/api/v1/",
+              "app/agents/",
+              "app/engines/",
+              "app/services/",
+              "chassis/",
           )
           contract_files_prefixes = (
-              'docs/contracts/',
-              'tests/contracts/',
+              "docs/contracts/",
+              "tests/contracts/",
+              "scripts/verify_node_constitution.py",
           )
 
-          contract_bound_files = [
+          touched_bound = [
               path for path in diff if path.startswith(contract_bound_prefixes)
           ]
-          companion_files = [
-              path for path in diff if path.startswith(contract_files_prefixes)
+          touched_contracts = [
+              path
+              for path in diff
+              if path.startswith(contract_files_prefixes)
           ]
 
-          if contract_bound_files and not companion_files:
-              print('[constitution-gate] contract-bound change without contract/test companion files')
-              for path in contract_bound_files:
-                  print(f' - {path}')
-              raise SystemExit(1)
+          summary_lines = []
+          summary_lines.append("## L9 Constitution Review Signal")
+          summary_lines.append("")
+          summary_lines.append("### Changed files")
+          for path in diff:
+              summary_lines.append(f"- `{path}`")
 
-          print('[constitution-gate] contract-bound change gate passed')
+          summary_lines.append("")
+          summary_lines.append("### Contract-bound surfaces")
+          if touched_bound:
+              for path in touched_bound:
+                  summary_lines.append(f"- `{path}`")
+          else:
+              summary_lines.append("- none")
+
+          summary_lines.append("")
+          summary_lines.append("### Contract/test surfaces")
+          if touched_contracts:
+              for path in touched_contracts:
+                  summary_lines.append(f"- `{path}`")
+          else:
+              summary_lines.append("- none")
+
+          step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if step_summary:
+              with open(step_summary, "a", encoding="utf-8") as handle:
+                  handle.write("\n".join(summary_lines) + "\n")
+
+          if touched_bound and not touched_contracts:
+              print(
+                  "Contract-bound application files changed without corresponding "
+                  "docs/contracts, tests/contracts, or constitution verifier updates.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
           PY
