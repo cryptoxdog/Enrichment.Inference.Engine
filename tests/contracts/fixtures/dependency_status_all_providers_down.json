@@ -1,0 +1,8 @@
+{
+ "redis_available": true,
+ "postgres_available": true,
+ "neo4j_available": true,
+ "providers": [],
+ "crm_available": true,
+ "expected_enrich_state": "failed"
+}

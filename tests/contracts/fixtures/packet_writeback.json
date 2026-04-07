@@ -1,12 +1,15 @@
 {
- "packet_id": "ingress-pkt-001",
- "action": "enrich",
+ "packet_id": "ingress-pkt-005",
+ "action": "writeback",
  "payload": {
-  "entity": {
-   "Name": "Acme Recycling Corp"
-  },
+  "crm_type": "salesforce",
   "object_type": "Account",
-  "objective": "Enrich polymer data"
+  "record_id": "001B000000LpT1FIAV",
+  "enriched_data": {
+   "recycling_grade": "HDPE",
+   "annual_tonnage": 50000
+  },
+  "confidence_threshold": 0.75
  },
  "tenant": "acme-corp",
  "source_node": "score-engine",
@@ -20,12 +23,12 @@
   "derivation_type": "dispatch"
  },
  "governance": {
-  "intent": "enrichment",
+  "intent": "writeback",
   "audit_required": true,
   "compliance_tags": [
-   "tenant:acme-corp"
+   "tenant:acme-corp",
+   "external-mutation"
   ]
  },
- "delegation_chain": [],
- "content_hash": "5810a2d6cbfbe32df4cc4f52f9cc5b4f8f6b8d3c08d9ba2df6adb8b66b3e5d0b"
+ "delegation_chain": []
 }

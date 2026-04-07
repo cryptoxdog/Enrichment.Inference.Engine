@@ -1,9 +1,6 @@
 {
  "fields": {
-  "polymer_type": "HDPE",
-  "contamination_pct": 2.1,
-  "material_grade": "Premium HDPE",
-  "facility_tier": "Tier 1"
+  "polymer_type": "HDPE"
  },
  "confidence": 0.91,
  "kb_content_hash": "a3f9b2c1d4e5f678901234567890abcd",
@@ -19,17 +16,10 @@
   "plastics_recycling.yaml"
  ],
  "kb_fragment_ids": [
-  "hdpe.mfi_range",
-  "premium_hdpe_grade"
+  "hdpe.mfi_range"
  ],
- "inferences": [
-  {
-   "field": "material_grade",
-   "value": "Premium HDPE",
-   "confidence": 0.95
-  }
- ],
- "quality_tier": "gold",
+ "inferences": [],
+ "quality_tier": "high",
  "grade_matches": [],
  "tokens_used": 1840,
  "failure_reason": null,

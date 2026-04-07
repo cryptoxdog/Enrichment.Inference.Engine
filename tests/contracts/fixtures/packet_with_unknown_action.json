@@ -1,6 +1,6 @@
 {
- "packet_id": "ingress-pkt-001",
- "action": "enrich",
+ "packet_id": "ingress-pkt-003",
+ "action": "unknown_action",
  "payload": {
   "entity": {
    "Name": "Acme Recycling Corp"
@@ -26,6 +26,5 @@
    "tenant:acme-corp"
   ]
  },
- "delegation_chain": [],
- "content_hash": "5810a2d6cbfbe32df4cc4f52f9cc5b4f8f6b8d3c08d9ba2df6adb8b66b3e5d0b"
+ "delegation_chain": []
 }

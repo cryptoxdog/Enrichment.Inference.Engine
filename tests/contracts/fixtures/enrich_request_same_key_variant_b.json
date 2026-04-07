@@ -10,11 +10,9 @@
  "schema": {
   "polymer_type": "string",
   "contamination_pct": "float",
-  "material_grade": "string",
-  "facility_tier": "string"
+  "material_grade": "string"
  },
- "kb_context": "plastics_recycling",
- "consensus_threshold": 0.75,
- "max_variations": 3,
- "idempotency_key": "acct-de-plasticos-2026-04-06"
+ "consensus_threshold": 0.8,
+ "max_variations": 5,
+ "idempotency_key": "idem-same-key-001"
 }

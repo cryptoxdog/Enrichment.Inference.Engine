@@ -1,0 +1,21 @@
+{
+ "fields": {},
+ "confidence": 0.0,
+ "kb_content_hash": "a3f9b2c1d4e5f678901234567890abcd",
+ "variation_count": 1,
+ "consensus_threshold": 0.75,
+ "uncertainty_score": 9.8,
+ "pass_count": 1,
+ "inference_version": "v2.2.0",
+ "processing_time_ms": 210,
+ "enrichment_payload": null,
+ "feature_vector": null,
+ "kb_files_consulted": [],
+ "kb_fragment_ids": [],
+ "inferences": [],
+ "quality_tier": "unknown",
+ "grade_matches": [],
+ "tokens_used": 120,
+ "failure_reason": null,
+ "state": "failed"
+}
