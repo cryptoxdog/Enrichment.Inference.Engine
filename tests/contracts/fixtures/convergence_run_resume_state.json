@@ -1,0 +1,35 @@
+{
+ "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+ "tenant_id": "acme-corp",
+ "entity_id": "001B000000LpT1FIAV",
+ "domain": "plasticos",
+ "domain_yaml_version_before": "v1.0.0",
+ "domain_yaml_version_after": null,
+ "state": "running",
+ "convergence_reason": null,
+ "current_pass": 2,
+ "max_passes": 5,
+ "accumulated_fields": {
+  "polymer_type": "HDPE"
+ },
+ "accumulated_confidences": {
+  "polymer_type": 0.81
+ },
+ "pass_results": [
+  {
+   "pass_number": 1,
+   "state": "completed"
+  },
+  {
+   "pass_number": 2,
+   "state": "completed"
+  }
+ ],
+ "total_tokens": 8400,
+ "total_cost_usd": 0.042,
+ "max_budget_tokens": 50000,
+ "schema_proposals": [],
+ "created_at": "2026-04-05T19:00:00Z",
+ "updated_at": "2026-04-05T19:01:00Z",
+ "completed_at": null
+}
