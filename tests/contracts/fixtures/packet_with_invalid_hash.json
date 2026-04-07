@@ -1,0 +1,31 @@
+{
+ "packet_id": "ingress-pkt-002",
+ "action": "enrich",
+ "payload": {
+  "entity": {
+   "Name": "Acme Recycling Corp"
+  },
+  "object_type": "Account",
+  "objective": "Enrich polymer data"
+ },
+ "tenant": "acme-corp",
+ "source_node": "score-engine",
+ "reply_to": "route-engine",
+ "lineage": {
+  "parent_ids": [
+   "root-pkt-000"
+  ],
+  "root_id": "root-pkt-000",
+  "generation": 2,
+  "derivation_type": "dispatch"
+ },
+ "governance": {
+  "intent": "enrichment",
+  "audit_required": true,
+  "compliance_tags": [
+   "tenant:acme-corp"
+  ]
+ },
+ "delegation_chain": [],
+ "content_hash": "deadbeef"
+}
