@@ -11,12 +11,10 @@ import pytest
 from tests.contracts.conftest_contracts import EVENTS_DIR, load_yaml
 
 CONTRACTED_EVENTS = [
-    "enrichment.completed",
-    "enrichment.failed",
-    "enrichment.started",
-    "convergence.completed",
-    "convergence.started",
-    "writeback.completed",
+    "enrichment_completed",
+    "enrichment_failed",
+    "convergence_completed",
+    "schema_proposed",
 ]
 
 
