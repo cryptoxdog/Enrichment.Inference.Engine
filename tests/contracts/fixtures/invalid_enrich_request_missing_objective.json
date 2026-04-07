@@ -1,0 +1,7 @@
+{
+ "entity": {
+  "Name": "Acme Recycling Corp",
+  "BillingCountry": "US"
+ },
+ "object_type": "Account"
+}
