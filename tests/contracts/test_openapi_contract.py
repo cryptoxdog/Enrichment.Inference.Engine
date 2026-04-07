@@ -54,9 +54,9 @@ REQUIRED_PATHS = [
     ("POST", "/api/v1/discover"),
     ("POST", "/api/v1/scan"),
     ("GET", "/api/v1/proposals/{domain}"),
-    ("POST", "/api/v1/proposals/{id}/approve"),
+    ("POST", "/api/v1/proposals/{proposal_id}/approve"),  # {proposal_id} not {id}
     ("GET", "/api/v1/fields/{entity_id}"),
-    ("GET", "/api/v1/fields/{entity_id}/{field}/history"),
+    ("GET", "/api/v1/fields/{entity_id}/{field_name}/history"),  # {field_name} not {field}
 ]
 
 
