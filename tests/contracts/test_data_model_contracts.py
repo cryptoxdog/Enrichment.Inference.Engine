@@ -31,12 +31,12 @@ ENRICHMENT_RESULT_FIELDS = {
 }
 
 CONVERGENCE_RUN_FIELDS = {
-    "run_id": {},
+    "id": {},
     "domain": {},
     "entity_id": {},
     "state": {},
-    "pass_count": {},
-    "consensus_threshold": {},
+    "current_pass": {},
+    "max_passes": {},
 }
 
 FIELD_CONFIDENCE_HISTORY_FIELDS = {
