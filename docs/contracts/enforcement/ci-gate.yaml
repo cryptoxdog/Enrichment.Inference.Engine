@@ -1,0 +1,114 @@
+version: "1.0.0"
+
+gate_order:
+  - constitution_verify
+  - tier1_structural
+  - tier2_behavior
+  - tier2_packet
+  - tier2_authority
+  - tier2_events
+  - tier2_provenance
+  - tier2_dependency_failure
+
+gates:
+  constitution_verify:
+    description: Verify node constitution alignment with packet, MCP, events, dependencies, and attestation schema.
+    match_any_prefix:
+      - docs/contracts/
+      - app/
+      - chassis/
+      - scripts/
+      - tests/contracts/
+    blocking: true
+    commands:
+      - python scripts/l9_contract_control.py verify-constitution
+      - python scripts/l9_contract_control.py verify-attestation
+
+  tier1_structural:
+    description: Existing structural contract suite.
+    match_any_prefix:
+      - docs/contracts/
+      - tests/contracts/
+      - app/
+      - chassis/
+    blocking: true
+    commands:
+      - pytest tests/contracts/ -m "unit and not enforcement" -q --disable-warnings --maxfail=1
+
+  tier2_behavior:
+    description: Runtime behavior invariants for EnrichResponse and related semantics.
+    match_any_prefix:
+      - docs/contracts/api/
+      - app/api/
+      - app/models/
+      - app/services/
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/test_enforcement_behavior.py
+    blocking: true
+    commands:
+      - pytest tests/contracts/tier2/test_enforcement_behavior.py -q --disable-warnings --maxfail=1
+
+  tier2_packet:
+    description: PacketEnvelope runtime enforcement.
+    match_any_prefix:
+      - docs/contracts/agents/protocols/
+      - chassis/
+      - app/api/v1/
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/test_enforcement_packet_runtime.py
+    blocking: true
+    commands:
+      - pytest tests/contracts/tier2/test_enforcement_packet_runtime.py -q --disable-warnings --maxfail=1
+
+  tier2_authority:
+    description: Action and tool authority enforcement including writeback gating.
+    match_any_prefix:
+      - docs/contracts/agents/tool-schemas/
+      - docs/contracts/agents/protocols/
+      - app/agents/
+      - app/api/v1/
+      - app/engines/
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/test_enforcement_authority.py
+    blocking: true
+    commands:
+      - pytest tests/contracts/tier2/test_enforcement_authority.py -q --disable-warnings --maxfail=1
+
+  tier2_events:
+    description: Event envelope and delivery semantics.
+    match_any_prefix:
+      - docs/contracts/events/
+      - app/services/event_emitter.py
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/test_enforcement_events.py
+    blocking: true
+    commands:
+      - pytest tests/contracts/tier2/test_enforcement_events.py -q --disable-warnings --maxfail=1
+
+  tier2_provenance:
+    description: Provenance presence on critical surfaces.
+    match_any_prefix:
+      - docs/contracts/data/
+      - docs/contracts/api/
+      - docs/contracts/events/
+      - docs/contracts/agents/protocols/
+      - app/services/
+      - app/api/
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/test_enforcement_provenance.py
+    blocking: true
+    commands:
+      - pytest tests/contracts/tier2/test_enforcement_provenance.py -q --disable-warnings --maxfail=1
+
+  tier2_dependency_failure:
+    description: Degraded-mode and dependency failure behavior.
+    match_any_prefix:
+      - docs/contracts/dependencies/
+      - docs/contracts/config/
+      - app/services/
+      - app/engines/
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/test_enforcement_dependency_failures.py
+    blocking: false
+    commands:
+      - pytest tests/contracts/tier2/test_enforcement_dependency_failures.py -q --disable-warnings --maxfail=1

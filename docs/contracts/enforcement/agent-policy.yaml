@@ -1,0 +1,94 @@
+version: "1.0.0"
+
+read_order:
+  - docs/contracts/node.constitution.yaml
+  - relevant_contracts
+  - relevant_tier1_tests
+  - relevant_tier2_tests
+  - relevant_fixtures
+
+stop_conditions:
+  - action_inventory_change
+  - tool_inventory_change
+  - event_inventory_change
+  - request_response_shape_change
+  - dependency_readiness_semantics_change
+  - runtime_attestation_shape_change
+  - mutation_class_change
+  - approval_mode_change
+
+deliverable_requirements:
+  - files_changed
+  - contracts_changed
+  - constitution_fields_changed
+  - tests_changed
+  - fixtures_changed
+  - runtime_guard_changes
+  - degraded_mode_impact
+  - provenance_impact
+
+surface_policies:
+  api:
+    contract_prefixes:
+      - docs/contracts/api/
+    test_prefixes:
+      - tests/contracts/
+    fixture_prefixes:
+      - tests/contracts/fixtures/
+    required_cochanges:
+      - docs/contracts/api/
+      - tests/contracts/
+
+  packet:
+    contract_prefixes:
+      - docs/contracts/agents/protocols/
+    test_prefixes:
+      - tests/contracts/
+    fixture_prefixes:
+      - tests/contracts/fixtures/
+    required_cochanges:
+      - docs/contracts/agents/protocols/
+      - docs/contracts/node.constitution.yaml
+      - tests/contracts/
+
+  mcp:
+    contract_prefixes:
+      - docs/contracts/agents/tool-schemas/
+    test_prefixes:
+      - tests/contracts/
+    fixture_prefixes:
+      - tests/contracts/fixtures/
+    required_cochanges:
+      - docs/contracts/agents/tool-schemas/
+      - docs/contracts/node.constitution.yaml
+      - tests/contracts/
+
+  events:
+    contract_prefixes:
+      - docs/contracts/events/
+    test_prefixes:
+      - tests/contracts/
+    fixture_prefixes:
+      - tests/contracts/fixtures/
+    required_cochanges:
+      - docs/contracts/events/
+      - docs/contracts/node.constitution.yaml
+      - tests/contracts/
+
+  persistence:
+    contract_prefixes:
+      - docs/contracts/data/
+    test_prefixes:
+      - tests/contracts/
+    fixture_prefixes:
+      - tests/contracts/fixtures/
+    required_cochanges:
+      - docs/contracts/data/
+      - tests/contracts/
+
+agent_rules:
+  forbid_uncontracted_fields: true
+  forbid_uncontracted_actions: true
+  forbid_uncontracted_event_types: true
+  require_constitution_first: true
+  require_tests_with_contract_changes: true

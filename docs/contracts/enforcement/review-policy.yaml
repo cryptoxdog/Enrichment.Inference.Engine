@@ -1,0 +1,90 @@
+version: "1.0.0"
+
+contract_bound_prefixes:
+  - app/api/v1/
+  - app/agents/
+  - app/engines/
+  - app/services/
+  - chassis/
+
+companion_prefixes:
+  - docs/contracts/
+  - tests/contracts/
+  - scripts/l9_contract_control.py
+
+required_companion_files:
+  - docs/contracts/node.constitution.yaml
+  - docs/contracts/runtime-attestation.schema.json
+
+surface_rules:
+  api:
+    match_any_prefix:
+      - app/api/v1/
+      - app/models/
+      - docs/contracts/api/
+    must_update_any_prefix:
+      - docs/contracts/api/
+      - tests/contracts/fixtures/
+      - tests/contracts/tier2/
+    review_checks:
+      - request_response_contract_alignment
+      - fixture_alignment
+      - tier2_behavior_alignment
+
+  packet:
+    match_any_prefix:
+      - chassis/
+      - docs/contracts/agents/protocols/
+    must_update_any_prefix:
+      - docs/contracts/agents/protocols/
+      - docs/contracts/node.constitution.yaml
+      - tests/contracts/tier2/
+    review_checks:
+      - content_hash_rule_preserved
+      - lineage_semantics_preserved
+      - hop_trace_semantics_preserved
+      - writeback_policy_gate_preserved
+
+  mcp:
+    match_any_prefix:
+      - app/agents/
+      - docs/contracts/agents/tool-schemas/
+    must_update_any_prefix:
+      - docs/contracts/agents/tool-schemas/
+      - docs/contracts/node.constitution.yaml
+      - tests/contracts/tier2/
+    review_checks:
+      - tool_registry_alignment
+      - chassis_action_mapping_alignment
+      - authority_matrix_alignment
+
+  events:
+    match_any_prefix:
+      - app/services/event_emitter.py
+      - docs/contracts/events/
+    must_update_any_prefix:
+      - docs/contracts/events/
+      - docs/contracts/node.constitution.yaml
+      - tests/contracts/tier2/
+    review_checks:
+      - event_name_alignment
+      - wire_format_alignment
+      - delivery_semantics_alignment
+
+  persistence:
+    match_any_prefix:
+      - app/services/pg_models.py
+      - app/services/pg_store.py
+      - docs/contracts/data/
+    must_update_any_prefix:
+      - docs/contracts/data/
+      - tests/contracts/tier2/
+    review_checks:
+      - model_schema_alignment
+      - provenance_alignment
+      - migration_policy_alignment
+
+review_signal:
+  fail_if_contract_bound_without_companion: true
+  fail_if_required_companion_missing: true
+  emit_markdown: true
