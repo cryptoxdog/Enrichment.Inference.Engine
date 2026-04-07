@@ -1,0 +1,10 @@
+{
+ "redis_available": true,
+ "postgres_available": false,
+ "neo4j_available": true,
+ "providers": [
+  "perplexity"
+ ],
+ "crm_available": true,
+ "expected_resume_state": "not_resumable"
+}
