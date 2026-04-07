@@ -1,0 +1,11 @@
+{
+ "event_type": "score_invalidated",
+ "entity_id": "001B000000LpT1FIAV",
+ "tenant_id": "acme-corp",
+ "domain": "plasticos",
+ "payload": {
+  "reason": "enrichment_changed"
+ },
+ "correlation_id": "d4e5f6a7-b8c9-0123-def0-123456789012",
+ "occurred_at": "2026-04-05T20:01:00Z"
+}
