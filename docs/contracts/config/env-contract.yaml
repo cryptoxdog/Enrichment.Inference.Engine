@@ -114,7 +114,7 @@ variables:
   # ── Redis ───────────────────────────────────────────────────
   - name: REDIS_URL
     type: url
-    required: false
+    required: true
     default: redis://localhost:6379/0
     description: Redis connection URL. Used for idempotency store and event streams.
     sensitive: false
