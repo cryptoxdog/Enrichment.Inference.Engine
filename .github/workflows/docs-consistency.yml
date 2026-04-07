@@ -1,0 +1,146 @@
+name: docs-consistency
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - '.cursorrules'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - 'tools/**'
+
+permissions:
+  contents: read
+
+jobs:
+  doc-consistency:
+    name: Documentation Consistency Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify AGENT.md contains Autonomy Tiers
+        run: |
+          if [ ! -f "AGENT.md" ]; then
+            echo "SKIP: AGENT.md not found (may be added by this PR)"
+            exit 0
+          fi
+          if ! grep -q "Agent Autonomy Tiers" AGENT.md; then
+            echo "FAIL: AGENT.md missing 'Agent Autonomy Tiers' section"
+            exit 1
+          fi
+          echo "PASS: AGENT.md contains Autonomy Tiers"
+
+      - name: Verify 7-gate sequence has single SSOT
+        run: |
+          # The SSOT for agent-check is the Makefile target itself.
+          # Multiple docs may reference it — limit is a sanity check, not strict.
+          COUNT=$(grep -rl "make agent-check" *.md 2>/dev/null | wc -l || echo "0")
+          if [ "$COUNT" -gt 15 ]; then
+            echo "FAIL: 'make agent-check' appears in $COUNT markdown files (max 15 allowed)"
+            grep -rl "make agent-check" *.md
+            exit 1
+          fi
+          echo "PASS: make agent-check referenced in $COUNT files (within limit)"
+
+      - name: Verify AGENT.md references GUARDRAILS.md
+        run: |
+          if [ ! -f "AGENT.md" ]; then
+            echo "SKIP: AGENT.md not found"
+            exit 0
+          fi
+          if ! grep -q "GUARDRAILS.md" AGENT.md; then
+            echo "FAIL: AGENT.md does not reference GUARDRAILS.md"
+            exit 1
+          fi
+          echo "PASS: AGENT.md references GUARDRAILS.md"
+
+      - name: Verify INVARIANTS.md contains INV-1 through INV-20
+        run: |
+          if [ ! -f "INVARIANTS.md" ]; then
+            echo "SKIP: INVARIANTS.md not found"
+            exit 0
+          fi
+          for i in $(seq 1 20); do
+            if ! grep -q "INV-$i" INVARIANTS.md; then
+              echo "FAIL: INVARIANTS.md missing INV-$i"
+              exit 1
+            fi
+          done
+          echo "PASS: All INV-1 through INV-20 present in INVARIANTS.md"
+
+      - name: Verify all waivers have ADR references
+        run: |
+          if [ ! -f "CI_WHITELIST_REGISTER.md" ]; then
+            echo "SKIP: CI_WHITELIST_REGISTER.md not found"
+            exit 0
+          fi
+          for i in $(seq 1 7); do
+            if ! grep -q "ADR-00$i" CI_WHITELIST_REGISTER.md; then
+              echo "FAIL: CI_WHITELIST_REGISTER.md missing ADR-00$i reference for WAIVER-00$i"
+              exit 1
+            fi
+          done
+          echo "PASS: All 7 WAIVER->ADR references present"
+
+      - name: Verify ADR files exist
+        run: |
+          if [ ! -d "docs/adr" ]; then
+            echo "SKIP: docs/adr/ directory not found"
+            exit 0
+          fi
+          for i in $(seq 1 7); do
+            NUM=$(printf "%03d" $i)
+            if ! ls docs/adr/ADR-${NUM}-*.md 1> /dev/null 2>&1; then
+              echo "FAIL: docs/adr/ADR-${NUM}-*.md not found"
+              exit 1
+            fi
+          done
+          echo "PASS: All 7 ADR files exist"
+
+      - name: Detect new root-level directories (INV-16 warning)
+        run: |
+          NEW_DIRS=$(git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -E '^[^/]+/$' || true)
+          if [ -n "$NEW_DIRS" ]; then
+            echo "WARN: New root-level directories detected — INV-16 requires arch team approval:"
+            echo "$NEW_DIRS"
+          else
+            echo "PASS: No new root-level directories"
+          fi
+
+      - name: Detect ruff ignore list changes (INV-17 warning)
+        run: |
+          if git diff HEAD~1..HEAD -- pyproject.toml 2>/dev/null | grep -q "^[+-].*ignore.*="; then
+            echo "WARN: pyproject.toml ruff ignore list may have changed — INV-17 requires ADR approval"
+            git diff HEAD~1..HEAD -- pyproject.toml | grep -E "^[+-].*ignore" || true
+          else
+            echo "PASS: ruff ignore list unchanged"
+          fi
+
+      - name: Verify HTTP route count (INV-1 warning)
+        run: |
+          if [ -d "app/api" ]; then
+            ROUTE_COUNT=$(grep -rE "@(app|router)\.(post|get|put|delete|patch)\(" app/api/ 2>/dev/null | wc -l || echo "0")
+            echo "HTTP route decorators found: $ROUTE_COUNT"
+            if [ "$ROUTE_COUNT" -gt 4 ]; then
+              echo "WARN: More than 4 route decorators found in app/api/ — INV-1 limits to 2 routes"
+            else
+              echo "PASS: Route count within expected range"
+            fi
+          else
+            echo "SKIP: app/api/ not found"
+          fi
+
+      - name: Verify AGENT_BOOTSTRAP.md is present and linked
+        run: |
+          if [ ! -f "AGENT_BOOTSTRAP.md" ]; then
+            echo "SKIP: AGENT_BOOTSTRAP.md not found (may be added by this PR)"
+            exit 0
+          fi
+          if ! grep -q "AGENT.md" AGENT_BOOTSTRAP.md; then
+            echo "FAIL: AGENT_BOOTSTRAP.md does not reference AGENT.md"
+            exit 1
+          fi
+          echo "PASS: AGENT_BOOTSTRAP.md present and references AGENT.md"

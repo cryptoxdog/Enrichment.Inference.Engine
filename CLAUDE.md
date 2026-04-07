@@ -1,113 +1,88 @@
-# AI Coding Context — L9 Golden Repo / L9 Constellation Engine
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [governance]
+# tags: [L9_TEMPLATE, agent, claude, delta]
+# owner: platform
+# status: active
+# token_estimate: 210
+# ssot_for: [claude-specific-delta]
+# load_when: [claude_code, claude_pr_review]
+# references: [AGENT.md, GUARDRAILS.md, ARCHITECTURE.md]
+# --- /L9_META ---
 
-## What This Is
-An L9 constellation engine. FastAPI chassis + domain engine. Single ingress (`POST /v1/execute`).
-Read `L9_Platform_Architecture.md` before writing any code.
+# CLAUDE.md — Claude-Specific Delta
 
-## The One Rule
-The chassis already handles: auth, rate limiting, tenant resolution, logging, metrics, routing, Docker, CI/CD.
-**You build the engine. Nothing else.**
+**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
 
-## Architecture
+> Delta-only file. AGENT.md is the primary governance document. Load AGENT.md first.
+> This file contains ONLY Claude-specific overrides and additions not in AGENT.md.
+
+---
+
+## Claude-Specific Loading Order
+
+1. AGENT_BOOTSTRAP.md — context strategy
+2. AGENT.md — all contracts, tiers, forbidden patterns
+3. GUARDRAILS.md — all prohibitions
+4. ARCHITECTURE.md — system topology
+5. This file — Claude delta only
+
+---
+
+## Terminology Corrections (Claude Output Guard)
+
+Do NOT use these phrases in responses or code comments:
+
+| Banned | Use Instead |
+|---|---|
+| "best practices" | Cite the specific contract ID (e.g., C-07 requires...) |
+| "as needed" | Specify the exact condition |
+| "you may want to" | Make a binary recommendation |
+| "consider using" | State whether it is required or optional per contract |
+| "it depends" | State which invariant or contract governs the decision |
+| "generally speaking" | Reference the specific rule that applies |
+
+---
+
+## Claude Review Output Format
+
+When producing PR review comments, use this exact template:
+
 ```
-POST /v1/execute → L9 Chassis → Action Router → engine/handlers.py → domain logic
-```
-- Engine registers handlers: `chassis.router.register_handler("match", handle_match)`
-- Handler signature: `async def handle_{action}(tenant: str, payload: dict) -> dict`
-- Engine NEVER imports FastAPI, never creates routes, never touches auth/logging/metrics config
-
-## 20 Contracts (enforced by contract_scanner.py + CI)
-
-### Layer 1 — Chassis Boundary (1–5)
-1. Single ingress — `POST /v1/execute` only. No custom routes.
-2. Handler interface — `async def handle_<action>(tenant: str, payload: dict) -> dict`. Only `engine/handlers.py` imports chassis.
-3. Tenant isolation — chassis resolves tenant. Engine receives it as string. Every Neo4j query scopes to tenant database.
-4. Observability inherited — engine uses `structlog.get_logger(__name__)` only. Never configures logging.
-5. Infrastructure is template — no Dockerfile, docker-compose, CI, or Terraform in engine/.
-
-### Layer 2 — Packet Protocol (6–8)
-6. PacketEnvelope is the only data container between services.
-7. Immutability + content_hash — `frozen=True`. Mutations via `.derive()`. `content_hash` is UNIQUE constraint.
-8. Lineage + audit — all derived packets set `parent_id`, `root_id`, increment `generation`.
-
-### Layer 3 — Security (9–11)
-9. Cypher injection prevention — labels/types via `sanitize_label()` only. Values always parameterized.
-10. Prohibited factors — compliance fields blocked at compile time. Never runtime.
-11. PII handling — declared in domain spec. Never logged. Chassis filters set it.
-
-### Layer 4 — Engine Architecture (12–16)
-12. Domain spec is SSOT — all behavior from `spec.yaml`. DomainPackLoader → DomainConfig.
-13. Gate-then-score — gates compile to Cypher WHERE, scoring to Cypher WITH. Zero Python post-filtering.
-14. NULL semantics are deterministic — per-gate `null_behavior: pass | fail`. Compiler handles it.
-15. Bidirectional matching — invertible gates swap props on direction reversal. Compiler handles it.
-16. File structure is fixed — see directory layout below.
-
-### Layer 5 — Testing + Quality (17–18)
-17. Tests: unit (gate compilation, scoring math), integration (testcontainers-neo4j, no mock drivers), compliance, performance (<200ms p95).
-18. L9_META on every file.
-
-### Layer 6 — Graph Intelligence (19–20)
-19. GDS jobs are declarative — declared in `spec.gds_jobs`, not hardcoded.
-20. KGE embeddings — CompoundE3D 256-dim, domain-specific, never cross-tenant.
-
-## Protected Files — Explicit Approval Required
-- `engine/handlers.py` — chassis bridge
-- `docker-compose.prod.yml` — production infra
-- `.github/workflows/ci-quality.yml` — CI gate
-
-## Canonical Directory Layout
-```
-engine/handlers.py      ← ONLY chassis bridge
-engine/config/          ← domain spec schema + loader
-engine/gates/           ← gate compiler + types (10 types)
-engine/scoring/         ← scoring assembler (9 computation types)
-engine/traversal/       ← traversal assembler
-engine/sync/            ← sync generator
-engine/gds/             ← GDS scheduler (APScheduler)
-engine/graph/           ← Neo4j async driver wrapper
-engine/compliance/      ← prohibited factors + PII + audit
-engine/packet/          ← PacketEnvelope bridge
-chassis/                ← thin chassis adapter
-domains/                ← {domain_id}/spec.yaml per vertical
+CONTRACT C-{N} VIOLATION — {rule-name}
+File: {path} Line: {line}
+Found: {offending_code}
+Required: {corrected_code}
+Evidence: AGENT.md Forbidden Patterns, .cursorrules CONTRACT {N}
 ```
 
-## Banned Patterns (CRITICAL — merge blocked)
-- `f-string Cypher MATCH` without `sanitize_label()` → SEC-001
-- `eval()`, `exec()`, `pickle.load()` → SEC-002/003/006
-- `from fastapi import` in engine/ → ARCH-001
-- `INSERT INTO packet_store` in engine/ → MEM-001
-- `raise NotImplementedError` outside tests/ → STUB-001
-- `# TODO` or `# PLACEHOLDER` comments → STUB-002/003
-- Uppercase `packet_type` values → PKT-001
-- `yaml.load()` without SafeLoader → SEC-007
-
-## Code Style
-- Python 3.12+, async/await for all I/O
-- Pydantic v2 BaseModel (frozen where appropriate)
-- ruff format (88-char), mypy --strict engine/
-- structlog: include `tenant`, `trace_id`, `action` in every log context
-- snake_case everywhere. No `Field(alias=...)`.
-
-## Ruff Patterns to Avoid
-```python
-# ❌ raise ValueError(f"invalid {x}")
-# ✅ msg = f"invalid {x}"; raise ValueError(msg)  # prevents EM101/102
-
-# ❌ def f(x: str = None)
-# ✅ def f(x: str | None = None)  # prevents RUF013
-
-# ❌ datetime.now()
-# ✅ datetime.now(tz=UTC)  # prevents DTZ005
+For approvals:
+```
+All 20 contracts verified. No violations found.
+Tier assessment: T{N} change. {0/1/2} reviewers required.
+make agent-check gates: [verified / not verified — request confirmation]
 ```
 
-## What NOT to Build
-- FastAPI routes, APIRouter → chassis (contract 1)
-- Auth, tenant resolution, CORS middleware → chassis (contract 3)
-- Logging/structlog configuration → chassis (contract 4)
-- Prometheus setup → chassis (contract 4)
-- Dockerfile, docker-compose, CI/CD → l9-template (contract 5)
-- Custom request/response HTTP schemas → universal envelope (contract 1)
-- String-interpolated Cypher without sanitize_label → security (contract 9)
-- Python post-filtering of match results → gate-then-score in Cypher (contract 13)
-- Hardcoded GDS scheduling → declarative spec (contract 19)
-- eval(), exec(), pickle.load(), yaml.load() without SafeLoader → banned (contract 9)
+---
+
+## Ruff Ignore List — Complete (Do Not Restate Inline)
+
+Do NOT restate these in code comments. Reference pyproject.toml [tool.ruff.lint] ignore.
+Full list as of SHA 358d15d: E501, TC001, TC002, TC003, SIM105, TRY003, TRY400, ARG001, ARG002, ARG003, B007, B008.
+
+---
+
+## CI Response Protocol
+
+| CI Step Fails | Claude Action |
+|---|---|
+| validate | Fix Python syntax or YAML before any other work |
+| lint-ruff | Run make agent-fix then re-push |
+| lint-mypy | Log warning; do not block (WAIVER-001) |
+| test (coverage < 60%) | Add tests until coverage >= 60% |
+| compliance-chassis | Remove FastAPI import from engine/; verify handler boundary |
+| compliance-terminology | Replace print(), Optional[], List[], Dict[] |
+| security-pip-audit | Log warning; do not block (WAIVER-002) |
+| semgrep | Read .semgrep/ rules, fix violation, escalate if unclear |
