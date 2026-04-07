@@ -1,0 +1,14 @@
+{
+ "event_type": "convergence_completed",
+ "entity_id": "001B000000LpT1FIAV",
+ "tenant_id": "acme-corp",
+ "domain": "plasticos",
+ "payload": {
+  "pass_count": 3,
+  "convergence_reason": "confidence_plateau",
+  "total_tokens": 12600,
+  "total_cost_usd": 0.063
+ },
+ "correlation_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+ "occurred_at": "2026-04-05T19:56:14Z"
+}
