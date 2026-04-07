@@ -6,9 +6,9 @@
   "type": "object",
   "properties": {
     "id": { "type": "string", "format": "uuid", "description": "Primary key." },
-    "tenant_id": { "type": "string", "maxLength": 128 },
-    "entity_id": { "type": "string", "maxLength": 256 },
-    "domain": { "type": "string", "maxLength": 128 },
+    "tenant_id": { "type": "string", "maxLength": 128, "description": "Tenant identifier." },
+    "entity_id": { "type": "string", "maxLength": 256, "description": "Entity identifier from CRM." },
+    "domain": { "type": "string", "maxLength": 128, "description": "Domain identifier (e.g., plasticos)." },
     "domain_yaml_version_before": { "type": ["string", "null"], "maxLength": 64, "description": "Domain YAML version at loop start." },
     "domain_yaml_version_after": { "type": ["string", "null"], "maxLength": 64, "description": "Domain YAML version at loop completion." },
     "state": {
@@ -23,13 +23,13 @@
     "accumulated_fields": { "type": "object", "additionalProperties": true, "description": "Field values accumulated across all passes (JSONB)." },
     "accumulated_confidences": { "type": "object", "additionalProperties": true, "description": "Confidence per field accumulated across passes (JSONB)." },
     "pass_results": { "type": "array", "items": { "type": "object" }, "description": "Per-pass result records (JSONB)." },
-    "total_tokens": { "type": "integer", "default": 0 },
+    "total_tokens": { "type": "integer", "default": 0, "description": "Total tokens consumed across all passes." },
     "total_cost_usd": { "type": "number", "default": 0, "description": "NUMERIC(10,6)." },
-    "max_budget_tokens": { "type": "integer", "default": 50000 },
+    "max_budget_tokens": { "type": "integer", "default": 50000, "description": "Maximum token budget for this run." },
     "schema_proposals": { "type": "array", "items": { "type": "object" }, "description": "Schema proposals generated during this run (JSONB)." },
-    "created_at": { "type": "string", "format": "date-time" },
-    "updated_at": { "type": "string", "format": "date-time" },
-    "completed_at": { "type": ["string", "null"], "format": "date-time" }
+    "created_at": { "type": "string", "format": "date-time", "description": "Row creation timestamp." },
+    "updated_at": { "type": "string", "format": "date-time", "description": "Last update timestamp." },
+    "completed_at": { "type": ["string", "null"], "format": "date-time", "description": "Completion timestamp." }
   },
   "required": ["id", "tenant_id", "entity_id", "domain", "state", "created_at", "updated_at"],
   "additionalProperties": false,
