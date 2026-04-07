@@ -1,0 +1,44 @@
+node:
+ id: enrichment-engine
+ version: 2.3.0
+ contract_version: 1.0.0
+ role: layer2_intelligence_node
+ ingress:
+  public_api: true
+  chassis_api: true
+  mcp_api: true
+ trust:
+  autonomy_ceiling: bounded_autonomous
+  writeback_requires: confidence_and_policy_gate
+ actions:
+  enrich:
+   determinism: D1
+   mutation: enrich_only
+   approval: autonomous
+  discover:
+   determinism: D1
+   mutation: propose_only
+   approval: autonomous
+  converge:
+   determinism: D1
+   mutation: internal_state
+   approval: autonomous
+  writeback:
+   determinism: D0_or_D1
+   mutation: external_mutation
+   approval: threshold_or_human
+ events:
+  enrichment_completed: telemetry
+  score_invalidated: coordination
+  schema_proposed: governance
+  entity_updated: authoritative
+ dependencies:
+  required:
+   - PERPLEXITY_API_KEY
+   - API_SECRET_KEY
+  recommended:
+   - DATABASE_URL
+   - REDIS_URL
+   - NEO4J_URI
+ runtime_attestation:
+  required: true
