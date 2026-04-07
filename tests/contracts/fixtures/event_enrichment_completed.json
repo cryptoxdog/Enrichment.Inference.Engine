@@ -1,0 +1,13 @@
+{
+ "event_type": "enrichment_completed",
+ "entity_id": "001B000000LpT1FIAV",
+ "tenant_id": "acme-corp",
+ "domain": "plasticos",
+ "payload": {
+  "fields_count": 8,
+  "confidence": 0.87,
+  "tokens_used": 4200
+ },
+ "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+ "occurred_at": "2026-04-05T19:54:14Z"
+}
