@@ -1,18 +1,93 @@
-# Copilot Instructions
+# L9 Constitution-First Coding Rules
 
-For this repository, treat `docs/contracts/node.constitution.yaml` as the source of truth for:
-- action inventory
-- tool inventory
-- event inventory
-- dependency readiness semantics
-- runtime attestation shape
+For this repository, the source of truth for contract-bound development is the generated contract pack plus the constitution and corresponding tests.
 
-When changing contract-bound runtime files under `app/`, `chassis/`, or contract documents under `docs/contracts/`, also update the relevant tests under `tests/contracts/`.
+## Mandatory read order for contract-bound changes
 
-Do not introduce:
-- uncontracted actions
-- uncontracted tools
-- uncontracted event types
-- runtime attestation fields not reflected in `docs/contracts/runtime-attestation.schema.json`
+When editing any of the following surfaces:
 
-Prefer additive, test-backed changes that keep the constitution, attestation builder, and Tier 2 contract tests aligned.
+- app/api/v1/**
+- app/agents/**
+- app/engines/**
+- app/services/**
+- chassis/**
+
+you must read, in this order:
+
+1. `docs/contracts/node.constitution.yaml`
+2. The directly relevant contract file under `docs/contracts/`
+3. The corresponding Tier 1 and Tier 2 tests under `tests/contracts/`
+
+## Constitution-preserving rules
+
+Do not introduce a new:
+
+- chassis action
+- MCP tool
+- event type
+- persisted semantic field
+- request/response field
+- dependency requirement
+
+unless the same change also updates:
+
+- the relevant contract file under `docs/contracts/`
+- the corresponding test coverage under `tests/contracts/`
+- the constitution when inventories, policies, or attestation semantics change
+
+## Required co-change matrix
+
+### API handler or schema change
+Must update:
+- relevant OpenAPI or schema contracts
+- relevant request/response fixtures
+- Tier 1 API tests
+- Tier 2 behavior or provenance tests
+
+### Packet or chassis change
+Must update:
+- packet protocol contract
+- Tier 1 packet tests
+- Tier 2 packet runtime tests
+
+### MCP tool change
+Must update:
+- specific tool schema
+- MCP alignment tests
+- Tier 2 authority tests
+
+### Event change
+Must update:
+- event channel or envelope contracts
+- Tier 1 event tests
+- Tier 2 event tests
+
+### Persistence or convergence change
+Must update:
+- data model schema under `docs/contracts/data/`
+- migration policy if applicable
+- the constitution if semantic behavior changes
+- Tier 1 data model tests
+- Tier 2 behavior or provenance tests
+
+## Stop conditions
+
+Stop and require a contract update if the code change would alter:
+
+- the action inventory
+- the tool inventory
+- the event inventory
+- the dependency readiness behavior
+- the runtime attestation shape
+- the mutation class or approval mode of an action
+
+## Output requirements for agent-generated changes
+
+For every contract-bound code change, include:
+
+- contract files changed
+- constitution fields changed
+- tests added or updated
+- fixtures added or updated
+- runtime guard behavior changed
+- degraded-mode or provenance impact
