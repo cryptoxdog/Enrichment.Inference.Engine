@@ -24,3 +24,10 @@ source_file: app/services/event_emitter.py
 emitter_class: EventEmitter
 backend_class: RedisStreamsBackend
 
+# Delivery guarantees (Phase 1.4)
+delivery:
+  guarantee: at_most_once  # fire-and-forget, no retries
+  ordering: per_tenant_stream
+  retry_policy: none
+  dead_letter: null
+
