@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -66,6 +66,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
 
       - name: Install Validation Tools
         run: |
@@ -137,13 +140,16 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
 
       - name: Install Linting Tools
         run: |
@@ -186,58 +192,25 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep
+        run: pip install semgrep
 
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: '.semgrep/'
+        run: semgrep --config .semgrep/ --error --quiet
 
-# ────────────────────────────────────────────────────────────────────────
-# PHASE 3: TEST SUITE
-# ────────────────────────────────────────────────────────────────────────
-  test:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [validate, lint]
-    permissions:
-      contents: read
-
-    services:
-      postgres:
-        image: ${{ vars.POSTGRES_IMAGE || 'postgres:16' }}
-        env:
-          POSTGRES_USER: ${{ vars.POSTGRES_USER || 'test_user' }}
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: ${{ vars.POSTGRES_DB || 'test_db' }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      redis:
-        image: ${{ vars.REDIS_IMAGE || 'redis:7-alpine' }}
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
 
       - name: Install Dependencies
         run: |
@@ -288,7 +261,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -312,7 +285,7 @@ jobs:
       - name: Run pip-audit (Dependency Vulnerabilities)
         run: |
           echo "Scanning dependencies for known vulnerabilities..."
-          pip-audit --desc || echo "⚠️  Vulnerabilities found (non-blocking)"
+          pip-audit --desc 
 
       - name: Run Safety Check
         run: |
@@ -348,7 +321,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Generate Software Bill of Materials
         uses: anchore/sbom-action@v0
@@ -373,7 +346,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -385,7 +358,7 @@ jobs:
           publish_results: true
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scorecard.sarif
 
@@ -429,7 +402,8 @@ jobs:
           if [[ "${{ needs.validate.result }}" == "failure" ]] || \
              [[ "${{ needs.lint.result }}" == "failure" ]] || \
              [[ "${{ needs.semgrep.result }}" == "failure" ]] || \
-             [[ "${{ needs.test.result }}" == "failure" ]]; then
+             [[ "${{ needs.test.result }}" == "failure" ]] || \
+          [[ "${{ needs.security.result }}" == "failure" ]]; then
             echo "❌ CI GATE FAILED — Critical job(s) failed"
             echo ""
             echo "Required jobs must pass:"

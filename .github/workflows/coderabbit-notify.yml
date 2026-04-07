@@ -4,6 +4,10 @@ on:
   pull_request_review:
     types: [submitted]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   notify-l:
     if: github.event.review.user.login == 'coderabbitai[bot]' && github.event.review.state == 'changes_requested'
