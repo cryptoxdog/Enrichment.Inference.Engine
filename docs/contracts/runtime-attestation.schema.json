@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cryptoxdog/Enrichment.Inference.Engine/docs/contracts/runtime-attestation.schema.json",
+  "title": "RuntimeAttestation",
+  "description": "Machine-readable runtime attestation emitted by the Enrichment Engine. Derived from docs/contracts/node.constitution.yaml and tracked contract files.",
+  "type": "object",
+  "required": [
+    "node_id",
+    "node_version",
+    "contract_version",
+    "contract_digest",
+    "generated_at",
+    "tracked_contract_hashes",
+    "action_inventory",
+    "tool_inventory",
+    "event_inventory",
+    "dependency_readiness",
+    "degraded_modes",
+    "policy_mode"
+  ],
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "node_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_digest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tracked_contract_hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "action_inventory": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "tool_inventory": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "event_inventory": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "dependency_readiness": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "required",
+          "ready",
+          "env_vars",
+          "missing_env"
+        ],
+        "properties": {
+          "required": {
+            "type": "boolean"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "env_vars": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missing_env": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "degraded_modes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "policy_mode": {
+      "type": "string",
+      "enum": [
+        "enforced"
+      ]
+    }
+  },
+  "additionalProperties": false
+}
