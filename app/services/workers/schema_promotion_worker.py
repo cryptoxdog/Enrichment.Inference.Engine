@@ -102,7 +102,8 @@ class SchemaPromotionWorker:
                     for msg_id, fields in entries:
                         await self._handle_message(msg_id, fields)
             except asyncio.CancelledError:
-                break
+                logger.info("schema_promotion_worker_cancelled")
+                raise
             except Exception as exc:
                 logger.warning("promotion_worker_error", extra={"error": str(exc)})
                 await asyncio.sleep(2.0)
@@ -136,7 +137,7 @@ class SchemaPromotionWorker:
                 return
 
             # Promote the field
-            promoted = await self._promote_field(
+            promoted = self._promote_field(
                 domain=domain,
                 field_name=field_name,
                 field_type=field_type,
@@ -168,7 +169,7 @@ class SchemaPromotionWorker:
             logger.warning("promotion_handle_error", extra={"msg_id": msg_id, "error": str(exc)})
             await self._redis.xack(DISCOVERED_STREAM, CONSUMER_GROUP, msg_id)
 
-    async def _promote_field(
+    def _promote_field(
         self,
         domain: str,
         field_name: str,

@@ -108,7 +108,8 @@ class GraphInferenceConsumer:
                     for msg_id, fields in entries:
                         await self._handle_message(msg_id, fields)
             except asyncio.CancelledError:
-                break
+                logger.info("graph_inference_consumer_cancelled")
+                raise
             except Exception as exc:
                 logger.warning("consumer_error", extra={"error": str(exc)})
                 await asyncio.sleep(1.0)
