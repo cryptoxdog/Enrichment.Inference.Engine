@@ -33,7 +33,7 @@ gates:
       - chassis/
     blocking: true
     commands:
-      - pytest tests/contracts/ -m "unit and not enforcement" -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/ -m "unit and not enforcement" -q --disable-warnings --maxfail=1 -o addopts=''
 
   tier2_behavior:
     description: Runtime behavior invariants for EnrichResponse and related semantics.
@@ -46,7 +46,7 @@ gates:
       - tests/contracts/tier2/test_enforcement_behavior.py
     blocking: true
     commands:
-      - pytest tests/contracts/tier2/test_enforcement_behavior.py -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/tier2/test_enforcement_behavior.py -q --disable-warnings --maxfail=1 -o addopts=''
 
   tier2_packet:
     description: PacketEnvelope runtime enforcement.
@@ -58,7 +58,7 @@ gates:
       - tests/contracts/tier2/test_enforcement_packet_runtime.py
     blocking: true
     commands:
-      - pytest tests/contracts/tier2/test_enforcement_packet_runtime.py -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/tier2/test_enforcement_packet_runtime.py -q --disable-warnings --maxfail=1 -o addopts=''
 
   tier2_authority:
     description: Action and tool authority enforcement including writeback gating.
@@ -72,7 +72,7 @@ gates:
       - tests/contracts/tier2/test_enforcement_authority.py
     blocking: true
     commands:
-      - pytest tests/contracts/tier2/test_enforcement_authority.py -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/tier2/test_enforcement_authority.py -q --disable-warnings --maxfail=1 -o addopts=''
 
   tier2_events:
     description: Event envelope and delivery semantics.
@@ -83,7 +83,7 @@ gates:
       - tests/contracts/tier2/test_enforcement_events.py
     blocking: true
     commands:
-      - pytest tests/contracts/tier2/test_enforcement_events.py -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/tier2/test_enforcement_events.py -q --disable-warnings --maxfail=1 -o addopts=''
 
   tier2_provenance:
     description: Provenance presence on critical surfaces.
@@ -98,7 +98,7 @@ gates:
       - tests/contracts/tier2/test_enforcement_provenance.py
     blocking: true
     commands:
-      - pytest tests/contracts/tier2/test_enforcement_provenance.py -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/tier2/test_enforcement_provenance.py -q --disable-warnings --maxfail=1 -o addopts=''
 
   tier2_dependency_failure:
     description: Degraded-mode and dependency failure behavior.
@@ -111,4 +111,4 @@ gates:
       - tests/contracts/tier2/test_enforcement_dependency_failures.py
     blocking: false
     commands:
-      - pytest tests/contracts/tier2/test_enforcement_dependency_failures.py -q --disable-warnings --maxfail=1
+      - pytest tests/contracts/tier2/test_enforcement_dependency_failures.py -q --disable-warnings --maxfail=1 -o addopts=''

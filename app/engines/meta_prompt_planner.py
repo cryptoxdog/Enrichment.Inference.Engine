@@ -56,9 +56,9 @@ class MetaPromptPlanner:
         self,
         entity: dict[str, Any],
         known_fields: dict[str, float],
-        inferred_fields: dict[str, Any],
+        _inferred_fields: dict[str, Any],
         domain_hints: dict[str, Any],
-        inference_rule_catalog: list[Any],
+        _inference_rule_catalog: list[Any],
         pass_number: int,
     ) -> "PromptPlan":
         """
