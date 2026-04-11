@@ -1,5 +1,10 @@
 """Convergence loop engines."""
 
+from .convergence_signals import (
+    ConvergenceExitReason,
+    GraphInferenceEvent,
+    InferredTripleSignal,
+)
 from .cost_tracker import CostSummary, CostTracker
 from .loop_state import (
     LoopState,
@@ -24,6 +29,10 @@ from .schema_proposer import (
 )
 
 __all__ = [
+    # convergence_signals.py
+    "InferredTripleSignal",
+    "ConvergenceExitReason",
+    "GraphInferenceEvent",
     # cost_tracker.py
     "CostSummary",
     "CostTracker",
