@@ -1,5 +1,9 @@
 # ROADMAP.CONTRACTS.md
 
+**LAST_REVIEWED:** 2026-04-11
+
+Strategic contract/governance roadmap. For **authoritative env names**, use [`docs/contracts/config/env-contract.yaml`](docs/contracts/config/env-contract.yaml). For **day-to-day agent law**, use [AGENTS.md](AGENTS.md).
+
 Here’s the highest-leverage read of the whole project state.
 
 ## 1. Current state vs finished state gap
@@ -13,7 +17,7 @@ You already have a serious multi-plane contract system for EIE spanning:
 - REST/OpenAPI contracts
 - event/AsyncAPI contracts
 - MCP tool contracts
-- PacketEnvelope protocol contracts
+- TransportPacket / packet protocol contracts (`docs/contracts/`, SDK)
 - dependency contracts
 - generation templates
 - a structural contract test suite with manifest, fixtures, drift checks, and gap-aware TODO tests.
@@ -201,25 +205,15 @@ This matters because provenance is the substrate for trust, replay, explainabili
 
 ## 4. Strategic plan in priority order
 
-### Priority 1 — Create a unified node.constitution.yaml
+### Priority 1 — Unified node constitution artifact
 
-Make one top-level machine-readable artifact that binds together:
-- node identity and version
-- contract version/digest
-- supported ingress surfaces
-- action inventory
-- dependency profiles
-- event classes
-- autonomy ceiling
-- required runtime attestation
+A single top-level `node.constitution.yaml` was **explored and removed** from this repo; the role is largely covered today by **`docs/contracts/**`**, [`tools/l9_enrichment_manifest.yaml`](tools/l9_enrichment_manifest.yaml), and CI/audit gates.
 
-This is the single highest-leverage move because it turns a contract pack into an admission object.
+**Next evolution (same intent):** either reintroduce one consolidated admission manifest *or* formally designate the manifest + `env-contract.yaml` + packet contracts as the joined “constitution” with a single digest step in CI.
 
 **Expected effect**
-- immediate clarity across all workflows
-- one source of truth for GATE/node registration
-- foundation for generated sibling nodes
-- enables trust/admission automation
+- one admission-oriented view for GATE / node registration
+- less drift between YAML packs and enforcement
 
 ### Priority 2 — Add an action authority model
 
@@ -241,16 +235,11 @@ Start with writeback first, because it is the highest-risk action and the one mo
 - clearer observability semantics
 - better trust scoring by action type
 
-### Priority 3 — Add Tier 2 enforcement tests
+### Priority 3 — Tier 2 enforcement tests (expand / harden)
 
-Keep the current suite as structural Tier 1. Add a second layer:
-- test_enforcement_behavior.py
-- test_enforcement_authority.py
-- test_enforcement_packet_runtime.py
-- test_enforcement_dependency_failures.py
-- test_enforcement_replay_idempotency.py
-- test_enforcement_events.py
-- test_enforcement_provenance.py
+**Status:** Many Tier-2 modules already exist under `tests/contracts/tier2/` (e.g. `test_enforcement_packet_runtime.py`, `test_enforcement_behavior.py`, `test_enforcement_authority.py`, `test_enforcement_dependency_failures.py`, `test_enforcement_replay_idempotency.py`, `test_enforcement_events.py`, `test_enforcement_provenance.py`).
+
+Keep structural Tier 1 as-is; **deepen assertions, fixtures, and CI gating** so these tests become merge-blocking where appropriate.
 
 Your existing manifest and fixture strategy already support this move.
 

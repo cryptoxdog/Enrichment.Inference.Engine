@@ -6,12 +6,13 @@ PostgreSQL async store — connection pool, CRUD, and query helpers.
 Module-level engine (one per process). All writes are idempotent where possible.
 Callers acquire a session via get_session() context manager.
 """
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -56,9 +57,7 @@ def init_engine(
         pool_pre_ping=True,
         echo=False,
     )
-    _session_factory = async_sessionmaker(
-        _engine, class_=AsyncSession, expire_on_commit=False
-    )
+    _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
     logger.info("pg_engine_initialized", pool_size=pool_size, max_overflow=max_overflow)
 
 
@@ -85,13 +84,12 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     """Yield an async session. Commits on success, rolls back on exception."""
     if _session_factory is None:
         raise RuntimeError("Call init_engine() before requesting a session")
-    async with _session_factory() as session:
-        async with session.begin():
-            try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
+    async with _session_factory() as session, session.begin():
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 
 # ── EnrichmentResult CRUD ──────────────────────────────────────────────────
@@ -129,9 +127,7 @@ async def save_enrichment_result(
     if idempotency_key:
         existing = await get_enrichment_result_by_idempotency_key(idempotency_key)
         if existing:
-            logger.debug(
-                "enrichment_result_idempotent_hit", idempotency_key=idempotency_key
-            )
+            logger.debug("enrichment_result_idempotent_hit", idempotency_key=idempotency_key)
             return existing
 
     record = EnrichmentResult(
@@ -200,9 +196,7 @@ async def get_enrichment_result_by_idempotency_key(
 ) -> EnrichmentResult | None:
     """Look up an existing result by caller-supplied idempotency key."""
     async with get_session() as session:
-        stmt = select(EnrichmentResult).where(
-            EnrichmentResult.idempotency_key == idempotency_key
-        )
+        stmt = select(EnrichmentResult).where(EnrichmentResult.idempotency_key == idempotency_key)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -273,13 +267,13 @@ async def update_convergence_run(
     domain_yaml_version_after: str | None = None,
 ) -> None:
     """Partial update — only provided kwargs are written to the database."""
-    values: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+    values: dict[str, Any] = {"updated_at": datetime.now(UTC)}
     if current_pass is not None:
         values["current_pass"] = current_pass
     if state is not None:
         values["state"] = state
         if state in _TERMINAL_STATES:
-            values["completed_at"] = datetime.now(timezone.utc)
+            values["completed_at"] = datetime.now(UTC)
     if convergence_reason is not None:
         values["convergence_reason"] = convergence_reason
     if accumulated_fields is not None:
@@ -378,9 +372,7 @@ async def save_schema_proposal(
         return record
 
 
-async def get_pending_schema_proposals(
-    tenant_id: str, domain: str
-) -> list[SchemaProposalRecord]:
+async def get_pending_schema_proposals(tenant_id: str, domain: str) -> list[SchemaProposalRecord]:
     """Return all pending proposals for a domain, ranked by confidence."""
     async with get_session() as session:
         stmt = (
@@ -396,9 +388,7 @@ async def get_pending_schema_proposals(
         return list(result.scalars().all())
 
 
-async def approve_schema_proposal(
-    proposal_id: uuid.UUID, reviewed_by: str, approved: bool
-) -> None:
+async def approve_schema_proposal(proposal_id: uuid.UUID, reviewed_by: str, approved: bool) -> None:
     """Record a human approval or rejection decision on a schema proposal."""
     async with get_session() as session:
         await session.execute(
@@ -407,6 +397,6 @@ async def approve_schema_proposal(
             .values(
                 approval_status="approved" if approved else "rejected",
                 reviewed_by=reviewed_by,
-                reviewed_at=datetime.now(timezone.utc),
+                reviewed_at=datetime.now(UTC),
             )
         )

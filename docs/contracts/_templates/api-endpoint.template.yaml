@@ -1,53 +1,53 @@
 # ═══════════════════════════════════════════════════════════════
-# Contract: {Endpoint Name}
-# Source:   {source_file}:{line_number}
+# Contract: "{Endpoint Name}"
+# Source:   "{source_file}:{line_number}"
 # Version:  1.0.0
-# Updated:  {ISO-8601-date}
+# Updated:  "{ISO-8601-date}"
 # ═══════════════════════════════════════════════════════════════
 
 # Paste this into api/openapi.yaml under `paths:` when adding a new endpoint.
 
-  /api/v1/{resource}:
-    post:
-      operationId: {camelCaseOperationId}
-      summary: One-line purpose
-      description: |
-        Detailed behavior. Include:
-        - What it does
-        - Who calls it (Salesforce, Odoo, L9 node)
-        - Side effects
-      tags: [{tag}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - required_field
-              properties:
-                required_field:
-                  type: string
-                  description: Description of this field.
-              additionalProperties: false
-            example:
-              required_field: example_value
-      responses:
-        "200":
-          description: Success description
-          content:
-            application/json:
-              schema:
-                type: object
-              example:
-                field: value
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "500":
-          $ref: "#/components/responses/InternalError"
-      x-source-file: {source_file}:{line_number}
-
+path: "/api/v1/{resource}"
+method: post
+operationId: "{camelCaseOperationId}"
+summary: One-line purpose
+description: |
+  Detailed behavior. Include:
+  - What it does
+  - Who calls it (Salesforce, Odoo, L9 node)
+  - Side effects
+tags:
+  - "{tag}"
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required:
+          - required_field
+        properties:
+          required_field:
+            type: string
+            description: Description of this field.
+        additionalProperties: false
+      example:
+        required_field: example_value
+responses:
+  "200":
+    description: Success description
+    content:
+      application/json:
+        schema:
+          type: object
+        example:
+          field: value
+  "401":
+    $ref: "#/components/responses/Unauthorized"
+  "403":
+    $ref: "#/components/responses/Forbidden"
+  "422":
+    $ref: "#/components/responses/ValidationError"
+  "500":
+    $ref: "#/components/responses/InternalError"
+x-source-file: "{source_file}:{line_number}"

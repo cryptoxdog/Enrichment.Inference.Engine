@@ -1,9 +1,9 @@
 """
 chassis/envelope.py
-Self-contained PacketEnvelope inflate/deflate for the chassis router.
+Self-contained transport wire envelope inflate/deflate for the chassis router (dict-shaped payloads; SDK uses `TransportPacket` for Gate I/O).
 
 Intentionally imports NOTHING from app/ — the chassis is a standalone library.
-app/engines/chassis_contract.py retains the full engine-level implementation.
+Engine-side orchestration lives under `app/engines/` and `app/services/chassis_handlers.py`; this module is the HTTP-free inflate/deflate primitive used by `chassis/router.py`.
 """
 
 from __future__ import annotations

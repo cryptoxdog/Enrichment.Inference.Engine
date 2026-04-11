@@ -1,6 +1,6 @@
 # TODO — Enrichment.Inference.Engine
 
-**Last Updated:** 2026-03-30
+**Last Updated:** 2026-04-07
 **Source:** Gap analysis of Core Gap Analysis-1.md, Core Gap Analysis-2.md
 
 ---
@@ -38,6 +38,11 @@
 
 ## 🟠 HIGH — Blocks Full Product
 
+### Single chassis HTTP ingress (fix multi-path gates)
+- [ ] **Problem:** One FastAPI process exposes many first-class routes (`/api/v1/enrich`, `/api/v1/enrich/batch`, discover, scan, proposals, `/v1/converge/*`, fields, etc.) *and* chassis routes (`POST /v1/execute`, `POST /v1/outcomes`). That violates the L9 “single ingress” model (constellation traffic should normalize on `POST /v1/execute` + health, not parallel REST surfaces).
+- [ ] **Target:** Collapse external HTTP to chassis contract — e.g. `POST /v1/execute` (and documented health/readiness only); map CRM and internal flows through `TransportPacket` actions or a single adapter layer (deprecate direct `/api/v1/*` enrichment paths behind a migration window).
+- [ ] **Follow-through:** Regenerate/sync `docs/contracts/api/openapi.yaml`, `node.constitution.yaml`, and integration docs (Salesforce, Odoo, Clay); wire or relocate `app/score/score_api.py` (currently unmounted) under the same ingress story.
+
 ### Downstream Services (Constellation Nodes)
 
 | Service | Purpose | Files Needed |
@@ -59,13 +64,34 @@
 - [ ] Pre-match enrichment wiring — ambiguous intake → enriched queries
 - [ ] Outcome→enrichment delegation — rejection triggers re-enrichment
 
+### gap-fixes/ Integration (BLOCKED — Awaiting SDK Chassis)
+**Status:** Code complete in `gap-fixes/`, integration blocked until SDK chassis defines wiring patterns.
+
+| Gap | Component | File in gap-fixes/ | Integration Status |
+|-----|-----------|-------------------|-------------------|
+| Gap-1 | Contract Enforcement | `enrich/contract_enforcement.py` | ⏸️ BLOCKED |
+| Gap-2 | GRAPH→ENRICH Return Channel | `enrich/graph_return_channel.py` | ⏸️ BLOCKED |
+| Gap-3 | Inference Rule Registry | `enrich/inference_rule_registry.py` | ⏸️ BLOCKED |
+| Gap-4 | Schema Proposal Emission | `enrich/convergence_controller_patch.py` | ⏸️ BLOCKED |
+| Gap-5 | Audit Persistence | `shared/audit_persistence.py` | ⏸️ BLOCKED |
+| Gap-6 | Community Export Hook | `graph/community_export.py` | ⏸️ BLOCKED |
+| Gap-7 | Per-field Confidence | `enrich/convergence_controller_patch.py` | ⏸️ BLOCKED |
+| Gap-8 | Domain Spec Enforcement | `enrich/convergence_controller_patch.py` | ⏸️ BLOCKED |
+| Gap-9 | v1 Bridge Guard | `shared/inference_bridge_v1_guard.py` | ⏸️ BLOCKED |
+| Gap-10 | Packet Type Registry | `enrich/contract_enforcement.py` | ⏸️ BLOCKED |
+
+**Startup wiring recipe:** `gap-fixes/app/startup_wiring.py`
+**Tests:** `gap-fixes/tests/test_gap*.py` (4 test files)
+
+**Why blocked:** SDK chassis will dictate TransportPacket validation, handler registration, and startup lifecycle. Integrating now would require rework.
+
 ### Multi-Provider LLM Clients
 - [ ] `app/services/openai_client.py` — OpenAI API client
 - [ ] `app/services/anthropic_client.py` — Anthropic API client
 
 **Why:** Multi-variation consensus requires multiple LLM providers to avoid single-provider bias.
 
-### PacketEnvelope Router
+### Transport / chassis router
 - [ ] `app/engines/packet_router.py` — Dispatch envelopes to constellation nodes
 
 **Why:** `chassis_contract.py` builds envelopes but `delegate_to_node` creates packets without sending them.

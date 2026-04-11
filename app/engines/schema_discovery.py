@@ -9,7 +9,7 @@ Aligned with L9 Contract Specifications domain spec versioning:
 
 Output is a SchemaProposal that can be:
   - Written back to Odoo as a schema evolution record
-  - Emitted as PacketEnvelope(packettype="schema_proposal")
+  - Emitted as TransportPacket(packettype="schema_proposal")
   - Fed to the graph engine's DomainPackLoader for next sync
 """
 

@@ -29,6 +29,9 @@ class ConvergenceConfig:
     min_improvement_delta: float = 0.05
     priority_fields: list[str] = field(default_factory=list)
     domain_constraints: dict[str, Any] = field(default_factory=dict)
+    # Optional advanced convergence features (default off — no behavior change)
+    synthesize_composites: bool = False
+    corrective_retrieval_enabled: bool = False
 
     @classmethod
     def from_domain_yaml(cls, domain: str) -> ConvergenceConfig:
@@ -53,6 +56,10 @@ class ConvergenceConfig:
             min_improvement_delta=convergence_settings.get("min_improvement_delta", 0.05),
             priority_fields=convergence_settings.get("priority_fields", []),
             domain_constraints=convergence_settings.get("domain_constraints", {}),
+            synthesize_composites=convergence_settings.get("synthesize_composites", False),
+            corrective_retrieval_enabled=convergence_settings.get(
+                "corrective_retrieval_enabled", False
+            ),
         )
 
     @classmethod
@@ -64,6 +71,8 @@ class ConvergenceConfig:
             min_improvement_delta=config_dict.get("min_improvement_delta", 0.05),
             priority_fields=config_dict.get("priority_fields", []),
             domain_constraints=config_dict.get("domain_constraints", {}),
+            synthesize_composites=config_dict.get("synthesize_composites", False),
+            corrective_retrieval_enabled=config_dict.get("corrective_retrieval_enabled", False),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -74,4 +83,6 @@ class ConvergenceConfig:
             "min_improvement_delta": self.min_improvement_delta,
             "priority_fields": self.priority_fields,
             "domain_constraints": self.domain_constraints,
+            "synthesize_composites": self.synthesize_composites,
+            "corrective_retrieval_enabled": self.corrective_retrieval_enabled,
         }

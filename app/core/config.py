@@ -2,6 +2,10 @@
 Settings — single source of truth for all configuration.
 Loaded once at startup from env vars / .env file.
 
+Platform integrations: Prefer the L9 Gate/SDK and TransportPacket actions
+for third-party systems. Direct CRM/waterfall env fields below remain for legacy or
+transitional code paths; new work should not add bespoke HTTP integrations here.
+
 Integration fix applied (PR#21 merge pass):
     GAP-7: max_budget_tokens added as canonical field. convergence_controller.py
            reads getattr(settings, "max_budget_tokens", ...) and previously fell
@@ -14,7 +18,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -40,6 +44,7 @@ class Settings(BaseSettings):
     odoo_password: str = ""
     crm_mapping_path: str = "config/crm/odoo_mapping.yaml"
 
+    # Legacy / direct CRM & enrichment providers (prefer gate/SDK for new integrations).
     salesforce_client_id: str = ""
     salesforce_client_secret: str = ""
     salesforce_username: str = ""
@@ -53,8 +58,13 @@ class Settings(BaseSettings):
     apollo_api_key: str = ""
     hunter_api_key: str = ""
 
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+
     ceg_base_url: str = "http://localhost:8001"
 
+    gate_url: str = "http://localhost:8080"
+    # Legacy direct peer URLs retained for backward-compatible config loading only.
     graph_node_url: str = "http://localhost:8001"
     score_node_url: str = "http://localhost:8002"
     route_node_url: str = "http://localhost:8003"
@@ -78,7 +88,11 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=(".env", ".env.local"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @model_validator(mode="after")
     def align_legacy_token_budget(self) -> Settings:

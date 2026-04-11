@@ -12,7 +12,7 @@ Dependencies:
   app.models.enrichment   — InferenceResult, ConvergenceState, EnrichRequest
   app.models.common       — FieldStatus, FieldTrace
   app.engines.convergence — ConvergenceConfig
-  PacketEnvelope          — immutable I/O boundary (enforced by caller)
+  TransportPacket          — immutable I/O boundary (enforced by caller)
 
 L9 Compliance:
   - No routes, auth, rate-limiting, or infra
@@ -20,40 +20,42 @@ L9 Compliance:
   - Deterministic: same inputs → same CorrectiveState
   - Zero stubs; all imports resolve against repo as ingested
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import FrozenSet, List, Optional, Tuple
+from dataclasses import dataclass, field, replace
 
-from app.engines.convergence.config import ConvergenceConfig
-from app.models.enrichment import ConvergenceState, EnrichRequest, InferenceResult
+from app.engines.convergence.convergence_config import ConvergenceConfig
 from app.models.common import FieldStatus, FieldTrace
+from app.models.enrichment import ConvergenceState, InferenceResult
 
 logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
 _CORRECTIVE_TARGETS_KEY = "_corrective_targets"
-_TRIGGER_STATUSES: FrozenSet[str] = frozenset(
+_TRIGGER_STATUSES: frozenset[str] = frozenset(
     {FieldStatus.INPUTS_MISSING, FieldStatus.BELOW_THRESHOLD}
 )
-_MIN_UNLOCK_SCORE: float = 0.0   # include all blocked fields; caller gates on confidence
+_MIN_UNLOCK_SCORE: float = 0.0  # include all blocked fields; caller gates on confidence
 _MAX_CORRECTIVE_FIELDS: int = 8  # cap to prevent prompt bloat
 
 
 # ── Domain objects ────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class CorrectiveTarget:
     """Immutable descriptor for a single field the next pass should focus on."""
+
     field_name: str
     status: str
-    unlock_score: float       # how much this field unblocks downstream inference
-    missing_inputs: Tuple[str, ...] = field(default_factory=tuple)
-    confidence_gap: float = 0.0   # required_confidence - current_confidence
+    unlock_score: float  # how much this field unblocks downstream inference
+    missing_inputs: tuple[str, ...] = field(default_factory=tuple)
+    confidence_gap: float = 0.0  # required_confidence - current_confidence
 
     def to_prompt_hint(self) -> str:
         """Serialise to a terse string injected into the enrichment prompt."""
@@ -73,27 +75,22 @@ class CorrectiveState:
     _CORRECTIVE_TARGETS_KEY.  Consumed exactly once by plan_pass(); discarded
     after consumption so subsequent passes do not inherit stale targets.
     """
-    targets: Tuple[CorrectiveTarget, ...]
+
+    targets: tuple[CorrectiveTarget, ...]
     source_run_id: str
     pass_number: int
-    idempotency_hash: str   # SHA-256 of (run_id, pass_number, sorted field names)
+    idempotency_hash: str  # SHA-256 of (run_id, pass_number, sorted field names)
 
     @classmethod
     def build(
         cls,
-        targets: List[CorrectiveTarget],
+        targets: list[CorrectiveTarget],
         run_id: str,
         pass_number: int,
-    ) -> "CorrectiveState":
-        sorted_targets = tuple(
-            sorted(targets, key=lambda t: t.unlock_score, reverse=True)
-        )
-        field_str = json.dumps(
-            sorted([t.field_name for t in sorted_targets]), sort_keys=True
-        )
-        idem_hash = hashlib.sha256(
-            f"{run_id}:{pass_number}:{field_str}".encode()
-        ).hexdigest()
+    ) -> CorrectiveState:
+        sorted_targets = tuple(sorted(targets, key=lambda t: t.unlock_score, reverse=True))
+        field_str = json.dumps(sorted([t.field_name for t in sorted_targets]), sort_keys=True)
+        idem_hash = hashlib.sha256(f"{run_id}:{pass_number}:{field_str}".encode()).hexdigest()
         return cls(
             targets=sorted_targets,
             source_run_id=run_id,
@@ -109,11 +106,11 @@ class CorrectiveState:
         lines = ["## Corrective Focus (pass-level override)"]
         for t in self.targets:
             lines.append(f"  - {t.to_prompt_hint()}")
-        return "
-".join(lines)
+        return "\n".join(lines)
 
 
 # ── Core extraction logic ─────────────────────────────────────────────────────
+
 
 def _extract_unlock_score(field_name: str, trace: FieldTrace) -> float:
     """
@@ -127,7 +124,7 @@ def _extract_unlock_score(field_name: str, trace: FieldTrace) -> float:
     return float(len(dependents))
 
 
-def _extract_missing_inputs(trace: FieldTrace) -> Tuple[str, ...]:
+def _extract_missing_inputs(trace: FieldTrace) -> tuple[str, ...]:
     extra = getattr(trace, "extra", {})
     raw = extra.get("missing_inputs", [])
     return tuple(str(x) for x in raw)
@@ -135,7 +132,7 @@ def _extract_missing_inputs(trace: FieldTrace) -> Tuple[str, ...]:
 
 def _extract_confidence_gap(trace: FieldTrace, cfg: ConvergenceConfig) -> float:
     current = getattr(trace, "confidence", 0.0)
-    required = cfg.convergence_threshold
+    required = cfg.confidence_threshold
     return max(0.0, required - current)
 
 
@@ -143,12 +140,12 @@ def extract_corrective_targets(
     inference_result: InferenceResult,
     convergence_state: ConvergenceState,
     cfg: ConvergenceConfig,
-) -> List[CorrectiveTarget]:
+) -> list[CorrectiveTarget]:
     """
     Walk InferenceResult.blocked_fields and the rule_trace to build a ranked
     list of CorrectiveTarget objects.  Capped at _MAX_CORRECTIVE_FIELDS.
     """
-    targets: List[CorrectiveTarget] = []
+    targets: list[CorrectiveTarget] = []
 
     blocked = getattr(inference_result, "blocked_fields", {}) or {}
     rule_trace: dict = getattr(inference_result, "rule_trace", {}) or {}
@@ -157,7 +154,7 @@ def extract_corrective_targets(
         if status not in _TRIGGER_STATUSES:
             continue
 
-        trace: Optional[FieldTrace] = rule_trace.get(field_name)
+        trace: FieldTrace | None = rule_trace.get(field_name)
         if trace is None:
             # Synthesise a minimal trace so we still create a target
             trace = FieldTrace(field_name=field_name, status=status)
@@ -189,6 +186,7 @@ def extract_corrective_targets(
 
 # ── ConvergenceState injection / consumption ──────────────────────────────────
 
+
 def should_apply_corrective(pass_number: int, cfg: ConvergenceConfig) -> bool:
     """
     Gate: corrective override is only valid on pass 2+.
@@ -204,7 +202,7 @@ def apply_corrective_override(
 ) -> ConvergenceState:
     """
     Return a new ConvergenceState with _corrective_targets injected into
-    metadata.  The original state is never mutated (PacketEnvelope immutability).
+    metadata.  The original state is never mutated (TransportPacket immutability).
     """
     if corrective.is_empty():
         return state
@@ -222,20 +220,20 @@ def apply_corrective_override(
             "idempotency_hash": corrective.idempotency_hash,
         },
     )
-    return state.replace(metadata=updated_meta)
+    return replace(state, metadata=updated_meta)
 
 
 def consume_corrective_override(
     state: ConvergenceState,
-) -> Tuple[ConvergenceState, Optional[CorrectiveState]]:
+) -> tuple[ConvergenceState, CorrectiveState | None]:
     """
     Pop _corrective_targets from metadata, returning the consumed CorrectiveState
     and a new ConvergenceState without the key.  Idempotent: safe to call when
     no override is present.
     """
     meta = dict(state.metadata or {})
-    corrective: Optional[CorrectiveState] = meta.pop(_CORRECTIVE_TARGETS_KEY, None)
-    new_state = state.replace(metadata=meta)
+    corrective: CorrectiveState | None = meta.pop(_CORRECTIVE_TARGETS_KEY, None)
+    new_state = replace(state, metadata=meta)
     if corrective:
         logger.debug(
             "corrective_override.consumed",
@@ -249,13 +247,14 @@ def consume_corrective_override(
 
 # ── High-level orchestration entry point ─────────────────────────────────────
 
+
 def build_corrective_state_for_next_pass(
     inference_result: InferenceResult,
     convergence_state: ConvergenceState,
     cfg: ConvergenceConfig,
     run_id: str,
     current_pass: int,
-) -> Optional[CorrectiveState]:
+) -> CorrectiveState | None:
     """
     Called by the convergence controller after each InferenceEngine.run() call.
     Returns None if no corrective action is needed (all fields converged or

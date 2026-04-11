@@ -6,6 +6,7 @@ Field-level confidence and provenance API.
 GET  /api/v1/fields/{entity_id}                      — field map + confidence
 GET  /api/v1/fields/{entity_id}/{field_name}/history — confidence time-series
 """
+
 from __future__ import annotations
 
 from datetime import datetime

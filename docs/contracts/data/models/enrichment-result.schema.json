@@ -74,6 +74,11 @@
       "default": 0,
       "description": "Wall-clock processing time in milliseconds."
     },
+    "inference_version": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Version identifier for the inference engine used."
+    },
     "pass_count": {
       "type": "integer",
       "default": 1,

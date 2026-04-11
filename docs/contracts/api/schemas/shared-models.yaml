@@ -104,6 +104,33 @@ components:
       format: date-time
       example: "2026-04-05T19:54:14Z"
 
+    # ── Error Types ──────────────────────────────────────────
+    ErrorResponse:
+      title: ErrorResponse
+      description: Standard error envelope for API responses.
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code or type.
+          example: validation_error
+        message:
+          type: string
+          description: Human-readable error message.
+          example: "Field 'entity_id' is required"
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context.
+        request_id:
+          type: string
+          format: uuid
+          description: Request correlation ID for debugging.
+      additionalProperties: false
+
     # ── Pagination ──────────────────────────────────────────
     PaginationMeta:
       title: PaginationMeta

@@ -1,50 +1,63 @@
 """
 Config / Env Contract Tests
-Source: app/core/config.py Settings, .env.example
+Source: app/core/config.py Settings, docs/contracts/config/env-contract.yaml, .env.example
 Markers: unit
 """
+
 from __future__ import annotations
-from pathlib import Path
+
 import pytest
-import yaml
+
 from tests.contracts.conftest_contracts import CONFIG_DIR, REPO_ROOT, load_yaml
 
+# Every name must appear in env-contract.yaml `variables` (1:1 with Settings).
 REQUIRED_ENV_VARS = {
-    "ENRICHMENT_ENGINE_API_KEY": {"type": "secret", "required": True, "sensitive": True},
-    "ENRICHMENT_ENGINE_MODE":    {"type": "string", "required": False, "default": "enrichment"},
-    "HOST":       {"type": "string", "required": False, "default": "0.0.0.0"},
-    "PORT":       {"type": "integer", "required": False, "default": "8000"},
-    "LOG_LEVEL":  {"type": "string", "required": False, "default": "INFO"},
-    "PERPLEXITY_API_KEY": {"type": "secret", "required": True, "sensitive": True},
-    "CLEARBIT_API_KEY":   {"type": "secret", "required": False, "sensitive": True},
-    "ZOOMINFO_API_KEY":   {"type": "secret", "required": False, "sensitive": True},
-    "APOLLO_API_KEY":     {"type": "secret", "required": False, "sensitive": True},
-    "HUNTER_API_KEY":     {"type": "secret", "required": False, "sensitive": True},
-    "OPENAI_API_KEY":     {"type": "secret", "required": False, "sensitive": True},
-    "ANTHROPIC_API_KEY":  {"type": "secret", "required": False, "sensitive": True},
-    "REDIS_URL":          {"type": "url", "required": True, "sensitive": False},
-    "NEO4J_URI":          {"type": "url", "required": False, "sensitive": False},
-    "NEO4J_USERNAME":     {"type": "string", "required": False, "sensitive": False},
-    "NEO4J_PASSWORD":     {"type": "secret", "required": False, "sensitive": True},
-    "KB_FILES_PATH":      {"type": "string", "required": False},
-    "CB_FAILURE_THRESHOLD": {"type": "integer", "required": False, "default": "5"},
-    "CB_COOLDOWN_SECONDS":  {"type": "integer", "required": False, "default": "60"},
-    "CONSENSUS_THRESHOLD":  {"type": "float", "required": False, "default": "0.7"},
-    "ODOO_URL":             {"type": "url", "required": False, "sensitive": False},
-    "ODOO_DB":              {"type": "string", "required": False},
-    "ODOO_USERNAME":        {"type": "string", "required": False},
-    "ODOO_API_KEY":         {"type": "secret", "required": False, "sensitive": True},
-    "SALESFORCE_CLIENT_ID":     {"type": "secret", "required": False, "sensitive": True},
+    "PERPLEXITY_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "PERPLEXITY_MODEL": {"type": "string", "required": False, "sensitive": False},
+    "API_SECRET_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "API_KEY_HASH": {"type": "string", "required": False, "sensitive": False},
+    "KB_DIR": {"type": "string", "required": False, "sensitive": False},
+    "REDIS_URL": {"type": "url", "required": False, "sensitive": False},
+    "DEFAULT_CONSENSUS_THRESHOLD": {"type": "float", "required": False, "sensitive": False},
+    "DEFAULT_MAX_VARIATIONS": {"type": "integer", "required": False, "sensitive": False},
+    "DEFAULT_TIMEOUT_SECONDS": {"type": "integer", "required": False, "sensitive": False},
+    "MAX_CONCURRENT_VARIATIONS": {"type": "integer", "required": False, "sensitive": False},
+    "MAX_ENTITIES_PER_BATCH": {"type": "integer", "required": False, "sensitive": False},
+    "CB_FAILURE_THRESHOLD": {"type": "integer", "required": False, "sensitive": False},
+    "CB_COOLDOWN_SECONDS": {"type": "integer", "required": False, "sensitive": False},
+    "ODOO_URL": {"type": "url", "required": False, "sensitive": False},
+    "ODOO_DB": {"type": "string", "required": False, "sensitive": False},
+    "ODOO_USERNAME": {"type": "string", "required": False, "sensitive": False},
+    "ODOO_PASSWORD": {"type": "secret", "required": False, "sensitive": True},
+    "CRM_MAPPING_PATH": {"type": "string", "required": False, "sensitive": False},
+    "SALESFORCE_CLIENT_ID": {"type": "secret", "required": False, "sensitive": True},
     "SALESFORCE_CLIENT_SECRET": {"type": "secret", "required": False, "sensitive": True},
-    "SALESFORCE_USERNAME":      {"type": "string", "required": False},
-    "SALESFORCE_PASSWORD":      {"type": "secret", "required": False, "sensitive": True},
-    "SALESFORCE_DOMAIN":        {"type": "string", "required": False},
-    "HUBSPOT_ACCESS_TOKEN":     {"type": "secret", "required": False, "sensitive": True},
-    "DATABASE_URL":             {"type": "url", "required": False, "sensitive": False},
-    "ASYNC_DATABASE_URL":       {"type": "url", "required": False, "sensitive": False},
-    "DB_POOL_MIN_SIZE":         {"type": "integer", "required": False, "default": "2"},
-    "DB_POOL_MAX_SIZE":         {"type": "integer", "required": False, "default": "10"},
-    "ENABLE_GRAPH_MEMORY":      {"type": "boolean", "required": False, "default": "false"},
+    "SALESFORCE_USERNAME": {"type": "string", "required": False, "sensitive": False},
+    "SALESFORCE_PASSWORD": {"type": "secret", "required": False, "sensitive": True},
+    "SALESFORCE_SECURITY_TOKEN": {"type": "secret", "required": False, "sensitive": True},
+    "HUBSPOT_ACCESS_TOKEN": {"type": "secret", "required": False, "sensitive": True},
+    "CLEARBIT_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "ZOOMINFO_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "APOLLO_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "HUNTER_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "OPENAI_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "ANTHROPIC_API_KEY": {"type": "secret", "required": False, "sensitive": True},
+    "CEG_BASE_URL": {"type": "url", "required": False, "sensitive": False},
+    "GATE_URL": {"type": "url", "required": False, "sensitive": False},
+    "GRAPH_NODE_URL": {"type": "url", "required": False, "sensitive": False},
+    "SCORE_NODE_URL": {"type": "url", "required": False, "sensitive": False},
+    "ROUTE_NODE_URL": {"type": "url", "required": False, "sensitive": False},
+    "INTER_NODE_SECRET": {"type": "secret", "required": False, "sensitive": True},
+    "NEO4J_URI": {"type": "url", "required": False, "sensitive": False},
+    "NEO4J_USER": {"type": "string", "required": False, "sensitive": False},
+    "NEO4J_PASSWORD": {"type": "secret", "required": False, "sensitive": True},
+    "DATABASE_URL": {"type": "url", "required": False, "sensitive": True},
+    "DOMAINS_DIR": {"type": "string", "required": False, "sensitive": False},
+    "DEFAULT_DOMAIN": {"type": "string", "required": False, "sensitive": False},
+    "MAX_BUDGET_TOKENS": {"type": "integer", "required": False, "sensitive": False},
+    "MAX_BUDGET_TOKENS_DEFAULT": {"type": "integer", "required": False, "sensitive": False},
+    "TOKEN_RATE_USD_PER_1K": {"type": "float", "required": False, "sensitive": False},
+    "LOG_LEVEL": {"type": "string", "required": False, "sensitive": False},
 }
 
 
@@ -98,21 +111,11 @@ def test_env_contract_has_examples(env_contract: dict) -> None:
     assert has_examples, "env-contract.yaml must include examples — Phase 3.6 Rule 3"
 
 
-CRITICAL_REQUIRED_VARS = [
-    "ENRICHMENT_ENGINE_API_KEY", "PERPLEXITY_API_KEY", "REDIS_URL",
-]
-
 @pytest.mark.unit
-@pytest.mark.parametrize("var_name", CRITICAL_REQUIRED_VARS)
-def test_critical_vars_marked_required(var_name: str, env_contract: dict) -> None:
-    s = str(env_contract)
-    if var_name not in s:
-        pytest.skip(f"{var_name} not in contract")
-    idx = s.find(var_name)
-    surrounding = s[max(0, idx-20):idx+200]
-    assert "required" in surrounding.lower() and (
-        "true" in surrounding.lower() or ": true" in surrounding.lower()
-    ), f"{var_name}: must be marked required: true in env-contract.yaml"
+def test_required_for_startup_lists_auth_and_enrichment(env_contract: dict) -> None:
+    startup = env_contract.get("required_for_startup", [])
+    assert "API_KEY_HASH" in startup
+    assert "PERPLEXITY_API_KEY" in startup
 
 
 @pytest.mark.unit

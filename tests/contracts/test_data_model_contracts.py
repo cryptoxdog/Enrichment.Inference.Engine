@@ -3,17 +3,20 @@ Data Model Contract Tests
 Source: app/services/pg_models.py, migrations/versions/001_initial_schema.py
 Markers: unit
 """
+
 from __future__ import annotations
-import json
-import pytest
+
 from pathlib import Path
+
+import pytest
+
 from tests.contracts.conftest_contracts import DATA_DIR, load_json, load_yaml
 
 MODEL_FILES = {
     "enrichment-result": DATA_DIR / "models" / "enrichment-result.schema.json",
-    "convergence-run":   DATA_DIR / "models" / "convergence-run.schema.json",
+    "convergence-run": DATA_DIR / "models" / "convergence-run.schema.json",
     "field-confidence-history": DATA_DIR / "models" / "field-confidence-history.schema.json",
-    "schema-proposal":   DATA_DIR / "models" / "schema-proposal.schema.json",
+    "schema-proposal": DATA_DIR / "models" / "schema-proposal.schema.json",
 }
 
 ENRICHMENT_RESULT_FIELDS = {
@@ -28,25 +31,36 @@ ENRICHMENT_RESULT_FIELDS = {
 }
 
 CONVERGENCE_RUN_FIELDS = {
-    "run_id": {}, "domain": {}, "entity_id": {},
-    "state": {}, "pass_count": {}, "consensus_threshold": {},
+    "id": {},
+    "domain": {},
+    "entity_id": {},
+    "state": {},
+    "current_pass": {},
+    "max_passes": {},
 }
 
 FIELD_CONFIDENCE_HISTORY_FIELDS = {
-    "id": {}, "entity_id": {}, "field_name": {},
-    "value": {}, "confidence": {}, "inference_version": {},
+    "id": {},
+    "entity_id": {},
+    "field_name": {},
+    "field_value": {},
+    "confidence": {},
+    "source": {},
 }
 
 SCHEMA_PROPOSAL_FIELDS = {
-    "id": {}, "domain": {}, "field_name": {},
-    "proposed_type": {}, "status": {},
+    "id": {},
+    "domain": {},
+    "field_name": {},
+    "field_type": {},
+    "approval_status": {},
 }
 
 FIELD_GROUND_TRUTH = {
-    "enrichment-result":       ENRICHMENT_RESULT_FIELDS,
-    "convergence-run":         CONVERGENCE_RUN_FIELDS,
+    "enrichment-result": ENRICHMENT_RESULT_FIELDS,
+    "convergence-run": CONVERGENCE_RUN_FIELDS,
     "field-confidence-history": FIELD_CONFIDENCE_HISTORY_FIELDS,
-    "schema-proposal":         SCHEMA_PROPOSAL_FIELDS,
+    "schema-proposal": SCHEMA_PROPOSAL_FIELDS,
 }
 
 

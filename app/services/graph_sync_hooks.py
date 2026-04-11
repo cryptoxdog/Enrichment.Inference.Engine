@@ -13,20 +13,19 @@ app/services/graph_sync_hooks.py
 GAP #22: Graph sync + score invalidation hooks.
 
 When an enrichment pass converges:
-  1. trigger_graph_sync() → POST to GRAPH node /v1/sync with enriched fields
-  2. invalidate_score_cache() → POST to SCORE node /v1/invalidate
+  1. trigger_graph_sync() → send graph-sync TransportPacket to Gate
+  2. invalidate_score_cache() → send score-invalidate TransportPacket to Gate
 
-Both calls forward lineage_id and packet_id in headers for PacketEnvelope
-traceability.  Both are fire-and-forget with error logging (no blocking).
+Both calls preserve lineage hints in the payload for traceability and route
+through Gate instead of direct peer HTTP.
 
 Configuration:
-  - GRAPH_NODE_URL (optional) — if unset, graph sync is skipped
-  - SCORE_NODE_URL (optional) — if unset, score invalidation is skipped
+  - GATE_URL / settings.gate_url (optional) — if unset, Gate-routed follow-up work is skipped
 
 Architecture compliance:
-  - Async HTTP calls only
+  - Gate-only egress
   - No retries (let downstream services handle idempotency)
-  - Lineage forwarding mandatory
+  - Lineage forwarding mandatory in payload
   - Timeout: 10s per call
 """
 
@@ -35,7 +34,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import httpx
+from constellation_node_sdk.gate import GateClient, GateClientConfig
+from constellation_node_sdk.transport import create_transport_packet
 
 from app.core.config import get_settings
 
@@ -51,45 +51,48 @@ async def trigger_graph_sync(
     packet_id: str,
 ) -> None:
     """
-    Notify GRAPH node of new enrichment data for entity.
-
-    POST to {GRAPH_SERVICE_URL}/v1/sync with:
-      - entity_id, tenant_id, enriched_fields, confidence in body
-      - lineage_id, packet_id in headers
-
-    Fire-and-forget.  If GRAPH_SERVICE_URL is not configured, no-op.
+    Notify GRAPH via Gate of new enrichment data for entity.
     """
     settings = get_settings()
-    if not settings.graph_node_url:
-        logger.debug("graph_sync_skipped_no_url", extra={"entity_id": entity_id})
+    if not settings.gate_url:
+        logger.debug("graph_sync_skipped_no_gate", extra={"entity_id": entity_id})
         return
 
-    base = settings.graph_node_url.rstrip("/")
-    url = f"{base}/v1/sync"
-    headers = {
-        "X-L9-Lineage": lineage_id,
-        "X-L9-Packet": packet_id,
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "entity_id": entity_id,
-        "tenant_id": tenant_id,
-        "enriched_fields": enriched_fields,
-        "confidence": confidence,
-    }
+    packet = create_transport_packet(
+        action="graph-sync",
+        payload={
+            "entity_id": entity_id,
+            "tenant_id": tenant_id,
+            "enriched_fields": enriched_fields,
+            "confidence": confidence,
+            "lineage_id": lineage_id,
+            "packet_id": packet_id,
+        },
+        tenant=tenant_id,
+        source_node="enrichment-engine",
+        destination_node="gate",
+        reply_to="enrichment-engine",
+        classification="internal",
+        compliance_tags=("GRAPH_SYNC",),
+    )
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
+        client = GateClient(
+            GateClientConfig(
+                gate_url=settings.gate_url,
+                local_node="enrichment-engine",
+                timeout_seconds=10.0,
+            )
+        )
+        response = await client.send_to_gate(packet)
         logger.info(
             "graph_sync_triggered",
-            extra={"entity_id": entity_id, "url": url, "status": response.status_code},
+            extra={"entity_id": entity_id, "packet_id": str(response.header.packet_id)},
         )
-    except Exception as e:
+    except Exception as exc:
         logger.error(
             "graph_sync_failed",
-            extra={"entity_id": entity_id, "url": url, "error": str(e)},
+            extra={"entity_id": entity_id, "gate_url": settings.gate_url, "error": str(exc)},
             exc_info=True,
         )
 
@@ -101,42 +104,45 @@ async def invalidate_score_cache(
     packet_id: str,
 ) -> None:
     """
-    Notify SCORE node to invalidate cached scores for entity.
-
-    POST to {SCORE_SERVICE_URL}/v1/invalidate with:
-      - entity_id, tenant_id in body
-      - lineage_id, packet_id in headers
-
-    Fire-and-forget.  If SCORE_SERVICE_URL is not configured, no-op.
+    Notify SCORE via Gate to invalidate cached scores for entity.
     """
     settings = get_settings()
-    if not settings.score_node_url:
-        logger.debug("score_invalidation_skipped_no_url", extra={"entity_id": entity_id})
+    if not settings.gate_url:
+        logger.debug("score_invalidation_skipped_no_gate", extra={"entity_id": entity_id})
         return
 
-    base = settings.score_node_url.rstrip("/")
-    url = f"{base}/v1/invalidate"
-    headers = {
-        "X-L9-Lineage": lineage_id,
-        "X-L9-Packet": packet_id,
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "entity_id": entity_id,
-        "tenant_id": tenant_id,
-    }
+    packet = create_transport_packet(
+        action="score-invalidate",
+        payload={
+            "entity_id": entity_id,
+            "tenant_id": tenant_id,
+            "lineage_id": lineage_id,
+            "packet_id": packet_id,
+        },
+        tenant=tenant_id,
+        source_node="enrichment-engine",
+        destination_node="gate",
+        reply_to="enrichment-engine",
+        classification="internal",
+        compliance_tags=("SCORE_INVALIDATION",),
+    )
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
+        client = GateClient(
+            GateClientConfig(
+                gate_url=settings.gate_url,
+                local_node="enrichment-engine",
+                timeout_seconds=10.0,
+            )
+        )
+        response = await client.send_to_gate(packet)
         logger.info(
             "score_cache_invalidated",
-            extra={"entity_id": entity_id, "url": url, "status": response.status_code},
+            extra={"entity_id": entity_id, "packet_id": str(response.header.packet_id)},
         )
-    except Exception as e:
+    except Exception as exc:
         logger.error(
             "score_invalidation_failed",
-            extra={"entity_id": entity_id, "url": url, "error": str(e)},
+            extra={"entity_id": entity_id, "gate_url": settings.gate_url, "error": str(exc)},
             exc_info=True,
         )

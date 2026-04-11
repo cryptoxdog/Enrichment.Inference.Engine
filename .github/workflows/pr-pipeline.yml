@@ -1,0 +1,670 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: l9-template
+# engine: enrichment
+# layer: [ci, governance]
+# tags: [L9_TEMPLATE, ci, pr-pipeline, full-gate]
+# owner: platform
+# status: active
+# --- /L9_META ---
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Full PR Pipeline — GitHub Actions parity with `make pr`
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# VERSION: 1.0.0
+# PURPOSE: Run the full local PR pipeline (local_pr_pipeline/pr_pipeline.sh)
+#          in GitHub Actions for complete CI parity.
+# LOCAL EQUIVALENT: make pr (or make pr-quick)
+# SIBLING: local_pr_pipeline/pr_pipeline.sh
+#
+# WHEN IT RUNS (automatic):
+#   • Every pull_request (opened, synchronize, reopened) — all target branches GitHub allows.
+#   • Push to PRIMARY_BRANCH / DEVELOP_BRANCH (vars or default main/develop).
+#   • Manual: Actions → "PR Pipeline (Full Gate)" → Run workflow (with optional skip flags).
+# It is a normal GitHub Actions workflow: it runs whenever those events occur; whether it
+# blocks merge depends on branch protection "required checks" in repo settings.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+name: PR Pipeline (Full Gate)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - ${{ vars.PRIMARY_BRANCH || 'main' }}
+      - ${{ vars.DEVELOP_BRANCH || 'develop' }}
+  workflow_dispatch:
+    inputs:
+      skip_integration:
+        description: 'Skip integration tests (PR_SKIP_INTEGRATION)'
+        type: boolean
+        default: false
+      skip_semgrep:
+        description: 'Skip Semgrep policy checks (PR_SKIP_SEMGREP)'
+        type: boolean
+        default: false
+      skip_l9:
+        description: 'Skip L9 constitution/contract checks (PR_SKIP_L9)'
+        type: boolean
+        default: false
+      l9_minimal:
+        description: 'Minimal L9 checks only (PR_L9_MINIMAL)'
+        type: boolean
+        default: false
+      mypy_strict:
+        description: 'Fail on mypy errors (PR_MYPY_STRICT)'
+        type: boolean
+        default: false
+      security_strict:
+        description: 'Fail on security warnings (PR_SECURITY_STRICT)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: pr-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+env:
+  PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.12' }}
+  COVERAGE_THRESHOLD: ${{ vars.COVERAGE_THRESHOLD || '60' }}
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 1: VALIDATE
+  # ────────────────────────────────────────────────────────────────────────
+  validate:
+    name: Validate (syntax + YAML)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
+
+      - name: Install validation tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Check Python syntax
+        run: |
+          echo "Checking Python syntax..."
+          find . -name "*.py" \
+            -not -path "./venv/*" \
+            -not -path "./.venv/*" \
+            -not -path "./__pycache__/*" \
+            -not -path "./build/*" \
+            -not -path "./dist/*" \
+            -not -path "./WIP/*" \
+            -exec python -m py_compile {} +
+          echo "✅ All Python files have valid syntax"
+
+      - name: Validate workflow YAML
+        run: |
+          python3 -c "
+          import yaml
+          from pathlib import Path
+          errors = []
+          for f in Path('.github/workflows').glob('*.yml'):
+              try:
+                  with open(f) as fh:
+                      yaml.safe_load(fh)
+              except yaml.YAMLError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors:
+                  print(f'❌ {e}')
+              raise SystemExit(1)
+          print('✅ All workflow YAML files are valid')
+          "
+
+      - name: Validate KB YAML
+        run: |
+          python3 local_pr_pipeline/compliance_kb_validate.py
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 2: LINT
+  # ────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (Ruff + Mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run Ruff linter
+        run: |
+          echo "Running Ruff linter..."
+          ruff check . --output-format=github
+          echo "✅ Ruff checks passed"
+
+      - name: Run Ruff formatter check
+        run: |
+          echo "Checking code formatting..."
+          ruff format --check .
+          echo "✅ Code formatting is consistent"
+
+      - name: Run Mypy type checker
+        env:
+          PR_MYPY_STRICT: ${{ inputs.mypy_strict && '1' || '' }}
+        run: |
+          echo "Running type checks..."
+          MYPY_CMD="mypy app --show-error-codes --pretty --ignore-missing-imports"
+          if [ -n "$PR_MYPY_STRICT" ]; then
+            $MYPY_CMD
+          else
+            $MYPY_CMD || echo "⚠️ Type check warnings (non-blocking)"
+          fi
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 3: SEMGREP
+  # ────────────────────────────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep Policy Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+    if: ${{ !inputs.skip_semgrep }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: |
+          echo "Running Semgrep policy checks..."
+          semgrep --config .semgrep/ --error --quiet
+          echo "✅ Semgrep checks passed"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 4: TEST
+  # ────────────────────────────────────────────────────────────────────────
+  test:
+    name: Test (pytest + coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [validate, lint]
+    if: ${{ !inputs.skip_integration }}
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install -e ".[dev]" 2>/dev/null || pip install -e . 2>/dev/null || true
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379/0
+          TESTING: "true"
+        run: |
+          echo "Running test suite..."
+          PYTHONPATH=. pytest tests/ \
+            -n auto \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} \
+            --timeout=300 \
+            --tb=short \
+            -v
+          echo "✅ All tests passed with coverage >=${{ env.COVERAGE_THRESHOLD }}%"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 5: SECURITY
+  # ────────────────────────────────────────────────────────────────────────
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run Gitleaks (secret detection)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+      - name: Run pip-audit (dependency vulnerabilities)
+        run: |
+          echo "Scanning dependencies for known vulnerabilities..."
+          pip-audit --desc
+
+      - name: Run Safety check
+        env:
+          PR_SECURITY_STRICT: ${{ inputs.security_strict && '1' || '' }}
+        run: |
+          echo "Running Safety vulnerability scanner..."
+          if [ -n "$PR_SECURITY_STRICT" ]; then
+            safety check
+          else
+            safety check || echo "⚠️ Safety check warnings (non-blocking)"
+          fi
+
+      - name: Run Bandit (SAST)
+        env:
+          PR_SECURITY_STRICT: ${{ inputs.security_strict && '1' || '' }}
+        run: |
+          echo "Running Bandit static security analysis..."
+          if [ -n "$PR_SECURITY_STRICT" ]; then
+            bandit -r app -ll -f screen --exclude ./venv,./.venv,./tests,./build,./dist
+          else
+            bandit -r app -ll -f screen --exclude ./venv,./.venv,./tests,./build,./dist || echo "⚠️ Security warnings (non-blocking)"
+          fi
+
+      - name: Dependency Review (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 6: COMPLIANCE
+  # ────────────────────────────────────────────────────────────────────────
+  compliance:
+    name: Architecture Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install compliance tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Terminology Guard
+        run: |
+          python3 local_pr_pipeline/check_compliance_terminology.py
+
+      - name: Chassis Isolation Check
+        run: |
+          echo "Checking chassis isolation..."
+          VIOLATIONS=$(find app/ -name "*.py" \
+            -not -path "app/api/*" \
+            -not -path "app/middleware/*" \
+            -not -path "app/main.py" \
+            -not -path "app/core/auth.py" \
+            -not -path "app/score/score_api.py" \
+            -not -name "handlers.py" \
+            -exec grep -l "from fastapi import\|import fastapi" {} + 2>/dev/null || true)
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ FastAPI imports found outside allowed modules:"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "✅ Chassis isolation is maintained"
+
+      - name: KB YAML Schema Validation
+        run: |
+          python3 local_pr_pipeline/compliance_kb_validate.py
+
+      - name: L9 Contract Audit (if available)
+        run: |
+          if [ -f "tools/audit_engine.py" ]; then
+            echo "Running L9 contract audit..."
+            PYTHONPATH=. python tools/audit_engine.py --strict || echo "⚠️ Contract audit warnings (non-blocking)"
+          fi
+
+      - name: L9 Contract Verification (if available)
+        run: |
+          if [ -f "tools/verify_contracts.py" ]; then
+            echo "Running L9 contract verification..."
+            PYTHONPATH=. python tools/verify_contracts.py || echo "⚠️ Contract verification warnings (non-blocking)"
+          fi
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 7: L9 CONSTITUTION + CONTRACT CONTROL
+  # ────────────────────────────────────────────────────────────────────────
+  l9:
+    name: L9 Constitution Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate
+    if: ${{ !inputs.skip_l9 }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install L9 dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml pytest pytest-cov fastapi
+          pip install -e . --no-deps 2>/dev/null || true
+
+      - name: Verify node constitution
+        run: |
+          python scripts/verify_node_constitution.py
+
+      - name: Run Tier 2 constitution tests
+        run: |
+          pytest tests/contracts/tier2/test_node_constitution_contract.py \
+            tests/contracts/tier2/test_runtime_attestation_contract.py \
+            -q --disable-warnings --maxfail=1 -o addopts=""
+
+      - name: Verify constitution (l9_contract_control)
+        run: |
+          python scripts/l9_contract_control.py verify-constitution
+
+      - name: Verify attestation (l9_contract_control)
+        run: |
+          python scripts/l9_contract_control.py verify-attestation || {
+            if python -c "import app" 2>/dev/null; then
+              exit 1
+            fi
+            echo "[l9] SKIP: app module not installed, attestation verification skipped"
+          }
+
+      - name: Select and run gates (PR only)
+        if: github.event_name == 'pull_request' && !inputs.l9_minimal
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "L9 select-gates: base=$BASE_REF head=$HEAD_REF"
+          python scripts/l9_contract_control.py select-gates --base "$BASE_REF" --head "$HEAD_REF" > gates.json
+          python3 local_pr_pipeline/run_pr_select_gates.py gates.json
+
+      - name: Contract-bound change gate (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 local_pr_pipeline/contract_bound_local.py --base "$BASE_REF" --head "$HEAD_REF" || echo "⚠️ Contract-bound check (advisory)"
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PHASE 8: DOCS CONSISTENCY
+  # ────────────────────────────────────────────────────────────────────────
+  docs:
+    name: Docs Consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run docs consistency checks
+        run: |
+          bash local_pr_pipeline/docs_consistency_local.sh
+
+      - name: Run markdown link check
+        run: |
+          python3 local_pr_pipeline/docs_link_check_local.py
+
+  # ────────────────────────────────────────────────────────────────────────
+  # FINAL GATE: PR Pipeline Summary
+  # ────────────────────────────────────────────────────────────────────────
+  pr-pipeline-gate:
+    name: PR Pipeline Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - validate
+      - lint
+      - semgrep
+      - test
+      - security
+      - compliance
+      - l9
+      - docs
+
+    steps:
+      - name: Evaluate all results
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "PR Pipeline Results (parity with make pr)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Job Results:"
+          echo "  validate:   ${{ needs.validate.result }}"
+          echo "  lint:       ${{ needs.lint.result }}"
+          echo "  semgrep:    ${{ needs.semgrep.result }}"
+          echo "  test:       ${{ needs.test.result }}"
+          echo "  security:   ${{ needs.security.result }}"
+          echo "  compliance: ${{ needs.compliance.result }}"
+          echo "  l9:         ${{ needs.l9.result }}"
+          echo "  docs:       ${{ needs.docs.result }}"
+          echo ""
+
+          # Check for failures in required jobs
+          FAILED=0
+          if [[ "${{ needs.validate.result }}" == "failure" ]]; then
+            echo "❌ validate FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.lint.result }}" == "failure" ]]; then
+            echo "❌ lint FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.semgrep.result }}" == "failure" ]]; then
+            echo "❌ semgrep FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.test.result }}" == "failure" ]]; then
+            echo "❌ test FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.security.result }}" == "failure" ]]; then
+            echo "❌ security FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.compliance.result }}" == "failure" ]]; then
+            echo "❌ compliance FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.l9.result }}" == "failure" ]]; then
+            echo "❌ l9 FAILED"
+            FAILED=1
+          fi
+          if [[ "${{ needs.docs.result }}" == "failure" ]]; then
+            echo "❌ docs FAILED"
+            FAILED=1
+          fi
+
+          if [[ $FAILED -eq 1 ]]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ PR PIPELINE GATE FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "Fix the failing jobs above before merging."
+            echo "Local equivalent: make pr"
+            exit 1
+          fi
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ PR PIPELINE GATE PASSED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "All checks completed successfully."
+          echo "Ready for code review and merge."
+
+      - name: Post PR comment with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = "<!-- pr-pipeline-gate-summary -->";
+            const results = {
+              validate: "${{ needs.validate.result }}",
+              lint: "${{ needs.lint.result }}",
+              semgrep: "${{ needs.semgrep.result }}",
+              test: "${{ needs.test.result }}",
+              security: "${{ needs.security.result }}",
+              compliance: "${{ needs.compliance.result }}",
+              l9: "${{ needs.l9.result }}",
+              docs: "${{ needs.docs.result }}"
+            };
+
+            const icon = (r) => r === "success" ? "✅" : r === "skipped" ? "⏭️" : r === "failure" ? "❌" : "⚠️";
+            const allPassed = Object.values(results).every(r => r === "success" || r === "skipped");
+
+            let body = `${marker}\n## PR Pipeline Gate Summary\n\n`;
+            body += `| Phase | Status |\n|-------|--------|\n`;
+            for (const [job, result] of Object.entries(results)) {
+              body += `| ${job} | ${icon(result)} ${result} |\n`;
+            }
+            body += `\n`;
+            body += allPassed
+              ? `### ✅ All checks passed\n\nReady for code review and merge.\n`
+              : `### ❌ Some checks failed\n\nFix the failing jobs before merging.\n`;
+            body += `\n_Local equivalent: \`make pr\` · Job: ${context.runId}_`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const existing = comments.find(c => c.user.type === "Bot" && c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# END OF PR PIPELINE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

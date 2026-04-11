@@ -9,7 +9,7 @@ fields, range matching, and weighted-set scoring.
 
 from __future__ import annotations
 
-from score_models import (
+from .score_models import (
     ICPDefinition,
     ICPFieldCriterion,
     ICPFieldType,
@@ -198,3 +198,4 @@ def get_plastics_field_summary() -> dict[str, dict]:
                 for c in criteria
             ],
         }
+    return summary

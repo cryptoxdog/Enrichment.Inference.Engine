@@ -35,8 +35,11 @@ audit_scopes:
     - "app/inference/*"
     - "app/convergence/*"
   architecture:
-    - "app/chassis_contract.py"
-    - "app/handlers.py"
+    - "chassis/envelope.py"
+    - "chassis/router.py"
+    - "app/api/v1/chassis_endpoint.py"
+    - "app/services/chassis_handlers.py"
+    - "app/engines/handlers.py"
     - "app/models/*"
   testing:
     - "tests/**"

@@ -9,17 +9,23 @@ ROI 4: Adds inference_unlock_score to PassResult for telemetry.
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
+from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .schemas import EnrichRequest
+# Enums
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Convergence Request
-# ═══════════════════════════════════════════════════════════════════════════
+
+class ConvergenceMode(StrEnum):
+    """Enrichment mode for convergence pass."""
+
+    DISCOVERY = "discovery"
+    TARGETED = "targeted"
+    VERIFICATION = "verification"
 
 
 class ApprovalMode(StrEnum):
@@ -29,81 +35,50 @@ class ApprovalMode(StrEnum):
     HUMAN = "human"  # Discover tier: require human review
 
 
-class ConvergeRequest(EnrichRequest):
-    """
-    Multi-pass convergence loop request.
+class ConvergenceReason(StrEnum):
+    """Reason why convergence loop terminated."""
 
-    Extends EnrichRequest with convergence-specific parameters:
-    - max_passes: Hard limit on iteration count
-    - max_budget_tokens: Cost ceiling (Sonar tokens)
-    - approval_mode: Schema proposal handling (auto/human)
-    - convergence_threshold: Uncertainty target for termination
-    """
+    THRESHOLD_MET = "threshold_met"  # Uncertainty below threshold
+    BUDGET_EXHAUSTED = "budget_exhausted"  # Token budget depleted
+    MAX_PASSES = "max_passes"  # Reached max_passes limit
+    HUMAN_HOLD = "human_hold"  # Schema proposals require human approval
+    DIMINISHING_RETURNS = "diminishing_returns"  # ROI below threshold
+    FAILED = "failed"  # Unrecoverable error occurred
 
-    domain: str = Field(..., description="Domain identifier (e.g., 'plastics')")
-    max_passes: int = Field(default=5, ge=1, le=10, description="Maximum convergence passes")
-    max_budget_tokens: int = Field(default=50000, ge=1000, description="Token budget ceiling")
-    approval_mode: ApprovalMode = Field(
-        default=ApprovalMode.HUMAN, description="Schema proposal approval mode"
-    )
-    convergence_threshold: float = Field(
-        default=2.0, ge=0.0, description="Uncertainty threshold for convergence"
-    )
+
+class SchemaProposalSource(StrEnum):
+    """Source of schema proposal."""
+
+    ENRICHMENT = "enrichment"
+    INFERENCE = "inference"
+
+
+class ApprovalDecision(StrEnum):
+    """Schema proposal approval decision."""
+
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PENDING = "pending"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Pass Result
+# Cost Summary
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class PassResult(BaseModel):
-    """
-    Results from a single convergence pass.
+class CostSummary(BaseModel):
+    """Cost tracking for convergence run."""
 
-    Captures enriched fields, inferred fields, confidence deltas, uncertainty
-    reduction, token cost, and timing. Used for telemetry and convergence analysis.
+    total_tokens: int = Field(default=0, ge=0)
+    total_cost_usd: float = Field(default=0.0, ge=0.0)
+    cost_per_field: float = Field(default=0.0, ge=0.0)
+    budget_utilization_pct: float = Field(default=0.0, ge=0.0)
+    tokens_per_pass: list[int] = Field(default_factory=list)
 
-    ROI 4: Added inference_unlock_score and top_unlock_field for tracking
-    inference-unlock-aware targeting effectiveness.
-    """
-
-    pass_number: int = Field(..., ge=1, description="Pass sequence number (1-indexed)")
-    mode: Literal["discovery", "targeted", "verification"] = Field(
-        ..., description="Enrichment mode for this pass"
-    )
-    fields_enriched: list[str] = Field(
-        default_factory=list, description="Field names populated by enrichment"
-    )
-    fields_inferred: list[str] = Field(
-        default_factory=list, description="Field names derived by inference rules"
-    )
-    field_confidences: dict[str, float] = Field(
-        default_factory=dict,
-        description="Per-field confidence scores after this pass (0.0-1.0)",
-    )
-    uncertainty_before: float = Field(..., ge=0.0, description="Uncertainty score at pass start")
-    uncertainty_after: float = Field(..., ge=0.0, description="Uncertainty score at pass end")
-    tokens_used: int = Field(..., ge=0, description="Sonar tokens consumed this pass")
-    duration_ms: int = Field(..., ge=0, description="Pass execution time (milliseconds)")
-
-    # ROI 4: Inference unlock targeting telemetry
-    top_unlock_field: str | None = Field(
-        default=None,
-        description="Highest-priority field targeted (unlock-aware ranking)",
-    )
-    inference_unlock_score: float = Field(
-        default=0.0,
-        ge=0.0,
-        description="Unlock score of top_unlock_field (downstream inference value)",
-    )
-
-    # Optional metadata
-    kb_fragments_used: list[str] = Field(
-        default_factory=list, description="KB fragment IDs injected this pass"
-    )
-    variation_count: int = Field(
-        default=1, ge=1, le=5, description="Sonar variations used this pass"
-    )
+    @field_validator("total_cost_usd", "cost_per_field", "budget_utilization_pct", mode="after")
+    @classmethod
+    def round_to_6_decimals(cls, v: float) -> float:
+        return round(v, 6)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -120,38 +95,101 @@ class SchemaProposal(BaseModel):
     """
 
     field_name: str = Field(..., description="Proposed field name")
-    field_type: str = Field(..., description="Proposed data type (string, float, bool, list, etc.)")
-    source: Literal["enrichment", "inference"] = Field(..., description="How field was discovered")
-    fill_rate: float = Field(
-        ..., ge=0.0, le=1.0, description="Fraction of entities with this field populated"
+    field_type: str = Field(default="string", description="Proposed data type")
+    source: SchemaProposalSource = Field(
+        default=SchemaProposalSource.ENRICHMENT, description="How field was discovered"
     )
-    avg_confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Mean confidence across populated entities"
-    )
-    sample_values: list[Any] = Field(
-        default_factory=list, description="Sample values from discovered entities"
-    )
-    proposed_gate: dict[str, Any] | None = Field(
-        default=None, description="Optional gate definition if field enables matching"
-    )
-    proposed_scoring_dimension: dict[str, Any] | None = Field(
-        default=None, description="Optional scoring dimension if field affects ranking"
-    )
+    fill_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="Fraction populated")
+    avg_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Mean confidence")
+    sample_values: list[Any] = Field(default_factory=list, max_length=10)
+    proposed_gate: str | None = Field(default=None)
+    proposed_scoring_dimension: str | None = Field(default=None)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Pass Result
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class PassResult(BaseModel):
+    """
+    Results from a single convergence pass.
+
+    Captures enriched fields, inferred fields, confidence deltas, uncertainty
+    reduction, token cost, and timing.
+    """
+
+    pass_number: int = Field(..., ge=1, description="Pass sequence number (1-indexed)")
+    mode: ConvergenceMode = Field(default=ConvergenceMode.DISCOVERY)
+    fields_enriched: list[str] = Field(default_factory=list)
+    fields_inferred: list[str] = Field(default_factory=list)
+    field_confidences: dict[str, float] = Field(default_factory=dict)
+    uncertainty_before: float = Field(default=0.0, ge=0.0)
+    uncertainty_after: float = Field(default=0.0, ge=0.0)
+    tokens_used: int = Field(default=0, ge=0)
+    duration_ms: int = Field(default=0, ge=0)
+    rules_fired: list[str] = Field(default_factory=list)
+    error: str | None = Field(default=None)
+
+    # ROI 4: Inference unlock targeting telemetry
+    top_unlock_field: str | None = Field(default=None)
+    inference_unlock_score: float = Field(default=0.0, ge=0.0)
+
+    # Optional metadata
+    kb_fragments_used: list[str] = Field(default_factory=list)
+    variation_count: int = Field(default=1, ge=1, le=5)
+
+    @property
+    def uncertainty_delta(self) -> float:
+        """Uncertainty reduction this pass."""
+        return self.uncertainty_before - self.uncertainty_after
+
+    @property
+    def fields_gained(self) -> int:
+        """Total fields populated this pass."""
+        return len(self.fields_enriched) + len(self.fields_inferred)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Convergence Request
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class ConvergeRequest(BaseModel):
+    """
+    Multi-pass convergence loop request.
+
+    Extends EnrichRequest with convergence-specific parameters.
+    """
+
+    entity: dict[str, Any] = Field(..., min_length=1)
+    object_type: str = Field(...)
+    objective: str = Field(...)
+    domain: str | None = Field(default=None)
+    run_id: str = Field(default_factory=lambda: str(uuid4()))
+    idempotency_key: str | None = Field(default=None)
+    max_passes: int = Field(default=5, ge=1, le=20)
+    max_budget_tokens: int = Field(default=50000, ge=1000)
+    approval_mode: ApprovalMode = Field(default=ApprovalMode.HUMAN)
+    convergence_threshold: float = Field(default=2.0, ge=0.0, le=10.0)
+    consensus_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    max_variations: int = Field(default=3, ge=1, le=10)
+    target_schema: dict[str, Any] | str | None = Field(default=None)
+
+    @field_validator("target_schema", mode="before")
+    @classmethod
+    def parse_schema_string(cls, v: Any) -> dict[str, Any] | None:
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Convergence Response
 # ═══════════════════════════════════════════════════════════════════════════
-
-
-class ConvergenceReason(StrEnum):
-    """Reason why convergence loop terminated."""
-
-    THRESHOLD_MET = "threshold_met"  # Uncertainty below threshold
-    BUDGET_EXHAUSTED = "budget_exhausted"  # Token budget depleted
-    MAX_PASSES = "max_passes"  # Reached max_passes limit
-    HUMAN_HOLD = "human_hold"  # Schema proposals require human approval
-    ERROR = "error"  # Unrecoverable error occurred
 
 
 class ConvergeResponse(BaseModel):
@@ -162,32 +200,34 @@ class ConvergeResponse(BaseModel):
     convergence reason, and cost summary.
     """
 
-    entity_id: str = Field(..., description="Entity identifier")
-    domain: str = Field(..., description="Domain identifier")
-    passes: list[PassResult] = Field(
-        default_factory=list, description="Per-pass results in sequence"
-    )
-    final_fields: dict[str, Any] = Field(
-        default_factory=dict, description="Final entity state after convergence"
-    )
-    final_field_confidences: dict[str, float] = Field(
-        default_factory=dict, description="Per-field confidence scores (final state)"
-    )
-    schema_proposals: list[SchemaProposal] = Field(
-        default_factory=list,
-        description="Discovered fields proposed for domain schema",
-    )
-    convergence_reason: ConvergenceReason = Field(..., description="Why loop terminated")
-    total_tokens: int = Field(..., ge=0, description="Total Sonar tokens consumed")
-    total_cost_usd: float = Field(..., ge=0.0, description="Total enrichment cost (USD)")
-    domain_yaml_version_before: str | None = Field(
-        default=None, description="Domain YAML version at loop start"
-    )
-    domain_yaml_version_after: str | None = Field(
-        default=None, description="Domain YAML version at loop end (if updated)"
-    )
-    duration_ms: int = Field(..., ge=0, description="Total loop execution time (ms)")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    entity_id: str = Field(default="")
+    domain: str = Field(default="")
+    state: str = Field(default="running")
+    passes: list[PassResult] = Field(default_factory=list)
+    final_fields: dict[str, Any] = Field(default_factory=dict)
+    final_field_confidences: dict[str, float] = Field(default_factory=dict)
+    schema_proposals: list[SchemaProposal] = Field(default_factory=list)
+    convergence_reason: ConvergenceReason = Field(default=ConvergenceReason.MAX_PASSES)
+    total_tokens: int = Field(default=0, ge=0)
+    total_cost_usd: float = Field(default=0.0, ge=0.0)
+    domain_yaml_version_before: str | None = Field(default=None)
+    domain_yaml_version_after: str | None = Field(default=None)
+    kb_content_hash: str | None = Field(default=None)
+    duration_ms: int = Field(default=0, ge=0)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = Field(default=None)
+
+    @property
+    def total_passes(self) -> int:
+        return len(self.passes)
+
+    @property
+    def total_fields_discovered(self) -> int:
+        return len(self.final_fields)
+
+    @property
+    def is_converged(self) -> bool:
+        return self.convergence_reason == ConvergenceReason.THRESHOLD_MET
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -196,44 +236,43 @@ class ConvergeResponse(BaseModel):
 
 
 class BatchConvergeRequest(BaseModel):
-    """
-    Batch convergence request for multiple entities.
+    """Batch convergence request for multiple entities."""
 
-    Supports enrichment profile selection for targeted batch processing
-    (e.g., nightly-stale, high-null, failed-match entities).
-    """
-
-    entities: list[dict[str, Any]] = Field(..., description="List of entities to converge")
-    domain: str = Field(..., description="Domain identifier")
-    profile_name: str | None = Field(
-        default=None,
-        description="Enrichment profile name (e.g., 'nightly-stale', 'high-null')",
-    )
-    max_budget_tokens: int = Field(
-        default=100000, ge=1000, description="Total token budget for batch"
-    )
-    convergence_threshold: float = Field(
-        default=2.0, ge=0.0, description="Per-entity uncertainty threshold"
-    )
+    entities: list[ConvergeRequest] = Field(..., max_length=50)
+    profile_name: str | None = Field(default=None)
+    max_budget_tokens: int = Field(default=100000, ge=1000)
+    convergence_threshold: float = Field(default=2.0, ge=0.0)
 
 
 class BatchConvergeResponse(BaseModel):
-    """
-    Batch convergence response.
+    """Batch convergence response."""
 
-    Contains per-entity convergence results plus aggregate statistics.
-    """
+    results: list[ConvergeResponse] = Field(default_factory=list)
+    total: int = Field(default=0, ge=0)
+    succeeded: int = Field(default=0, ge=0)
+    failed: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
+    total_cost_usd: float = Field(default=0.0, ge=0.0)
+    avg_passes_per_entity: float = Field(default=0.0, ge=0.0)
+    duration_ms: int = Field(default=0, ge=0)
+    schema_proposal_set: list[SchemaProposal] | None = Field(default=None)
 
-    results: list[ConvergeResponse] = Field(
-        default_factory=list, description="Per-entity convergence results"
-    )
-    total_entities: int = Field(..., ge=0, description="Total entities processed")
-    succeeded: int = Field(..., ge=0, description="Entities converged successfully")
-    failed: int = Field(..., ge=0, description="Entities failed to converge")
-    total_tokens: int = Field(..., ge=0, description="Total Sonar tokens consumed")
-    total_cost_usd: float = Field(..., ge=0.0, description="Total batch cost (USD)")
-    avg_passes_per_entity: float = Field(..., ge=0.0, description="Mean passes per entity")
-    duration_ms: int = Field(..., ge=0, description="Total batch execution time (ms)")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Convergence Report (Telemetry)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class ConvergenceReport(BaseModel):
+    """Telemetry report for convergence analysis."""
+
+    run_id: str = Field(...)
+    passes_completed: int = Field(default=0, ge=0)
+    confidence_trajectory: list[float] = Field(default_factory=list)
+    uncertainty_trajectory: list[float] = Field(default_factory=list)
+    tokens_per_pass: list[int] = Field(default_factory=list)
+    cost_per_pass_usd: list[float] = Field(default_factory=list)
+    roi_per_pass: list[float] = Field(default_factory=list)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -242,11 +281,7 @@ class BatchConvergeResponse(BaseModel):
 
 
 class PassContext(BaseModel):
-    """
-    Internal context passed between convergence loop iterations.
-
-    Not exposed in API — used by convergence_controller.py.
-    """
+    """Internal context passed between convergence loop iterations."""
 
     pass_number: int
     budget_remaining: int

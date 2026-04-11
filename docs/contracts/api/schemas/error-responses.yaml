@@ -67,3 +67,42 @@ components:
             msg: "Field required"
             type: "missing"
 
+  responses:
+    # HTTP 400 Bad Request
+    BadRequest400:
+      description: Bad Request — malformed request syntax or invalid parameters.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Invalid request format"
+
+    # HTTP 401 Unauthorized
+    Unauthorized401:
+      description: Unauthorized — missing or invalid authentication credentials.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Invalid API key"
+
+    # HTTP 422 Validation Error
+    ValidationError422:
+      description: Unprocessable Entity — request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+
+    # HTTP 500 Internal Server Error
+    InternalError500:
+      description: Internal Server Error — unexpected server-side failure.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "An internal error occurred"
+

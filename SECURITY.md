@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.x     | ✅ Active  |
+| 2.x     | ✅ Active (see `pyproject.toml` / `app/main.py` for current package and runtime version) |
 | 1.x     | ❌ EOL     |
 
 ## Reporting a Vulnerability

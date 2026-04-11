@@ -1,135 +1,106 @@
 """
-PacketEnvelope Contract Tests — Source: chassis/envelope.py
+TransportPacket contract tests.
 Markers: unit
 """
+
 from __future__ import annotations
+
 import pytest
-import yaml
-from tests.contracts.conftest_contracts import AGENTS_DIR
-
-try:
-    from chassis.envelope import inflate_ingress, deflate_egress, _compute_hash
-    CHASSIS_AVAILABLE = True
-except ImportError:
-    CHASSIS_AVAILABLE = False
-
-chassis_required = pytest.mark.skipif(not CHASSIS_AVAILABLE, reason="chassis not on PYTHONPATH")
-
-
-@pytest.fixture(scope="module")
-def envelope_contract() -> dict:
-    path = AGENTS_DIR / "protocols" / "packet-envelope.yaml"
-    if not path.exists():
-        pytest.skip("packet-envelope.yaml missing")
-    with open(path) as f:
-        return yaml.safe_load(f)
+from constellation_node_sdk.transport import create_transport_packet
+from constellation_node_sdk.transport.hop_trace import make_execution_hop
 
 
 @pytest.mark.unit
-def test_envelope_contract_has_ingress_schema(envelope_contract: dict) -> None:
-    assert any(k in str(envelope_contract).lower() for k in ("ingress", "inflate", "inbound"))
-
-@pytest.mark.unit
-def test_envelope_contract_has_egress_schema(envelope_contract: dict) -> None:
-    assert any(k in str(envelope_contract).lower() for k in ("egress", "deflate", "outbound", "result"))
-
-@pytest.mark.unit
-def test_envelope_contract_lists_actions(envelope_contract: dict) -> None:
-    s = str(envelope_contract).lower()
-    for action in ["enrich", "writeback", "converge", "discover"]:
-        assert action in s, f"packet-envelope.yaml missing action '{action}'"
-
-@pytest.mark.unit
-def test_envelope_contract_documents_tenant(envelope_contract: dict) -> None:
-    assert "tenant" in str(envelope_contract).lower()
-
-@pytest.mark.unit
-def test_envelope_contract_documents_content_hash(envelope_contract: dict) -> None:
-    assert "content_hash" in str(envelope_contract)
-
-
-# ── Behavioral invariants ─────────────────────────────────────────────────
-
-@chassis_required
-@pytest.mark.unit
-def test_inflate_missing_action_raises() -> None:
+def test_transport_packet_requires_non_empty_action() -> None:
     with pytest.raises(ValueError, match="action"):
-        inflate_ingress({"payload": {}})
+        create_transport_packet(
+            action="",
+            payload={},
+            tenant="t1",
+            source_node="client",
+            destination_node="gate",
+        )
 
-@chassis_required
-@pytest.mark.unit
-def test_inflate_missing_payload_raises() -> None:
-    with pytest.raises(ValueError, match="payload"):
-        inflate_ingress({"action": "enrich", "payload": "bad"})
 
-@chassis_required
 @pytest.mark.unit
-def test_inflate_null_payload_raises() -> None:
-    with pytest.raises(ValueError, match="payload"):
-        inflate_ingress({"action": "enrich"})
+def test_transport_packet_requires_dict_payload() -> None:
+    with pytest.raises(TypeError):
+        create_transport_packet(  # type: ignore[arg-type]
+            action="enrich",
+            payload=None,
+            tenant="t1",
+            source_node="client",
+            destination_node="gate",
+        )
 
-@chassis_required
-@pytest.mark.unit
-def test_inflate_returns_guaranteed_fields() -> None:
-    result = inflate_ingress({"action": "enrich", "payload": {}, "tenant": "t1"})
-    for field in ["packet_id", "action", "payload", "content_hash", "tenant", "lineage", "governance", "hop_trace", "timestamp"]:
-        assert field in result, f"Missing guaranteed field: {field}"
 
-@chassis_required
 @pytest.mark.unit
-def test_inflate_destination_node_fixed() -> None:
-    result = inflate_ingress({"action": "enrich", "payload": {}, "tenant": "t1"})
-    assert result["address"]["destination_node"] == "enrichment-engine"
+def test_create_transport_packet_returns_guaranteed_fields() -> None:
+    packet = create_transport_packet(
+        action="enrich",
+        payload={},
+        tenant="t1",
+        source_node="client",
+        destination_node="gate",
+    )
+    assert packet.header.packet_id
+    assert packet.header.action == "enrich"
+    assert packet.payload == {}
+    assert packet.security.payload_hash
+    assert packet.security.transport_hash
+    assert packet.tenant.org_id == "t1"
+    assert packet.lineage.generation == 0
+    assert packet.address.destination_node == "gate"
 
-@chassis_required
-@pytest.mark.unit
-def test_inflate_computes_correct_hash() -> None:
-    action, payload, tenant = "enrich", {"Name": "Acme"}, "acme-corp"
-    result = inflate_ingress({"action": action, "payload": payload, "tenant": tenant})
-    assert result["content_hash"] == _compute_hash(action, payload, tenant)
 
-@chassis_required
 @pytest.mark.unit
-def test_inflate_tampered_hash_raises() -> None:
-    with pytest.raises(ValueError, match="content_hash"):
-        inflate_ingress({"action": "enrich", "payload": {}, "tenant": "t1", "content_hash": "bad" * 20})
+def test_transport_packet_preserves_tenant_context() -> None:
+    packet = create_transport_packet(
+        action="enrich",
+        payload={},
+        tenant="acme-corp",
+        source_node="client",
+        destination_node="gate",
+    )
+    assert packet.tenant.org_id == "acme-corp"
 
-@chassis_required
-@pytest.mark.unit
-def test_deflate_increments_generation() -> None:
-    envelope = inflate_ingress({"action": "enrich", "payload": {}, "tenant": "t1"})
-    initial = envelope["lineage"]["generation"]
-    egress = deflate_egress(envelope, {})
-    assert egress["lineage"]["generation"] == initial + 1
 
-@chassis_required
 @pytest.mark.unit
-def test_deflate_appends_hop_trace() -> None:
-    envelope = inflate_ingress({"action": "enrich", "payload": {}, "tenant": "t1"})
-    initial_hops = len(envelope["hop_trace"])
-    egress = deflate_egress(envelope, {})
-    assert len(egress["hop_trace"]) == initial_hops + 1
-    assert egress["hop_trace"][-1]["action"] == "respond"
+def test_derive_increments_generation_and_sets_parent() -> None:
+    packet = create_transport_packet(
+        action="enrich",
+        payload={},
+        tenant="t1",
+        source_node="client",
+        destination_node="gate",
+    )
+    child = packet.derive(
+        action="sync",
+        payload={"entity_id": "e1"},
+        source_node="enrichment-engine",
+        destination_node="gate",
+    )
+    assert child.lineage.generation == packet.lineage.generation + 1
+    assert child.lineage.parent_id == packet.header.packet_id
+    assert child.lineage.root_id == packet.lineage.root_id
 
-@chassis_required
-@pytest.mark.unit
-def test_deflate_preserves_tenant() -> None:
-    envelope = inflate_ingress({"action": "enrich", "payload": {}, "tenant": "acme-corp"})
-    egress = deflate_egress(envelope, {})
-    assert egress["tenant"]["actor"] == "acme-corp"
 
-@chassis_required
 @pytest.mark.unit
-def test_deflate_packet_type_is_result() -> None:
-    envelope = inflate_ingress({"action": "enrich", "payload": {}, "tenant": "t1"})
-    egress = deflate_egress(envelope, {})
-    assert egress.get("packet_type") == "enrichment_result"
-
-@chassis_required
-@pytest.mark.unit
-def test_inflate_lineage_defaults() -> None:
-    envelope = inflate_ingress({"action": "discover", "payload": {}, "tenant": "t1"})
-    lineage = envelope["lineage"]
-    assert lineage["generation"] == 0
-    assert lineage["derivation_type"] == "origin"
-    assert lineage["parent_ids"] == []
+def test_with_hop_appends_hop_trace() -> None:
+    packet = create_transport_packet(
+        action="enrich",
+        payload={},
+        tenant="t1",
+        source_node="client",
+        destination_node="gate",
+    )
+    hopped = packet.with_hop(
+        make_execution_hop(
+            packet=packet,
+            node="enrichment-engine",
+            action=packet.header.action,
+            status="processing",
+        )
+    )
+    assert len(hopped.hop_trace) == 1
+    assert hopped.hop_trace[-1].action == "enrich"

@@ -3,25 +3,27 @@ Dependency Contract Tests
 Source: .env.example, docker-compose.yml, app/services/
 Markers: unit
 """
+
 from __future__ import annotations
-from pathlib import Path
+
 import pytest
+
 from tests.contracts.conftest_contracts import DEPS_DIR, load_yaml
 
 EXPECTED_DEPS = {
-    "perplexity-sonar":  {"env_key": "PERPLEXITY_API_KEY",        "type": "external"},
-    "openai":            {"env_key": None,                          "type": "external"},
-    "anthropic":         {"env_key": None,                          "type": "external"},
-    "clearbit":          {"env_key": "CLEARBIT_API_KEY",           "type": "external"},
-    "zoominfo":          {"env_key": "ZOOMINFO_API_KEY",           "type": "external"},
-    "apollo":            {"env_key": "APOLLO_API_KEY",             "type": "external"},
-    "hunter":            {"env_key": "HUNTER_API_KEY",             "type": "external"},
-    "odoo-crm":          {"env_key": "ODOO_URL",                   "type": "internal"},
-    "salesforce-crm":    {"env_key": "SALESFORCE_CLIENT_ID",       "type": "external"},
-    "hubspot-crm":       {"env_key": "HUBSPOT_ACCESS_TOKEN",       "type": "external"},
-    "redis":             {"env_key": "REDIS_URL",                  "type": "internal"},
-    "postgresql":        {"env_key": None,                          "type": "internal"},
-    "neo4j":             {"env_key": None,                          "type": "internal"},
+    "perplexity-sonar": {"env_key": "PERPLEXITY_API_KEY", "type": "external"},
+    "openai": {"env_key": None, "type": "external"},
+    "anthropic": {"env_key": None, "type": "external"},
+    "clearbit": {"env_key": "CLEARBIT_API_KEY", "type": "external"},
+    "zoominfo": {"env_key": "ZOOMINFO_API_KEY", "type": "external"},
+    "apollo": {"env_key": "APOLLO_API_KEY", "type": "external"},
+    "hunter": {"env_key": "HUNTER_API_KEY", "type": "external"},
+    "odoo-crm": {"env_key": "ODOO_URL", "type": "external"},
+    "salesforce-crm": {"env_key": "SALESFORCE_CLIENT_ID", "type": "external"},
+    "hubspot-crm": {"env_key": "HUBSPOT_ACCESS_TOKEN", "type": "external"},
+    "redis": {"env_key": "REDIS_URL", "type": "internal"},
+    "postgresql": {"env_key": None, "type": "internal"},
+    "neo4j": {"env_key": None, "type": "internal"},
 }
 
 REQUIRED_FIELDS = ["service_name", "type", "protocol", "auth_method"]
@@ -64,16 +66,22 @@ def test_dependency_type_is_valid(dep_name: str, all_dep_contracts: dict) -> Non
 
 @pytest.mark.unit
 @pytest.mark.parametrize("dep_name,meta", EXPECTED_DEPS.items())
-def test_dependency_type_matches_expectation(dep_name: str, meta: dict, all_dep_contracts: dict) -> None:
+def test_dependency_type_matches_expectation(
+    dep_name: str, meta: dict, all_dep_contracts: dict
+) -> None:
     if dep_name not in all_dep_contracts:
         pytest.skip(f"{dep_name}.yaml missing")
     declared = all_dep_contracts[dep_name].get("type")
     if declared:
-        assert declared == meta["type"], f"{dep_name}.yaml: type={declared!r}, expected {meta['type']!r}"
+        assert declared == meta["type"], (
+            f"{dep_name}.yaml: type={declared!r}, expected {meta['type']!r}"
+        )
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("dep_name,meta", {k: v for k, v in EXPECTED_DEPS.items() if v["env_key"]}.items())
+@pytest.mark.parametrize(
+    "dep_name,meta", {k: v for k, v in EXPECTED_DEPS.items() if v["env_key"]}.items()
+)
 def test_dependency_env_key_referenced(dep_name: str, meta: dict, all_dep_contracts: dict) -> None:
     if dep_name not in all_dep_contracts:
         pytest.skip(f"{dep_name}.yaml missing")

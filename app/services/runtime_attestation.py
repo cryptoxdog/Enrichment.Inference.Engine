@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +123,7 @@ def build_runtime_attestation() -> dict[str, Any]:
         "node_version": constitution["node"]["version"],
         "contract_version": constitution["node"]["contract_version"],
         "contract_digest": _contract_digest(tracked_hashes),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "tracked_contract_hashes": tracked_hashes,
         "action_inventory": sorted(constitution["actions"].keys()),
         "tool_inventory": sorted(constitution["tools"].keys()),

@@ -254,7 +254,7 @@ class TestDomainClassificationWiring:
         assert total == len(classification.field_map)
 
     def test_domain_classification_to_dict(self):
-        """Test PacketEnvelope compliance via to_dict."""
+        """Test TransportPacket compliance via to_dict."""
         _classification_cache.clear()
         classification = get_or_classify_domain(SAMPLE_DOMAIN_SPEC)
         d = classification.to_dict()
@@ -372,7 +372,7 @@ class TestDomainClassificationWiring:
 
 
 class TestSonarConfigSerialization:
-    """Test SonarConfig.to_dict for PacketEnvelope compliance."""
+    """Test SonarConfig.to_dict for TransportPacket compliance."""
 
     def test_sonar_config_to_dict(self):
         config = SonarConfig(

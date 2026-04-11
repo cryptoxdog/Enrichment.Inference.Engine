@@ -3,7 +3,7 @@ SCORE Service — FastAPI Router
 revopsos-score-engine
 
 REST endpoints for scoring, decay, and explainability.
-All endpoints produce PacketEnvelope-compatible responses with
+All endpoints produce TransportPacket-compatible responses with
 full provenance and downstream routing metadata.
 """
 
@@ -16,14 +16,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from score_models import (
+
+from ..core.exceptions import DependencyNotConfiguredError
+from .score_models import (
     BatchScoreRequest,
     ScoreDimension,
     ScoreTier,
     ScoringProfile,
 )
-
-from ..core.exceptions import DependencyNotConfiguredError
 
 # ── Dependency stubs (replaced by DI in production) ───────────
 
@@ -149,7 +149,7 @@ def _envelope(
     entity_id: str = "",
     domain: str = "",
 ) -> dict[str, Any]:
-    """Wrap response in PacketEnvelope-compatible structure."""
+    """Wrap response in TransportPacket-compatible structure."""
     return {
         "packet_id": str(uuid4()),
         "service": service,

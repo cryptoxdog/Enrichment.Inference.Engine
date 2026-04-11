@@ -151,9 +151,7 @@ class TestActionAuthorityCoverage:
         self,
         packet_protocol: dict[str, Any],
     ) -> None:
-        declared_actions = {
-            handler["action"] for handler in packet_protocol["registered_handlers"]
-        }
+        declared_actions = {handler["action"] for handler in packet_protocol["registered_handlers"]}
         assert declared_actions == set(ACTION_AUTHORITY.keys())
 
     def test_discover_is_propose_only(self) -> None:

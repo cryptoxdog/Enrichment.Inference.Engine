@@ -5,6 +5,7 @@ node:
   contract_version: "1.0.0"
   contract_pack_root: docs/contracts
   tracked_contracts:
+    - docs/contracts/VERIFICATION_MATRIX.md
     - docs/contracts/api/openapi.yaml
     - docs/contracts/agents/protocols/packet-envelope.yaml
     - docs/contracts/agents/tool-schemas/_index.yaml
@@ -93,7 +94,7 @@ actions:
     required_provenance:
       - inference_version
 
-  enrich_and_sync:
+  enrich-and-sync:
     mutation_class: internal_plus_graph_sync
     approval_mode: autonomous
     idempotency_mode: caller_key_supported
@@ -185,7 +186,7 @@ dependencies:
       - enrichbatch
       - converge
       - discover
-      - enrich_and_sync
+      - enrich-and-sync
     degraded_modes: []
 
   OpenAI:
@@ -244,7 +245,7 @@ dependencies:
   Neo4j:
     required: false
     used_by:
-      - enrich_and_sync
+      - enrich-and-sync
     degraded_modes:
       - graph_sync
 

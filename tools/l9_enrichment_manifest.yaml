@@ -3,9 +3,10 @@ generated_from: l9-template v1.0.0
 engine: enrichment
 contracts:
   engine_level:
-  - path: app/engines/chassis_contract.py
+  - path: chassis/envelope.py
     sha256: <computed-at-stamp-time>
     required_refs: []
+    description: "TransportPacket inflate/deflate boundary (no app/ imports)"
   - path: app/engines/handlers.py
     sha256: <computed-at-stamp-time>
     required_refs: []
@@ -25,11 +26,11 @@ contracts:
     sha256: <computed-at-stamp-time>
     required_refs: []
   constellation_level:
-  - path: app/engines/chassis_contract.py
+  - path: app/api/v1/chassis_endpoint.py
     sha256: <computed-at-stamp-time>
     required_refs: []
-    description: "PacketEnvelope inflate/deflate boundary contract"
-  - path: app/engines/graph_sync_client.py
+    description: "Transport-adjacent HTTP routes (SDK + app-specific chassis API)"
+  - path: app/services/chassis_handlers.py
     sha256: <computed-at-stamp-time>
     required_refs: []
-    description: "Graph Intelligence Service integration contract"
+    description: "SDK register_handler wiring and graph return channel bridge"

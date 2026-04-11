@@ -86,7 +86,9 @@ def test_dependency_readiness_covers_constitution_dependencies(
     constitution: dict[str, Any],
 ) -> None:
     attestation = build_runtime_attestation()
-    assert set(attestation["dependency_readiness"].keys()) == set(constitution["dependencies"].keys())
+    assert set(attestation["dependency_readiness"].keys()) == set(
+        constitution["dependencies"].keys()
+    )
 
 
 def test_tracked_contract_hashes_cover_constitution_tracked_files(

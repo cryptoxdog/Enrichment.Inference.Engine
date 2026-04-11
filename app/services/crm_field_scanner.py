@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -35,13 +35,13 @@ logger = logging.getLogger(__name__)
 # ── Enums ────────────────────────────────────────────────────
 
 
-class FieldMatchStatus(str, Enum):
+class FieldMatchStatus(StrEnum):
     MATCHED = "matched"
     UNMAPPED = "unmapped"
     MISSING = "missing"
 
 
-class ImpactTier(str, Enum):
+class ImpactTier(StrEnum):
     GATE_CRITICAL = "gate_critical"
     SCORING_CRITICAL = "scoring_critical"
     INFERENCE_INPUT = "inference_input"
@@ -303,9 +303,7 @@ def _type_compatible(crm_type: str, domain_type: str) -> bool:
     for group in (numeric, text, boolean, collection):
         if crm_norm in group and dom_norm in group:
             return True
-    if {crm_norm, dom_norm} <= {"enum", "string", "selection"}:
-        return True
-    return False
+    return {crm_norm, dom_norm} <= {"enum", "string", "selection"}
 
 
 # ── Impact Classification ───────────────────────────────────
@@ -551,7 +549,7 @@ def generate_discovery_report(
     )
 
 
-# ── Serialization for PacketEnvelope ────────────────────────
+# ── Serialization for TransportPacket ────────────────────────
 
 
 def scan_result_to_dict(result: ScanResult) -> dict[str, Any]:

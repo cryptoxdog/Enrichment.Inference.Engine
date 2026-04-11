@@ -7,6 +7,7 @@ Provides a clean API for convergence_controller and API layer without
 coupling callers to SQLAlchemy internals. Handles serialization
 and field confidence extraction automatically.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -87,9 +88,7 @@ class ResultStore:
         return await pg_store.get_enrichment_result(result_id)
 
     async def get_latest_for_entity(self, entity_id: str) -> EnrichmentResult | None:
-        return await pg_store.get_latest_enrichment_for_entity(
-            self.tenant_id, entity_id
-        )
+        return await pg_store.get_latest_enrichment_for_entity(self.tenant_id, entity_id)
 
     async def start_convergence_run(
         self,

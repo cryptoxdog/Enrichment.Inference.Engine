@@ -13,6 +13,14 @@
 # VERSION: 1.0.0
 # PURPOSE: Enforce L9 architectural contracts and chassis isolation
 # SIBLING PARITY: Cognitive.Engine.Graphs/compliance.yml
+#
+# Scope (this repo only — avoids firing on unrelated changes):
+#   Triggers when Python, kb/, engine/, or pyproject.toml change.
+#
+# FastAPI allowlist (imports from fastapi / import fastapi allowed only here):
+#   app/api/**, app/middleware/**, app/main.py, app/core/auth.py,
+#   app/score/score_api.py (router not mounted in main — still API surface),
+#   any **/handlers.py. All other app/*.py and engine/*.py must stay FastAPI-free.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 name: Architecture Compliance
@@ -25,12 +33,16 @@ on:
     paths:
       - '**/*.py'
       - 'kb/**'
+      - 'engine/**'
       - 'pyproject.toml'
   push:
     branches:
       - ${{ vars.PRIMARY_BRANCH || 'main' }}
     paths:
       - '**/*.py'
+      - 'kb/**'
+      - 'engine/**'
+      - 'pyproject.toml'
   workflow_dispatch:
 
 concurrency:
@@ -71,9 +83,16 @@ jobs:
           echo "Checking terminology consistency..."
           VIOLATIONS=0
 
-          # Check for banned patterns in app/ and tests/
-          for pattern in "\\bprint\\(" "\\bOptional\\[" "\\bList\\[" "\\bDict\\["; do
-            FOUND=$(find app/ tests/ -name "*.py" -exec grep -l -P "$pattern" {} + 2>/dev/null | grep -v __pycache__ || true)
+          # print() — app/ + engine/ (graph/KGE package; same rule as app)
+          FOUND=$(find app/ engine/ -name "*.py" -exec grep -l -P "\\bprint\\(" {} + 2>/dev/null | grep -v __pycache__ || true)
+          if [ -n "$FOUND" ]; then
+            echo "Found forbidden term: \\bprint\\("
+            echo "$FOUND"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          # Legacy typing generics — app/, tests/, engine/
+          for pattern in "\\bOptional\\[" "\\bList\\[" "\\bDict\\["; do
+            FOUND=$(find app/ tests/ engine/ -name "*.py" -exec grep -l -P "$pattern" {} + 2>/dev/null | grep -v __pycache__ || true)
             if [ -n "$FOUND" ]; then
               echo "Found forbidden term: $pattern"
               echo "$FOUND"
@@ -93,12 +112,14 @@ jobs:
       - name: Chassis Isolation Check
         run: |
           echo "Checking chassis isolation..."
-          # Engine modules in app/ should not import FastAPI directly
-          # Only app/api/ and app/main.py are allowed to use FastAPI
+          # app/* and top-level engine/* must not import FastAPI except allowlist (see workflow header).
 
-          VIOLATIONS=$(find app/ -name "*.py" \
+          VIOLATIONS=$(find app/ engine/ -name "*.py" \
             -not -path "app/api/*" \
+            -not -path "app/middleware/*" \
             -not -path "app/main.py" \
+            -not -path "app/core/auth.py" \
+            -not -path "app/score/score_api.py" \
             -not -name "handlers.py" \
             -exec grep -l "from fastapi import\|import fastapi" {} + 2>/dev/null || true)
 
@@ -106,8 +127,8 @@ jobs:
             echo "❌ FastAPI imports found outside allowed modules:"
             echo "$VIOLATIONS"
             echo ""
-            echo "Only app/api/, app/main.py, and handlers.py may import FastAPI."
-            echo "Engine modules must remain chassis-agnostic."
+            echo "Allowlist: app/api/, app/middleware/, app/main.py, app/core/auth.py,"
+            echo "  app/score/score_api.py, **/handlers.py — see Architecture Compliance workflow header."
             exit 1
           fi
 
@@ -127,7 +148,8 @@ jobs:
               print('No kb/ directory found, skipping')
               sys.exit(0)
 
-          for f in kb_dir.glob('*.yaml'):
+          kb_files = sorted({*kb_dir.rglob('*.yaml'), *kb_dir.rglob('*.yml')})
+          for f in kb_files:
               try:
                   with open(f) as fh:
                       data = yaml.safe_load(fh)

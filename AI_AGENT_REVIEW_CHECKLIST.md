@@ -9,14 +9,14 @@
 # token_estimate: 1570
 # ssot_for: [pr-review-protocol, review-decision-matrix, comment-templates]
 # load_when: [pr_review, code_review]
-# references: [AGENT.md, CI_WHITELIST_REGISTER.md, INVARIANTS.md]
+# references: [AGENTS.md, CI_WHITELIST_REGISTER.md, INVARIANTS.md]
 # --- /L9_META ---
 
 # AI_AGENT_REVIEW_CHECKLIST.md — PR Review Checklist
 
-**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
+**VERSION**: 2.1.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-11
 
-> Load AGENT.md before this file to have contracts, tiers, and patterns in context.
+> Load [AGENTS.md](AGENTS.md) before this file for contracts, tiers, and patterns.
 
 ---
 
@@ -36,20 +36,20 @@ Apply this verdict BEFORE writing any inline comments.
 
 ## Phase 1 — STOP: Merge-Blocking Violations (Check First)
 
-- [ ] C-01 / ARCH-001: from fastapi import outside app/api/, app/main.py, handlers.py?
+- [ ] C-01 / ARCH-001: `from fastapi import` outside allowed modules ([AGENTS.md](AGENTS.md) C-01: typically `app/api/`, `app/main.py`, `app/engines/handlers.py`)?
 - [ ] C-06 / SEC-002/003: eval(, exec(, compile(, pickle.loads( present?
 - [ ] C-07 / SEC-001: Cypher f-string without sanitize_label()?
 - [ ] C-08 / SEC-007: yaml.load( without Loader=yaml.SafeLoader?
 - [ ] C-10: Hardcoded API key, token, or credential?
-- [ ] C-13: chassis_contract.py modified without handlers.py update in same PR?
-- [ ] C-11: PacketEnvelope mutated after construction?
+- [ ] C-13: Transport/dispatch contract drift — changes to envelope ingress/egress or action registration without paired updates in the same PR? (Canonical modules include `chassis/envelope.py`, `app/services/chassis_handlers.py`, `app/api/v1/chassis_endpoint.py`, and `app/engines/handlers.py` / orchestration; see [AGENTS.md](AGENTS.md) C-13 intent.)
+- [ ] C-11: `TransportPacket` / chassis wire envelope mutated in place after construction?
 - [ ] C-16: Python less than 3.12 syntax or backport import present?
 
 ---
 
 ## Phase 2 — STOP: Contract Violations
 
-- [ ] C-02: Handler signatures match async def handle_*(tenant, payload, settings, neo4j, redis)?
+- [ ] C-02: Handler signatures match the contract in [AGENTS.md](AGENTS.md) C-02 (`async def handle_*(tenant, payload, settings, neo4j, redis)` or documented SDK handler shape)?
 - [ ] C-03: All Neo4j queries include WHERE n.tenant_id = $tenant?
 - [ ] C-04: No print() in app/ or engine/ (structlog only)?
 - [ ] C-05: No Optional[, List[, Dict[ — use T or None, list[T], dict[K,V]?
@@ -84,7 +84,7 @@ Apply this verdict BEFORE writing any inline comments.
 
 ### New Feature PR
 - [ ] T-tier assessed and appropriate reviewers assigned?
-- [ ] New env vars documented in CONFIG_ENV_CONTRACT.md?
+- [ ] New env vars documented in [`docs/contracts/config/env-contract.yaml`](docs/contracts/config/env-contract.yaml) and summarized in [CONFIG_ENV_CONTRACT.md](CONFIG_ENV_CONTRACT.md) / `.env.example`?
 - [ ] New files listed in FILE_INDEX_FOR_AGENTS.md?
 
 ### Bug Fix PR
@@ -117,14 +117,14 @@ CONTRACT C-{N} VIOLATION — {rule-name}
 File: {path} Line: {line}
 Found: {offending_code}
 Required: {corrected_code}
-Evidence: AGENT.md Forbidden Patterns, .cursorrules CONTRACT {N}
+Evidence: [AGENTS.md](AGENTS.md) Forbidden Patterns / Architectural Contracts (C-{N})
 ```
 
 ### Tier Escalation Required
 ```
 TIER ESCALATION — T{N} change requires {0/1/2} reviewer(s)
 File: {path}
-Reason: Modifying {file} is a T{N} operation per AGENT.md Agent Autonomy Tiers.
+Reason: Modifying {file} is a T{N} operation per AGENTS.md Autonomy Tiers.
 Action: Add [NEEDS-2-REVIEWERS] to PR title and request additional review.
 ```
 

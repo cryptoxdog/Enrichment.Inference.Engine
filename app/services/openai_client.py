@@ -6,6 +6,7 @@ OpenAI API client for consensus variation diversity.
 Uses httpx.AsyncClient directly (no openai SDK) to avoid version conflicts
 and to enable precise retry/timeout/circuit-breaker control.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -55,7 +56,9 @@ class OpenAIClient:
 
     async def complete(self, prompt: str, max_tokens: int = 2000, temperature: float = 0.3) -> str:
         """Return the text content of the first completion choice."""
-        response = await self._call(prompt=prompt, max_tokens=max_tokens, temperature=temperature, json_mode=False)
+        response = await self._call(
+            prompt=prompt, max_tokens=max_tokens, temperature=temperature, json_mode=False
+        )
         return response["choices"][0]["message"]["content"]
 
     async def complete_json(self, prompt: str, schema: dict | None = None) -> dict[str, Any]:
@@ -71,6 +74,7 @@ class OpenAIClient:
         """Estimate token count using tiktoken cl100k_base encoding."""
         try:
             import tiktoken
+
             enc = tiktoken.get_encoding("cl100k_base")
             return len(enc.encode(text))
         except ImportError:
@@ -89,7 +93,9 @@ class OpenAIClient:
         self._availability_cache = (available, now)
         return available
 
-    async def _call(self, prompt: str, max_tokens: int, temperature: float, json_mode: bool) -> dict[str, Any]:
+    async def _call(
+        self, prompt: str, max_tokens: int, temperature: float, json_mode: bool
+    ) -> dict[str, Any]:
         if self._circuit_open:
             raise LLMResponseError("OpenAI circuit breaker is open")
 
@@ -137,4 +143,6 @@ class OpenAIClient:
             self._circuit_open = True
             logger.error("openai_circuit_breaker_opened", failures=self._failure_count)
 
-        raise LLMResponseError(f"OpenAI call failed after {len(_RETRY_DELAYS)} attempts") from last_exc
+        raise LLMResponseError(
+            f"OpenAI call failed after {len(_RETRY_DELAYS)} attempts"
+        ) from last_exc

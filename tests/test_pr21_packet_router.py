@@ -3,17 +3,18 @@ tests/test_pr21_packet_router.py
 
 Proves GAP-1 and GAP-6:
   - dispatch_to_score does NOT exist in packet_router (confirms broken ref is gone)
-  - notify_graph_sync builds a valid PacketEnvelope and POSTs to /v1/execute
-  - notify_score_invalidate fires a fire-and-forget envelope with correct action
+  - notify_graph_sync builds a valid TransportPacket and sends it through Gate
+  - notify_score_invalidate fires a Gate-routed fire-and-forget packet with correct action
   - get_router() returns a singleton PacketRouter
   - orchestration_layer no longer imports the non-existent dispatch_to_score
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from constellation_node_sdk.transport import TransportPacket, create_transport_packet
 
 from app.engines.packet_router import NodeTarget, PacketRouter, _build_envelope, get_router
 
@@ -47,61 +48,56 @@ def test_orchestration_layer_does_not_import_dispatch_to_score():
 
 
 def test_build_envelope_structure():
-    """PacketEnvelope must contain header with packet_id, tenant_id, content_hash."""
-    env = _build_envelope(
-        action="graph_sync",
+    """TransportPacket must contain canonical header, tenant, and security hashes."""
+    packet = _build_envelope(
+        action="graph-sync",
         tenant_id="tenant-x",
         payload={"entity_id": "ent-001", "fields": {"material_type": "HDPE"}},
     )
-    assert "header" in env
-    assert env["header"]["action"] == "graph_sync"
-    assert env["header"]["tenant_id"] == "tenant-x"
-    assert "packet_id" in env["header"]
-    assert "content_hash" in env["header"]
-    assert "created_at" in env["header"]
-    assert env["header"]["content_hash"] == env["content_hash"]
+    assert isinstance(packet, TransportPacket)
+    assert packet.header.action == "graph-sync"
+    assert packet.tenant.org_id == "tenant-x"
+    assert packet.header.packet_id
+    assert packet.security.payload_hash
+    assert packet.security.transport_hash
 
 
 @pytest.mark.asyncio
-async def test_notify_graph_sync_posts_to_graph_node():
-    """GAP-6: notify_graph_sync must POST a PacketEnvelope to the graph node."""
-    router = PacketRouter(node_urls={NodeTarget.GRAPH.value: "https://graph-node:8001"})
+async def test_notify_graph_sync_sends_to_gate():
+    """GAP-6: notify_graph_sync must send a TransportPacket to Gate."""
+    router = PacketRouter(gate_url="https://gate-node:8080")
 
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"status": "synced"}
-    mock_resp.raise_for_status = MagicMock()
+    response_packet = create_transport_packet(
+        action="graph-sync",
+        payload={"status": "synced"},
+        tenant="tenant-acme",
+        source_node="gate",
+        destination_node="enrichment-engine",
+        reply_to="gate",
+    )
 
     with patch.object(
-        router._http, "post", new_callable=AsyncMock, return_value=mock_resp
-    ) as mock_post:
+        router._client, "send_to_gate", new_callable=AsyncMock, return_value=response_packet
+    ) as mock_send:
         result = await router.notify_graph_sync(
             tenant_id="tenant-acme",
             entity_id="ent-001",
             fields={"material_type": "HDPE", "mfi_range": "2-4"},
             domain="plastics",
         )
-        assert result == {"status": "synced"}
-        call_json = mock_post.call_args.kwargs["json"]
-    assert call_json["header"]["action"] == "graph_sync"
-    assert call_json["header"]["tenant_id"] == "tenant-acme"
-    assert call_json["payload"]["entity_id"] == "ent-001"
-    assert call_json["payload"]["domain"] == "plastics"
-
-
-@pytest.mark.asyncio
-async def test_notify_graph_sync_returns_none_when_no_graph_url():
-    """notify_graph_sync returns None if graph node URL not configured."""
-    router = PacketRouter(node_urls={})
-    result = await router.notify_graph_sync(
-        tenant_id="t", entity_id="e", fields={}, domain="plastics"
-    )
-    assert result is None
+        assert result["status"] == "synced"
+        assert "packet_id" in result
+        sent_packet = mock_send.await_args.args[0]
+    assert isinstance(sent_packet, TransportPacket)
+    assert sent_packet.header.action == "graph-sync"
+    assert sent_packet.tenant.org_id == "tenant-acme"
+    assert sent_packet.payload["entity_id"] == "ent-001"
+    assert sent_packet.payload["domain"] == "plastics"
 
 
 def test_notify_score_invalidate_is_fire_and_forget():
     """GAP-1: notify_score_invalidate must call route_fire_and_forget (non-blocking)."""
-    router = PacketRouter(node_urls={NodeTarget.SCORE.value: "https://score-node:8002"})
+    router = PacketRouter(gate_url="https://gate-node:8080")
 
     fired: list = []
 
@@ -117,21 +113,18 @@ def test_notify_score_invalidate_is_fire_and_forget():
     )
 
     assert len(fired) == 1
-    assert fired[0]["action"] == "score_invalidate"
+    assert fired[0]["action"] == "score-invalidate"
     assert fired[0]["tenant_id"] == "tenant-x"
     assert fired[0]["target"] == NodeTarget.SCORE
 
 
 def test_get_router_returns_singleton():
     """get_router() must return the same PacketRouter instance per process."""
-    from app.core.config import Settings
 
-    settings = Settings(
-        perplexity_api_key="test",
-        api_secret_key="test",
-        graph_node_url="https://graph:8001",
-        score_node_url="https://score:8002",
-    )
+    class SettingsStub:
+        gate_url = "https://gate:8080"
+
+    settings = SettingsStub()
 
     r1 = get_router(settings)
     r2 = get_router(settings)

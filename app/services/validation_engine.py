@@ -120,14 +120,14 @@ def validate_response(
 
 def _coerce(value: Any, expected: type) -> Any:
     """Coerce a value to the expected type."""
-    if expected == bool:
+    if expected is bool:
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
             return value.lower() in ("true", "yes", "1", "y")
         return bool(value)
 
-    if expected == list:
+    if expected is list:
         if isinstance(value, list):
             return list(dict.fromkeys(str(v).strip()[:256] for v in value if v))
         if isinstance(value, str):

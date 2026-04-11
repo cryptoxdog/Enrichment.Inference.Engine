@@ -127,17 +127,25 @@ def event_example() -> dict[str, Any]:
 
 
 class TestEnrichResponseProvenance:
-    def test_response_contains_kb_content_hash(self, enrich_response_example: dict[str, Any]) -> None:
+    def test_response_contains_kb_content_hash(
+        self, enrich_response_example: dict[str, Any]
+    ) -> None:
         assert "kb_content_hash" in enrich_response_example
 
-    def test_response_contains_inference_version(self, enrich_response_example: dict[str, Any]) -> None:
+    def test_response_contains_inference_version(
+        self, enrich_response_example: dict[str, Any]
+    ) -> None:
         assert "inference_version" in enrich_response_example
 
-    def test_response_contains_kb_fragment_ids(self, enrich_response_example: dict[str, Any]) -> None:
+    def test_response_contains_kb_fragment_ids(
+        self, enrich_response_example: dict[str, Any]
+    ) -> None:
         assert "kb_fragment_ids" in enrich_response_example
         assert isinstance(enrich_response_example["kb_fragment_ids"], list)
 
-    def test_response_contains_kb_files_consulted(self, enrich_response_example: dict[str, Any]) -> None:
+    def test_response_contains_kb_files_consulted(
+        self, enrich_response_example: dict[str, Any]
+    ) -> None:
         assert "kb_files_consulted" in enrich_response_example
         assert isinstance(enrich_response_example["kb_files_consulted"], list)
 
@@ -146,13 +154,17 @@ class TestPersistedEnrichmentResultProvenance:
     def test_schema_contains_inferences(self, enrichment_result_schema: dict[str, Any]) -> None:
         assert "inferences" in enrichment_result_schema["properties"]
 
-    def test_schema_contains_kb_fragment_ids(self, enrichment_result_schema: dict[str, Any]) -> None:
+    def test_schema_contains_kb_fragment_ids(
+        self, enrichment_result_schema: dict[str, Any]
+    ) -> None:
         assert "kb_fragment_ids" in enrichment_result_schema["properties"]
 
     def test_schema_contains_feature_vector(self, enrichment_result_schema: dict[str, Any]) -> None:
         assert "feature_vector" in enrichment_result_schema["properties"]
 
-    def test_schema_contains_convergence_run_id(self, enrichment_result_schema: dict[str, Any]) -> None:
+    def test_schema_contains_convergence_run_id(
+        self, enrichment_result_schema: dict[str, Any]
+    ) -> None:
         assert "convergence_run_id" in enrichment_result_schema["properties"]
 
 
@@ -163,7 +175,9 @@ class TestPacketEgressProvenance:
     def test_packet_egress_contains_timestamp(self, packet_egress_example: dict[str, Any]) -> None:
         assert "timestamp" in packet_egress_example
 
-    def test_packet_egress_contains_content_hash(self, packet_egress_example: dict[str, Any]) -> None:
+    def test_packet_egress_contains_content_hash(
+        self, packet_egress_example: dict[str, Any]
+    ) -> None:
         assert "content_hash" in packet_egress_example
         assert len(packet_egress_example["content_hash"]) > 0
 

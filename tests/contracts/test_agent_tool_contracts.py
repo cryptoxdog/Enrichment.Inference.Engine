@@ -2,18 +2,33 @@
 Agent Tool Contract Tests — Source: app/agents/mcp_server.py TOOL_REGISTRY
 Markers: unit
 """
+
 from __future__ import annotations
-import json
+
 from pathlib import Path
+
 import pytest
+
 from tests.contracts.conftest_contracts import AGENTS_DIR, load_json, load_yaml
 
 TOOL_REGISTRY_GROUND_TRUTH = {
-    "enrich_contact": {"required": ["domain", "entity_name"], "optional": ["entity_data", "quality_threshold"], "action": "enrich"},
-    "lead_router":    {"required": ["lead_data"], "optional": ["team_config"], "action": "enrich"},
-    "deal_risk":      {"required": ["deal_data"], "optional": ["historical_context"], "action": "enrich"},
-    "data_hygiene":   {"required": ["records", "domain"], "optional": [], "action": "enrich"},
-    "writeback":      {"required": ["crm_type", "object_type", "record_id", "enriched_data"], "optional": ["confidence_threshold"], "action": "writeback"},
+    "enrich_contact": {
+        "required": ["domain", "entity_name"],
+        "optional": ["entity_data", "quality_threshold"],
+        "action": "enrich",
+    },
+    "lead_router": {"required": ["lead_data"], "optional": ["team_config"], "action": "enrich"},
+    "deal_risk": {
+        "required": ["deal_data"],
+        "optional": ["historical_context"],
+        "action": "enrich",
+    },
+    "data_hygiene": {"required": ["records", "domain"], "optional": [], "action": "enrich"},
+    "writeback": {
+        "required": ["crm_type", "object_type", "record_id", "enriched_data"],
+        "optional": ["confidence_threshold"],
+        "action": "writeback",
+    },
 }
 
 TOOL_SCHEMA_FILES = {

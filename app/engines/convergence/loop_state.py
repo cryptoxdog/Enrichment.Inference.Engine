@@ -12,8 +12,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ...models.field_confidence import FieldConfidenceMap
-from ...models.loop_schemas import PassResult
-from .cost_tracker import CostSummary
+from ...models.loop_schemas import CostSummary, PassResult
 
 logger = logging.getLogger(__name__)
 

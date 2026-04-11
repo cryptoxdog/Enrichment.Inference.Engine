@@ -81,9 +81,7 @@ def enrich_response_example() -> dict[str, Any]:
         "feature_vector": None,
         "kb_files_consulted": ["kb/plastics_recycling.yaml"],
         "kb_fragment_ids": ["hdpe.mfi_range", "premium_hdpe_grade"],
-        "inferences": [
-            {"field": "material_grade", "value": "Premium HDPE", "confidence": 0.95}
-        ],
+        "inferences": [{"field": "material_grade", "value": "Premium HDPE", "confidence": 0.95}],
         "quality_tier": "gold",
         "grade_matches": [],
         "tokens_used": 1840,
@@ -115,6 +113,12 @@ def make_enrich_response(**overrides: Any) -> dict[str, Any]:
         "state": "completed",
     }
     base.update(overrides)
+    # Enforce invariants: state='failed' requires failure_reason
+    if base.get("state") == "failed" and base.get("failure_reason") is None:
+        base["failure_reason"] = "Unspecified failure"
+    # Enforce invariants: state='completed' must not have failure_reason
+    if base.get("state") == "completed" and base.get("failure_reason") is not None:
+        base["failure_reason"] = None
     return base
 
 

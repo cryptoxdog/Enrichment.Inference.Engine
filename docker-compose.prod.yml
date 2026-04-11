@@ -1,30 +1,276 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# docker-compose.prod.yml — Enrichment Inference Engine (Production)
+# ═══════════════════════════════════════════════════════════════════════════
+# VERSION: 2.0.0
+# UPDATED: 2026-04-11
+#
+# LOAD ORDER (enforced via depends_on + healthchecks):
+#   1. Infrastructure: redis, postgres (no deps)
+#   2. Monitoring: loki, prometheus, otel-collector, jaeger (depends on infra)
+#   3. Visualization: grafana, alloy (depends on monitoring)
+#   4. Application: enrichment-api (depends on all above)
+#
+# USAGE:
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml logs -f enrichment-api
+#
+# REQUIRED ENV VARS (in .env):
+#   - PERPLEXITY_API_KEY
+#   - API_SECRET_KEY / API_KEY_HASH
+#   - DATABASE_URL (or use default)
+# ═══════════════════════════════════════════════════════════════════════════
+
 services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # TIER 1: Infrastructure (no dependencies)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-enrich}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-enrich}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-enrich} -d ${POSTGRES_DB:-enrich}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TIER 2: Monitoring Core (depends on infrastructure)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:14269/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-otel
+    restart: unless-stopped
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./monitoring/otel/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    networks:
+      - monitoring
+      - backend
+    depends_on:
+      jaeger:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:13133/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TIER 3: Visualization & Log Collection (depends on monitoring core)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  alloy:
+    image: grafana/alloy:v1.0.0
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - monitoring
+      - backend
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:12345/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TIER 4: Application (depends on all infrastructure + monitoring)
+  # ─────────────────────────────────────────────────────────────────────────
+
   enrichment-api:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    container_name: ${APP_NAME:-enrichment-api}
+    container_name: ${COMPOSE_PROJECT_NAME:-eie}-api
+    restart: unless-stopped
     ports:
       - "${APP_PORT:-8000}:8000"
-    env_file: .env
-    restart: always
+    env_file:
+      - .env
+    environment:
+      # Override for container networking
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-enrich}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-enrich}
+      # OpenTelemetry
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: enrichment-engine
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=production
+    networks:
+      - backend
+      - monitoring
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "50m"
+        max-file: "5"
+        tag: "{{.Name}}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
 
-  redis:
-    image: redis:7-alpine
-    container_name: ${APP_NAME:-enrichment-api}-redis
-    restart: always
-    volumes:
-      - redis_data:/data
+# ─────────────────────────────────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────────────────────────────────
+
+networks:
+  backend:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME:-eie}-backend
+  monitoring:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME:-eie}-monitoring
+
+# ─────────────────────────────────────────────────────────────────────────
+# Volumes
+# ─────────────────────────────────────────────────────────────────────────
 
 volumes:
   redis_data:
+    name: ${COMPOSE_PROJECT_NAME:-eie}-redis-data
+  postgres_data:
+    name: ${COMPOSE_PROJECT_NAME:-eie}-postgres-data
+  loki_data:
+    name: ${COMPOSE_PROJECT_NAME:-eie}-loki-data
+  prometheus_data:
+    name: ${COMPOSE_PROJECT_NAME:-eie}-prometheus-data
+  grafana_data:
+    name: ${COMPOSE_PROJECT_NAME:-eie}-grafana-data

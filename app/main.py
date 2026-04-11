@@ -4,23 +4,26 @@ Domain Enrichment API v2.3.0 — Constellation-wired
 POST /api/v1/enrich         single entity (Salesforce + Odoo)
 POST /api/v1/enrich/batch   batch up to 50
 GET  /api/v1/health         health + KB + circuit breaker
-POST /v1/execute            L9 chassis PacketEnvelope
+POST /v1/execute            SDK TransportPacket execution surface
 POST /v1/outcomes           match outcome feedback
 
 Integration fix applied (PR#22 merge pass):
-    GAP-3: converge.configure() called in lifespan with LoopStateStore,
+    GAP-3: converge.configure() called in startup with LoopStateStore,
            ProfileRegistry, domain_specs, kb_resolver, and idem_store.
 """
 
 from __future__ import annotations
 
+import os
 import time
-from contextlib import asynccontextmanager
 from typing import Annotated
 
 import structlog
-from fastapi import Depends, FastAPI
+from constellation_node_sdk import LifecycleHook, NodeRuntimeConfig, create_node_app
+from constellation_node_sdk.runtime.handlers import clear_handlers
+from fastapi import Depends
 
+from .api.v1.attestation import router as attestation_router
 from .api.v1.chassis_endpoint import router as chassis_router
 from .api.v1.converge import router as converge_router
 from .api.v1.discover import router as discover_router
@@ -39,6 +42,7 @@ from .models.schemas import (
     EnrichResponse,
     HealthCheckResponse,
 )
+from .score.score_api import router as score_router
 from .services.idempotency import IdempotencyStore
 from .services.kb_resolver import KBResolver
 
@@ -48,71 +52,103 @@ _kb: KBResolver | None = None
 _idem: IdempotencyStore | None = None
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup: load KB, connect Redis, init persistence, configure converge module."""
-    global _kb, _idem
+class EnrichmentLifecycle(LifecycleHook):
+    """Bridge the existing app startup/shutdown into the SDK runtime."""
 
-    settings = get_settings()
-    setup_logging(settings.log_level)
+    async def startup(self) -> None:
+        """Load KB, connect Redis, init persistence, and register SDK handlers."""
+        global _kb, _idem
 
-    _kb = KBResolver(settings.kb_dir)
+        settings = get_settings()
+        setup_logging(settings.log_level)
 
-    try:
-        _idem = IdempotencyStore(settings.redis_url)
-        logger.info("redis_connected", url=settings.redis_url)
-    except Exception as e:
-        logger.warning("redis_unavailable", error=str(e))
+        _kb = KBResolver(settings.kb_dir)
+
+        try:
+            _idem = IdempotencyStore(settings.redis_url)
+            logger.info("redis_connected", url=settings.redis_url)
+        except Exception as exc:
+            logger.warning("redis_unavailable", error=str(exc))
+            _idem = None
+
+        clear_handlers()
+        register_orchestration(kb=_kb, idem_store=_idem)
+        from .services.chassis_handlers import register_all_handlers
+
+        register_all_handlers()
+
+        # Persistence layer
+        from .services import pg_store
+        from .services.event_emitter import get_emitter
+
+        pg_store.init_engine(settings.database_url)
+        get_emitter(settings)
+        logger.info("pg_store_initialized")
+
+        # GAP-3: Converge endpoint dependency injection
+        from .api.v1 import converge as converge_module
+        from .services.enrichment_profile import ProfileRegistry
+
+        try:
+            from .engines.convergence.loop_state import RedisLoopStateStore
+
+            loop_state_store = (
+                RedisLoopStateStore(redis_client=_idem.client) if _idem else _fallback_loop_store()
+            )
+        except Exception:
+            loop_state_store = _fallback_loop_store()
+
+        profile_registry = ProfileRegistry()
+        converge_module.configure(
+            state_store=loop_state_store,
+            profile_registry=profile_registry,
+            domain_specs={},
+            kb_resolver=_kb,
+            idem_store=_idem,
+        )
+        logger.info(
+            "converge_module_configured",
+            profiles=profile_registry.list_profiles(),
+            state_backend="redis" if _idem else "memory",
+        )
+        logger.info("api_started", version="2.3.0")
+
+    async def shutdown(self) -> None:
+        global _kb, _idem
+
+        if _idem:
+            await _idem.close()
+        from .services import pg_store as _pg
+
+        await _pg.close_engine()
+        _kb = None
         _idem = None
 
-    register_orchestration(kb=_kb, idem_store=_idem)
 
-    # Persistence layer
-    from .services import pg_store
-    from .services.event_emitter import get_emitter
-
-    pg_store.init_engine(settings.database_url)
-    get_emitter(settings)
-    logger.info("pg_store_initialized")
-
-    # GAP-3: Converge endpoint dependency injection
-    from .api.v1 import converge as converge_module
-    from .services.enrichment_profile import ProfileRegistry
-
-    try:
-        from .engines.convergence.loop_state import RedisLoopStateStore
-
-        loop_state_store = (
-            RedisLoopStateStore(redis_client=_idem.client) if _idem else _fallback_loop_store()
-        )
-    except Exception:
-        loop_state_store = _fallback_loop_store()
-
-    profile_registry = ProfileRegistry()
-    converge_module.configure(
-        state_store=loop_state_store,
-        profile_registry=profile_registry,
-        domain_specs={},
-        kb_resolver=_kb,
-        idem_store=_idem,
+def _build_runtime_config() -> NodeRuntimeConfig:
+    settings = get_settings()
+    environment = os.getenv("L9_ENVIRONMENT", "local").strip().lower() or "local"
+    return NodeRuntimeConfig(
+        environment=environment,
+        node_name="enrichment-engine",
+        service_name="enrichment-engine",
+        service_version="2.3.0",
+        dev_mode=environment in {"local", "dev", "test"},
+        gate_url=settings.gate_url,
+        allowed_actions=(
+            "community-export",
+            "converge",
+            "discover",
+            "enrich",
+            "enrich-and-sync",
+            "enrichbatch",
+            "graph-inference-result",
+            "schema-proposal",
+            "simulate",
+            "writeback",
+        ),
+        max_attachments=0,
     )
-    logger.info(
-        "converge_module_configured",
-        profiles=profile_registry.list_profiles(),
-        state_backend="redis" if _idem else "memory",
-    )
-
-    logger.info("api_started", version="2.3.0")
-
-    yield
-
-    if _idem:
-        await _idem.close()
-    from .services import pg_store as _pg
-
-    await _pg.close_engine()
-    _kb = None
-    _idem = None
 
 
 def _fallback_loop_store():
@@ -138,23 +174,23 @@ def _fallback_loop_store():
     return _InMemory()
 
 
-app = FastAPI(
-    title="L9 ENRICH - Domain Enrichment API",
+app = create_node_app(
+    service_name="enrichment-engine",
     version="2.3.0",
-    description=(
-        "Universal domain-aware entity enrichment. "
-        "Layer 2 of the L9 three-layer intelligence stack."
-    ),
-    lifespan=lifespan,
+    lifecycle_hook=EnrichmentLifecycle(),
+    config=_build_runtime_config(),
+    auto_register_with_gate=False,
 )
 
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 setup_telemetry(app)
 
+app.include_router(attestation_router)
 app.include_router(chassis_router)
 app.include_router(converge_router)
 app.include_router(discover_router)
 app.include_router(fields_router)
+app.include_router(score_router)
 
 
 @app.get("/api/v1/health", response_model=HealthCheckResponse)

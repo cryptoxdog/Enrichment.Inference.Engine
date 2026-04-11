@@ -1,25 +1,120 @@
 # ═══════════════════════════════════════════════════════════════
 # Contract: Environment Variable Contract
-# Source:   app/core/config.py:Settings, .env.example
-# Version:  2.3.0
-# Updated:  2026-04-05
+# Source:   app/core/config.py:Settings (pydantic-settings BaseSettings)
+# Version:  2.5.2
+# Updated:  2026-04-10
 # ═══════════════════════════════════════════════════════════════
-
-# All variables are loaded via pydantic-settings (BaseSettings).
-# Source: app/core/config.py
-# Loaded once at startup via @lru_cache get_settings().
+#
+# Scope: variables below map 1:1 to Settings fields. Env names follow Pydantic
+# defaults (field_name → FIELD_NAME). No extras that Settings does not load.
+#
+# Integration architecture: Third-party platforms (CRMs, data vendors, etc.)
+# should integrate through the gate/SDK and TransportPacket actions, not
+# new ad-hoc service clients in this repo. Variables for Salesforce, HubSpot,
+# waterfall providers, and similar remain for legacy or transitional direct use.
+#
+# Files: .env then .env.local (later wins). .env.local is gitignored.
+# GitHub Actions: use the same names for repository/org secrets when injecting
+# deploy/runtime env (see github_actions below).
+#
+# Not in Settings: OpenTelemetry and ad-hoc os.getenv reads (e.g. OTEL_*,
+# ENVIRONMENT in app/core/telemetry.py) — see other_runtime_env at file end.
 
 variables:
+  # ── Docker Compose ─────────────────────────────────────────
+  - name: COMPOSE_PROJECT_NAME
+    type: string
+    required: false
+    default: eie
+    description: Docker Compose project name prefix for container naming.
+    sensitive: false
+    source: env
+
+  - name: APP_PORT
+    type: integer
+    required: false
+    default: 8000
+    description: Host port to expose the API container.
+    sensitive: false
+    source: env
+
+  - name: POSTGRES_USER
+    type: string
+    required: false
+    default: enrich
+    description: PostgreSQL user for docker-compose postgres service.
+    sensitive: false
+    source: env
+
+  - name: POSTGRES_PASSWORD
+    type: secret
+    required: false
+    default: changeme
+    description: PostgreSQL password for docker-compose postgres service.
+    sensitive: true
+    source: env
+
+  - name: POSTGRES_DB
+    type: string
+    required: false
+    default: enrich
+    description: PostgreSQL database name for docker-compose postgres service.
+    sensitive: false
+    source: env
+
+  - name: GRAFANA_PORT
+    type: integer
+    required: false
+    default: 3000
+    description: Host port to expose Grafana dashboard.
+    sensitive: false
+    source: env
+
+  - name: GRAFANA_ADMIN_USER
+    type: string
+    required: false
+    default: admin
+    description: Grafana admin username.
+    sensitive: false
+    source: env
+
+  - name: GRAFANA_ADMIN_PASSWORD
+    type: secret
+    required: false
+    default: admin
+    description: Grafana admin password.
+    sensitive: true
+    source: env
+
+  - name: GRAFANA_ROOT_URL
+    type: url
+    required: false
+    default: http://localhost:3000
+    description: Grafana external URL for links and redirects.
+    sensitive: false
+    source: env
+
+  # ── Core ────────────────────────────────────────────────────
+  - name: APP_ENV
+    type: string
+    required: false
+    default: development
+    description: Application environment (development, staging, production).
+    sensitive: false
+    source: env
+    validation: "development | staging | production"
+
   # ── Perplexity Sonar ────────────────────────────────────────
   - name: PERPLEXITY_API_KEY
     type: secret
-    required: true
-    default: null
-    description: Perplexity Sonar API key. Primary enrichment source.
+    required: false
+    default: ""
+    description: |
+      Perplexity Sonar API key. Settings default is empty; enrichment calls need a real key.
     sensitive: true
     source: env
     example: pplx-xxxxxxxxxxxxxxxxxxxx
-    validation: "must start with pplx-"
+    validation: "non-empty for production enrichment"
 
   - name: PERPLEXITY_MODEL
     type: string
@@ -30,102 +125,114 @@ variables:
     source: env
     example: sonar-reasoning
 
-  # ── Authentication ──────────────────────────────────────────
+  # ── API (Settings fields; X-API-Key verification uses API_KEY_HASH) ──
   - name: API_SECRET_KEY
     type: secret
-    required: true
-    default: null
+    required: false
+    default: ""
     description: |
-      Raw API secret key. Minimum 32 characters recommended.
-      Generate: python -c "import secrets; print(secrets.token_urlsafe(48))"
+      Reserved / optional secret field on Settings (currently unused by auth).
+      Client authentication uses X-API-Key compared to API_KEY_HASH (SHA-256 hex).
     sensitive: true
     source: env
-    validation: "min length 32"
 
   - name: API_KEY_HASH
     type: string
     required: false
     default: ""
     description: |
-      SHA-256 hash of the client API key used for constant-time comparison.
-      Generate: python -c "import hashlib; print(hashlib.sha256(b'KEY').hexdigest())"
+      SHA-256 hex digest of the accepted raw API key (constant-time compare in app/core/auth.py).
+      Generate: python -c "import hashlib; print(hashlib.sha256(b'YOUR_KEY').hexdigest())"
     sensitive: false
     source: env
 
-  # ── Knowledge Base ──────────────────────────────────────────
+  # ── Knowledge base ───────────────────────────────────────────
   - name: KB_DIR
     type: string
     required: false
     default: /app/kb
-    description: Path to the knowledge base YAML files directory.
+    description: Directory containing knowledge base YAML files.
     sensitive: false
     source: env
     example: /app/kb
 
-  # ── Redis ───────────────────────────────────────────────────
+  # ── Redis ────────────────────────────────────────────────────
   - name: REDIS_URL
     type: url
     required: false
     default: redis://localhost:6379/0
-    description: Redis connection URL. Used for idempotency store and event streams.
+    description: Redis URL for idempotency and related runtime features.
     sensitive: false
     source: env
     example: redis://redis:6379/0
 
-  # ── Enrichment Defaults ─────────────────────────────────────
+  # ── Enrichment defaults ─────────────────────────────────────
   - name: DEFAULT_CONSENSUS_THRESHOLD
     type: float
     required: false
     default: 0.65
     description: Default minimum consensus ratio for field acceptance.
+    sensitive: false
+    source: env
     validation: "0.0 ≤ value ≤ 1.0"
 
   - name: DEFAULT_MAX_VARIATIONS
     type: integer
     required: false
     default: 5
-    description: Default number of parallel prompt variations per enrichment.
-    validation: "1 ≤ value ≤ 10"
+    description: Default parallel prompt variations per enrichment.
+    sensitive: false
+    source: env
 
   - name: DEFAULT_TIMEOUT_SECONDS
     type: integer
     required: false
     default: 120
-    description: Default enrichment request timeout in seconds.
+    description: Default enrichment timeout in seconds.
+    sensitive: false
+    source: env
 
   - name: MAX_CONCURRENT_VARIATIONS
     type: integer
     required: false
     default: 3
-    description: Maximum concurrent Perplexity requests per enrichment call.
+    description: Cap concurrent provider requests per enrichment call.
+    sensitive: false
+    source: env
 
   - name: MAX_ENTITIES_PER_BATCH
     type: integer
     required: false
     default: 50
-    description: Maximum entities in a single batch enrichment request.
-    validation: "max 50"
+    description: Maximum entities per batch enrichment request.
+    sensitive: false
+    source: env
 
-  # ── Circuit Breaker ─────────────────────────────────────────
+  # ── Circuit breaker ──────────────────────────────────────────
   - name: CB_FAILURE_THRESHOLD
     type: integer
     required: false
     default: 5
-    description: Number of failures before circuit breaker opens.
+    description: Failures before circuit opens.
+    sensitive: false
+    source: env
 
   - name: CB_COOLDOWN_SECONDS
     type: integer
     required: false
     default: 60
-    description: Seconds the circuit breaker stays open before half-open retry.
+    description: Seconds circuit stays open before half-open retry.
+    sensitive: false
+    source: env
 
-  # ── Odoo CRM ────────────────────────────────────────────────
+  # ── Odoo CRM ─────────────────────────────────────────────────
   - name: ODOO_URL
     type: url
     required: false
     default: ""
-    description: Odoo instance base URL (e.g., https://mycompany.odoo.com).
+    description: Odoo base URL.
     sensitive: false
+    source: env
     example: https://your-instance.odoo.com
 
   - name: ODOO_DB
@@ -133,142 +240,147 @@ variables:
     required: false
     default: ""
     description: Odoo database name.
+    sensitive: false
+    source: env
 
   - name: ODOO_USERNAME
     type: string
     required: false
     default: ""
-    description: Odoo authentication username.
+    description: Odoo login username.
+    sensitive: false
+    source: env
 
   - name: ODOO_PASSWORD
     type: secret
     required: false
     default: ""
-    description: Odoo authentication password.
+    description: Odoo password.
     sensitive: true
+    source: env
 
   - name: CRM_MAPPING_PATH
     type: string
     required: false
     default: config/crm/odoo_mapping.yaml
     description: Path to CRM field mapping YAML.
+    sensitive: false
+    source: env
 
-  # ── Salesforce CRM ──────────────────────────────────────────
-  - name: SALESFORCE_CLIENT_ID
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce Connected App client ID.
-    sensitive: true
-
-  - name: SALESFORCE_CLIENT_SECRET
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce Connected App client secret.
-    sensitive: true
-
-  - name: SALESFORCE_USERNAME
-    type: string
-    required: false
-    default: ""
-    description: Salesforce username.
-
-  - name: SALESFORCE_PASSWORD
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce password.
-    sensitive: true
-
-  - name: SALESFORCE_SECURITY_TOKEN
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce security token (appended to password for non-IP-whitelisted access).
-    sensitive: true
-
-  # ── HubSpot CRM ─────────────────────────────────────────────
-  - name: HUBSPOT_ACCESS_TOKEN
-    type: secret
-    required: false
-    default: ""
-    description: HubSpot private app access token.
-    sensitive: true
-
-  # ── Enrichment Sources (waterfall) ──────────────────────────
+  # ── Enrichment sources (waterfall) ─────────────────────────
   - name: CLEARBIT_API_KEY
     type: secret
     required: false
     default: ""
-    description: Clearbit enrichment API key.
+    description: Clearbit API key.
     sensitive: true
+    source: env
 
   - name: ZOOMINFO_API_KEY
     type: secret
     required: false
     default: ""
-    description: ZoomInfo enrichment API key.
+    description: ZoomInfo API key.
     sensitive: true
+    source: env
 
   - name: APOLLO_API_KEY
     type: secret
     required: false
     default: ""
-    description: Apollo.io enrichment API key.
+    description: Apollo.io API key.
     sensitive: true
+    source: env
 
   - name: HUNTER_API_KEY
     type: secret
     required: false
     default: ""
-    description: Hunter.io email finder API key.
+    description: Hunter.io API key.
     sensitive: true
+    source: env
 
-  # ── Constellation Nodes ─────────────────────────────────────
+  - name: OPENAI_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: OpenAI API key (e.g. consensus / GPT clients via OpenAIClient).
+    sensitive: true
+    source: env
+
+  - name: ANTHROPIC_API_KEY
+    type: secret
+    required: false
+    default: ""
+    description: Anthropic API key (e.g. Claude via AnthropicClient).
+    sensitive: true
+    source: env
+
+  # ── Constellation / sibling nodes ───────────────────────────
   - name: CEG_BASE_URL
     type: url
     required: false
     default: http://localhost:8001
-    description: Cognitive Engine Graph (sibling L9 node) base URL.
+    description: Cognitive Engine Graph base URL.
+    sensitive: false
+    source: env
+
+  - name: GATE_URL
+    type: url
+    required: false
+    default: http://localhost:8080
+    description: Gate service base URL for SDK runtime and Gate-only egress.
+    sensitive: false
+    source: env
 
   - name: GRAPH_NODE_URL
     type: url
     required: false
     default: http://localhost:8001
-    description: GRAPH constellation node URL for PacketEnvelope routing.
+    description: Legacy direct GRAPH node URL. Deprecated in favor of GATE_URL.
+    sensitive: false
+    source: env
 
   - name: SCORE_NODE_URL
     type: url
     required: false
     default: http://localhost:8002
-    description: SCORE constellation node URL.
+    description: Legacy direct SCORE node URL. Deprecated in favor of GATE_URL.
+    sensitive: false
+    source: env
 
   - name: ROUTE_NODE_URL
     type: url
     required: false
     default: http://localhost:8003
-    description: ROUTE constellation node URL.
+    description: Legacy direct ROUTE node URL. Deprecated in favor of GATE_URL.
+    sensitive: false
+    source: env
 
   - name: INTER_NODE_SECRET
     type: secret
     required: false
     default: dev-inter-node-secret
-    description: Shared secret for node-to-node authentication.
+    description: Shared secret for node-to-node calls.
     sensitive: true
+    source: env
 
-  # ── Neo4j Graph ─────────────────────────────────────────────
+  # ── Neo4j ───────────────────────────────────────────────────
   - name: NEO4J_URI
     type: url
     required: false
     default: bolt://localhost:7687
-    description: Neo4j connection URI.
+    description: Neo4j Bolt URI.
+    sensitive: false
+    source: env
 
   - name: NEO4J_USER
     type: string
     required: false
     default: neo4j
-    description: Neo4j username.
+    description: Neo4j username (Settings field neo4j_user).
+    sensitive: false
+    source: env
 
   - name: NEO4J_PASSWORD
     type: secret
@@ -276,54 +388,79 @@ variables:
     default: changeme
     description: Neo4j password.
     sensitive: true
+    source: env
 
   # ── PostgreSQL ───────────────────────────────────────────────
   - name: DATABASE_URL
     type: url
     required: false
     default: postgresql+asyncpg://enrich:changeme@localhost:5432/enrich
-    description: PostgreSQL async connection URL (asyncpg driver).
+    description: Async SQLAlchemy URL (asyncpg driver).
     sensitive: true
+    source: env
     example: postgresql+asyncpg://enrich:secret@db:5432/enrich
 
-  # ── Domain Configuration ────────────────────────────────────
+  # ── Domain packs ────────────────────────────────────────────
   - name: DOMAINS_DIR
     type: string
     required: false
     default: ./domains
-    description: Directory containing domain YAML spec files.
+    description: Directory of domain YAML specs.
+    sensitive: false
+    source: env
 
   - name: DEFAULT_DOMAIN
     type: string
     required: false
     default: plasticos
-    description: Default domain profile when not specified in request.
+    description: Default domain id when request omits one.
+    sensitive: false
+    source: env
 
-  # ── Token Budget ─────────────────────────────────────────────
+  # ── Token budget ─────────────────────────────────────────────
+  - name: MAX_BUDGET_TOKENS
+    type: integer
+    required: false
+    default: 50000
+    description: Canonical max tokens per convergence run.
+    sensitive: false
+    source: env
+
   - name: MAX_BUDGET_TOKENS_DEFAULT
     type: integer
     required: false
     default: 50000
-    description: Default token budget per convergence run.
+    description: |
+      Legacy alias; if set without changing MAX_BUDGET_TOKENS from default 50000,
+      Settings validator copies this to max_budget_tokens (see app/core/config.py).
+    sensitive: false
+    source: env
 
   - name: TOKEN_RATE_USD_PER_1K
     type: float
     required: false
     default: 0.005
-    description: Token cost rate in USD per 1,000 tokens for cost tracking.
+    description: USD per 1k tokens for cost tracking.
+    sensitive: false
+    source: env
 
   # ── Logging ──────────────────────────────────────────────────
   - name: LOG_LEVEL
     type: string
     required: false
     default: INFO
-    description: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-    validation: "enum: DEBUG | INFO | WARNING | ERROR | CRITICAL"
+    description: Log level for structlog/logging.
+    sensitive: false
+    source: env
+    validation: "DEBUG | INFO | WARNING | ERROR | CRITICAL"
 
-# ── Required Variables Checklist ─────────────────────────────
+# ── Operational checklists (not Pydantic "required") ─────────
+# Settings supplies defaults for every field; these lists are what you typically
+# set for a real deployment.
+
 required_for_startup:
+  - API_KEY_HASH
   - PERPLEXITY_API_KEY
-  - API_SECRET_KEY
 
 required_for_caching:
   - REDIS_URL
@@ -337,10 +474,97 @@ required_for_odoo_integration:
   - ODOO_USERNAME
   - ODOO_PASSWORD
 
-required_for_salesforce_integration:
-  - SALESFORCE_CLIENT_ID
-  - SALESFORCE_CLIENT_SECRET
-  - SALESFORCE_USERNAME
-  - SALESFORCE_PASSWORD
-  - SALESFORCE_SECURITY_TOKEN
+# ═══════════════════════════════════════════════════════════════
+# Env read outside Settings (documentary only)
+# ═══════════════════════════════════════════════════════════════
+other_runtime_env:
+  description: |
+    Not loaded by app/core/config.py Settings. Examples: OTEL_EXPORTER_OTLP_ENDPOINT,
+    OTEL_SERVICE_NAME, ENVIRONMENT, VERSION — see app/core/telemetry.py.
 
+# ═══════════════════════════════════════════════════════════════
+# GitHub Actions — secrets & variables (CI / deploy / review bots)
+# ═══════════════════════════════════════════════════════════════
+github_actions:
+  secrets:
+    - name: PERPLEXITY_API_KEY
+      map_to_env: PERPLEXITY_API_KEY
+      required: optional
+      workflows: [.github/workflows/perplexity-code-review.yml]
+      notes: |
+        PR advisory AI diff review. If unset, workflow skips. Same name as runtime Settings.
+
+    - name: TELEGRAM_BOT_TOKEN
+      map_to_env: TELEGRAM_BOT_TOKEN
+      required: optional
+      workflows:
+        - .github/workflows/coderabbit-notify.yml
+        - .github/workflows/telegram-pr-review-notify.yml
+      notes: Telegram notifications for CodeRabbit and other PR review activity.
+
+    - name: KUBECONFIG
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/k8s-deploy.yml]
+      notes: Base64-encoded kubeconfig (not a Settings env var).
+
+    - name: SLACK_WEBHOOK_URL
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/k8s-deploy.yml]
+      notes: Incoming webhook when SLACK_NOTIFICATIONS_ENABLED=true on k8s deploy.
+
+    - name: CODECOV_TOKEN
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/ci.yml]
+      notes: Optional Codecov upload; ci.yml tolerates missing token.
+
+    - name: SONAR_TOKEN
+      map_to_env: null
+      required: optional
+      workflows: [.github/workflows/sonarcloud.yml]
+      notes: |
+        SonarCloud user token with SONAR_ORG_KEY + SONAR_PROJECT_KEY variables.
+
+  variables_non_secret:
+    - name: TELEGRAM_CHAT_ID
+      workflows:
+        - .github/workflows/coderabbit-notify.yml
+        - .github/workflows/telegram-pr-review-notify.yml
+      notes: Repository variable; pair with TELEGRAM_BOT_TOKEN.
+
+    - name: TELEGRAM_REVIEW_NOTIFY_MODE
+      workflows: [.github/workflows/telegram-pr-review-notify.yml]
+      notes: bots (default) or all — see telegram-pr-review-notify.yml header.
+
+    - name: TELEGRAM_REVIEW_BOT_ALLOWLIST
+      workflows: [.github/workflows/telegram-pr-review-notify.yml]
+      notes: Optional comma-separated GitHub logins overriding default bot list.
+
+    - name: SONAR_ORG_KEY
+      workflows: [.github/workflows/sonarcloud.yml]
+      notes: SonarCloud organization key.
+
+    - name: SONAR_PROJECT_KEY
+      workflows: [.github/workflows/sonarcloud.yml]
+      notes: SonarCloud project key.
+
+  paid_third_party:
+    description: |
+      CodeRabbit and SonarCloud are configured outside env files: billing + GitHub App,
+      SonarCloud import + token/variables. See CODERABBIT.md and sonar-project.properties.
+
+  not_user_configurable:
+    - name: GITHUB_TOKEN
+      notes: Auto-provided to workflows.
+
+  runtime_overlap:
+    description: |
+      Any variable in `variables:` can be set as a GitHub encrypted secret for deploy
+      workflows; name the secret to match the env var (e.g. PERPLEXITY_API_KEY, DATABASE_URL).
+
+  bulk_upload:
+    description: Push secrets from .env.local via GitHub CLI or org secrets.
+    tool: tools/sync_github_actions_secrets.sh
+    notes: gh secret set -f .env.local -R owner/repo

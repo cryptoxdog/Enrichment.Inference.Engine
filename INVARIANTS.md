@@ -9,16 +9,16 @@
 # token_estimate: 2834
 # ssot_for: [invariants, architectural-rules, process-rules]
 # load_when: [architectural_questions, invariant_lookup, refactor]
-# references: [AGENT.md, .cursorrules, CI_WHITELIST_REGISTER.md]
+# references: [AGENTS.md, CI_WHITELIST_REGISTER.md]
 # --- /L9_META ---
 
 # INVARIANTS.md — Immutable Architectural Rules
 
-**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
+**VERSION**: 2.1.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-11
 
 > These 20 rules must hold across ALL repository states.
 > Violation of any CRITICAL invariant is grounds for immediate PR rejection.
-> Gate sequence definition: see AGENT.md (SSOT).
+> Gate sequence definition: see [AGENTS.md](AGENTS.md) (SSOT — `make agent-check`).
 
 ---
 
@@ -32,7 +32,7 @@
 | C-07 (Cypher injection) | INV-6 | PARTIAL |
 | C-09 (L9_ prefix) | INV-20 | PARTIAL |
 | C-10 (no hardcoded creds) | INV-12 | COVERED (Gitleaks) |
-| C-11 (PacketEnvelope frozen) | INV-15 | PARTIAL (runtime only) |
+| C-11 (transport immutability) | INV-15 | PARTIAL (runtime only) |
 | C-15 (coverage >= 60%) | INV-9 | COVERED |
 | C-16 (Python 3.12+) | INV-11 | COVERED |
 | C-18 (frozen ruff ignores) | INV-17 | GAP — no automated check |
@@ -42,11 +42,10 @@
 
 ## Part A — Architectural Invariants (INV-1 through INV-15)
 
-### INV-1: HTTP Surface Constraint
-**Severity**: CRITICAL | **Enforcement**: GAP — human review only
-**Rule**: The API exposes exactly 2 HTTP routes: POST /v1/execute and GET /v1/health.
-No additional routes may be added without architecture team review.
-Automation opportunity: Parse app/api/ for route decorators and assert count = 2. Track: docs-gap-inv1.
+### INV-1: HTTP Surface Governance
+**Severity**: CRITICAL | **Enforcement**: GAP — human review + static scans (no exhaustive route inventory in CI)
+**Rule**: The governed FastAPI surface is assembled in `app/main.py` (included routers plus top-level routes). Documented entrypoints include enrichment (`POST /api/v1/enrich`, `POST /api/v1/enrich/batch`, `GET /api/v1/health`), Constellation transport (`POST /v1/execute`, `POST /v1/outcomes` per module docstring), and routers mounted from `app/api/v1/*` and `app/score/score_api.py`. **New routes** or new public routers require architecture/API review; ad-hoc endpoints must not bypass chassis patterns in [AGENTS.md](AGENTS.md) C-01/C-02.
+Automation opportunity: CI step or audit script that diffs OpenAPI route table against an allowlist. Track: docs-gap-inv1.
 
 ### INV-2: Chassis-Engine Import Boundary
 **Severity**: CRITICAL | **Enforcement**: COVERED — compliance.yml Chassis Isolation step
@@ -81,8 +80,8 @@ Automation opportunity: Semgrep rule matching Cypher strings without tenant sele
 **Rule**: Entity enrichment MUST execute gate compilation before scoring. Gates produce Cypher WHERE; scores produce ORDER BY. These stages must not be merged or reversed.
 
 ### INV-9: Coverage Threshold >= 60%
-**Severity**: HIGH | **Enforcement**: COVERED — ci.yml --cov-fail-under=60
-**Rule**: Test coverage for app/ must never drop below 60%. The threshold may only increase, never decrease.
+**Severity**: HIGH | **Enforcement**: COVERED — `pytest.ini` / `pyproject.toml` (`fail_under` / `--cov-fail-under`) and CI pytest step
+**Rule**: Test coverage for `app/` must never drop below 60%. The threshold may only increase, never decrease.
 
 ### INV-10: L9_META Presence
 **Severity**: MEDIUM | **Enforcement**: PARTIAL — tools/verify_contracts.py (confirmed present SHA 2d30a79)
@@ -104,9 +103,9 @@ Automation opportunity: Semgrep rule matching Cypher strings without tenant sele
 **Severity**: HIGH | **Enforcement**: PARTIAL — audit_engine.py STUB-001/002/003
 **Rule**: No pass, ..., or TODO may exist in committed production code outside test files and protocol definitions.
 
-### INV-15: PacketEnvelope Immutability
-**Severity**: CRITICAL | **Enforcement**: PARTIAL — Pydantic frozen=True at runtime
-**Rule**: PacketEnvelope instances MUST NOT be mutated after creation. Model uses model_config = ConfigDict(frozen=True).
+### INV-15: Transport Immutability
+**Severity**: CRITICAL | **Enforcement**: PARTIAL — SDK + code review
+**Rule**: `TransportPacket` and other constellation transport types MUST NOT be mutated after construction. Chassis wire dicts produced by `chassis/envelope.py` must not be mutated in place across service boundaries — derive new dicts/packets for changes.
 
 ---
 
@@ -144,7 +143,7 @@ Current frozen list with rationale:
 
 ### INV-19: Agent Check Gate Sequence
 **Severity**: HIGH | **Enforcement**: COVERED — Makefile + pre-commit
-**Rule**: The 7-gate make agent-check sequence is the mandatory pre-commit verification. See AGENT.md (SSOT). No commits while any gate is failing.
+**Rule**: The 7-gate `make agent-check` sequence is the mandatory pre-commit verification. See [AGENTS.md](AGENTS.md) (SSOT). No commits while any gate is failing.
 
 ### INV-20: Environment Variable L9_ Prefix Convention
 **Severity**: MEDIUM | **Enforcement**: PARTIAL — .cursorrules ENV-001
@@ -158,7 +157,7 @@ Current frozen list with rationale:
 2. Assign to CODEOWNERS (see .github/CODEOWNERS).
 3. Issue must include: rule statement, severity, enforcement mechanism, affected contracts.
 4. Only architecture team review can merge a new invariant.
-5. New invariants must update this file AND add a corresponding contract in .cursorrules.
+5. New invariants must update this file AND add or align a corresponding contract in [AGENTS.md](AGENTS.md) (and `.cursor/rules/` where repo policy mirrors contracts).
 
 ---
 

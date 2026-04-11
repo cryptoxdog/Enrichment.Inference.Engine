@@ -13,7 +13,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
-from score_models import (
+from .score_models import (
     ScoreDimension,
     ScoreRecord,
     ScoreTier,
@@ -159,15 +159,19 @@ def _resolve_dimension_timestamp(
     if timestamp_provider is None:
         return scored_at
 
-    match dimension:
-        case ScoreDimension.FIT:
-            ts = timestamp_provider.get_last_enriched_at(entity_id)
-        case ScoreDimension.INTENT | ScoreDimension.ENGAGEMENT | ScoreDimension.READINESS:
-            ts = timestamp_provider.get_last_signal_at(entity_id)
-        case ScoreDimension.GRAPH_AFFINITY:
-            ts = timestamp_provider.get_last_graph_sync_at(entity_id)
-        case _:
-            ts = None
+    ts: datetime | None
+    if dimension == ScoreDimension.FIT:
+        ts = timestamp_provider.get_last_enriched_at(entity_id)
+    elif dimension in (
+        ScoreDimension.INTENT,
+        ScoreDimension.ENGAGEMENT,
+        ScoreDimension.READINESS,
+    ):
+        ts = timestamp_provider.get_last_signal_at(entity_id)
+    elif dimension == ScoreDimension.GRAPH_AFFINITY:
+        ts = timestamp_provider.get_last_graph_sync_at(entity_id)
+    else:
+        ts = None
 
     return ts or scored_at
 

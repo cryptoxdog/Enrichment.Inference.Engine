@@ -3,9 +3,12 @@ OpenAPI Contract Tests
 Source: app/models/schemas.py, app/main.py, app/core/auth.py
 Markers: unit
 """
+
 from __future__ import annotations
+
 import pytest
-from tests.contracts.conftest_contracts import load_yaml, API_DIR
+
+from tests.contracts.conftest_contracts import API_DIR, load_yaml
 
 
 @pytest.fixture(scope="module")
@@ -22,10 +25,12 @@ def test_openapi_version_is_3_1(spec: dict) -> None:
         f"Expected OpenAPI 3.1.x, got: {spec.get('openapi')!r}"
     )
 
+
 @pytest.mark.unit
 def test_info_block_present(spec: dict) -> None:
     info = spec.get("info", {})
     assert info.get("title") and info.get("version")
+
 
 @pytest.mark.unit
 def test_security_scheme_defined(spec: dict) -> None:
@@ -36,22 +41,22 @@ def test_security_scheme_defined(spec: dict) -> None:
 
 
 REQUIRED_PATHS = [
-    ("GET",  "/api/v1/health"),
+    ("GET", "/api/v1/health"),
     ("POST", "/api/v1/enrich"),
     ("POST", "/api/v1/enrich/batch"),
     ("POST", "/v1/execute"),
     ("POST", "/v1/outcomes"),
     ("POST", "/v1/converge"),
     ("POST", "/v1/converge/batch"),
-    ("GET",  "/v1/converge/{run_id}"),
+    ("GET", "/v1/converge/{run_id}"),
     ("POST", "/v1/converge/{run_id}/approve"),
-    ("GET",  "/v1/converge/proposals/{domain}"),
+    ("GET", "/v1/converge/proposals/{domain}"),
     ("POST", "/api/v1/discover"),
     ("POST", "/api/v1/scan"),
-    ("GET",  "/api/v1/proposals/{domain}"),
-    ("POST", "/api/v1/proposals/{id}/approve"),
-    ("GET",  "/api/v1/fields/{entity_id}"),
-    ("GET",  "/api/v1/fields/{entity_id}/{field}/history"),
+    ("GET", "/api/v1/proposals/{domain}"),
+    ("POST", "/api/v1/proposals/{proposal_id}/approve"),  # {proposal_id} not {id}
+    ("GET", "/api/v1/fields/{entity_id}"),
+    ("GET", "/api/v1/fields/{entity_id}/{field_name}/history"),  # {field_name} not {field}
 ]
 
 
@@ -84,8 +89,13 @@ def test_endpoint_has_responses(spec: dict, method: str, path: str) -> None:
 
 ENRICH_REQUEST_REQUIRED_FIELDS = ["entity", "object_type", "objective"]
 ENRICH_RESPONSE_FIELDS = [
-    "fields", "confidence", "inference_version", "processing_time_ms",
-    "quality_tier", "state", "tokens_used",
+    "fields",
+    "confidence",
+    "inference_version",
+    "processing_time_ms",
+    "quality_tier",
+    "state",
+    "tokens_used",
 ]
 
 
@@ -96,8 +106,10 @@ def test_enrich_request_required_fields_in_spec(spec: dict) -> None:
         pytest.skip("/api/v1/enrich not in spec")
     post_op = paths["/api/v1/enrich"].get("post", {})
     body_schema = (
-        post_op.get("requestBody", {}).get("content", {})
-        .get("application/json", {}).get("schema", {})
+        post_op.get("requestBody", {})
+        .get("content", {})
+        .get("application/json", {})
+        .get("schema", {})
     )
     props = body_schema.get("properties", {})
     for field in ENRICH_REQUEST_REQUIRED_FIELDS:
@@ -110,8 +122,7 @@ def test_enrich_request_required_fields_in_spec(spec: dict) -> None:
 def test_error_response_components_present(spec: dict) -> None:
     components = spec.get("components", {})
     has_errors = bool(components.get("responses")) or any(
-        "error" in k.lower() or "Error" in k
-        for k in components.get("schemas", {})
+        "error" in k.lower() or "Error" in k for k in components.get("schemas", {})
     )
     assert has_errors, "No error response components — Phase 4.1 requires shared error envelope"
 

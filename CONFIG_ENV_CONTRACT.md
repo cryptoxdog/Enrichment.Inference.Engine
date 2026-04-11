@@ -6,99 +6,77 @@
 # tags: [L9_TEMPLATE, config, env-vars, contract]
 # owner: platform
 # status: active
-# token_estimate: 1556
-# ssot_for: [environment-variables, loading-order, minimum-dev-env]
+# token_estimate: 1200
+# ssot_for: [environment-variables-human-summary]
 # load_when: [env_var_change, config_question, startup_failure]
-# references: [AGENT.md, INVARIANTS.md INV-20, .github/env.template]
+# references: [AGENTS.md, INVARIANTS.md INV-20, docs/contracts/config/env-contract.yaml, .env.example]
 # --- /L9_META ---
 
-# CONFIG_ENV_CONTRACT.md — Environment Variables Contract
+# CONFIG_ENV_CONTRACT.md — Environment Variables Contract (summary)
 
-**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
+**VERSION**: 2.1.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-11
 
-> All env var names follow L9_ prefix convention (INVARIANT 20) unless noted as infrastructure-standard.
-> Loading order: OS environment > .env file > pydantic-settings defaults.
-> On missing required variable: pydantic-settings raises ValidationError listing ALL missing fields before app starts.
+> **Machine SSOT:** [`docs/contracts/config/env-contract.yaml`](docs/contracts/config/env-contract.yaml) — full variable list, defaults, GitHub Actions mappings, and `required_for_*` checklists.
+> **Human template:** [`.env.example`](.env.example) — copy to `.env` / `.env.local` (`.env.local` overrides and is gitignored).
+
+`app/core/config.py` (`Settings`, pydantic-settings) loads **uppercase env names** derived from field names (e.g. `neo4j_uri` → `NEO4J_URI`). There is **no** `L9_` prefix on Neo4j or database settings in `Settings`; use the names below.
 
 ---
 
-## Minimum .env for `make dev`
+## Minimum .env for local enrichment
+
+Typical values (align with `.env.example`):
 
 ```bash
-# Minimum required for local development
 PERPLEXITY_API_KEY=pplx-your-key-here
+API_KEY_HASH=<sha256-hex-of-your-client-api-key>
 REDIS_URL=redis://localhost:6379/0
-API_SECRET_KEY=your-32-plus-char-secret-here
-API_KEY_HASH=sha256-of-your-api-key-here
-L9_NEO4J_URI=bolt://localhost:7687
-L9_NEO4J_USER=neo4j
-L9_NEO4J_PASSWORD=your-neo4j-password
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/enrichment
+DATABASE_URL=postgresql+asyncpg://enrich:changeme@localhost:5432/enrich
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-neo4j-password
 ```
 
-Copy from `.env.example` and fill in values. Never commit `.env` (gitignored).
+`API_SECRET_KEY` exists on `Settings` but is **not** used for client auth; `X-API-Key` is verified against `API_KEY_HASH` (see `app/core/auth.py`).
 
 ---
 
-## Environment Variables
+## Core variables (Settings)
 
-### Required — Application Will NOT Start Without These
+| Variable | Role |
+|----------|------|
+| `PERPLEXITY_API_KEY` | Sonar / enrichment provider |
+| `PERPLEXITY_MODEL` | Model id (default `sonar-reasoning`) |
+| `API_KEY_HASH` | SHA-256 hex of accepted API key |
+| `API_SECRET_KEY` | Optional reserved field (see yaml contract) |
+| `REDIS_URL` | Idempotency / rate limiting |
+| `DATABASE_URL` | Async SQLAlchemy URL (`asyncpg`) |
+| `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | Graph (optional per deployment) |
+| `KB_DIR`, `DOMAINS_DIR`, `DEFAULT_DOMAIN` | KB and domain packs |
+| `GATE_URL`, `CEG_BASE_URL`, `INTER_NODE_SECRET` | Constellation / gate integration |
+| `DEFAULT_CONSENSUS_THRESHOLD`, `DEFAULT_MAX_VARIATIONS`, `DEFAULT_TIMEOUT_SECONDS` | Enrichment defaults |
+| `MAX_CONCURRENT_VARIATIONS`, `MAX_ENTITIES_PER_BATCH` | Concurrency / batch caps |
+| `CB_FAILURE_THRESHOLD`, `CB_COOLDOWN_SECONDS` | Circuit breaker |
+| `MAX_BUDGET_TOKENS`, `MAX_BUDGET_TOKENS_DEFAULT`, `TOKEN_RATE_USD_PER_1K` | Convergence cost |
+| `LOG_LEVEL` | Logging (`Settings.log_level`) |
 
-| Variable | Type | Description | L9_ Prefix |
-|---|---|---|---|
-| `PERPLEXITY_API_KEY` | str | Perplexity API key | No (external service) |
-| `API_SECRET_KEY` | str (32+ chars) | HMAC signing key for API auth | No (standard) |
-| `API_KEY_HASH` | str | SHA-256 hash of the API key | No (standard) |
-| `L9_NEO4J_URI` | str | Neo4j bolt URI | Yes |
-| `L9_NEO4J_USER` | str | Neo4j username | Yes |
-| `L9_NEO4J_PASSWORD` | str | Neo4j password | Yes |
-| `DATABASE_URL` | str | SQLAlchemy async DB URL | No (SQLAlchemy standard) |
-| `REDIS_URL` | str | Redis connection URL | No (Redis standard) |
+Docker Compose–only keys (`COMPOSE_PROJECT_NAME`, `POSTGRES_*`, `GRAFANA_*`, `APP_PORT`, …) are documented in `.env.example` and in `env-contract.yaml`.
 
-### Optional — Have Defaults
+---
 
-| Variable | Type | Default | Description | L9_ Prefix |
-|---|---|---|---|---|
-| `L9_API_PORT` | int | 8000 | Uvicorn bind port | Yes |
-| `L9_LOG_LEVEL` | str | INFO | structlog level | Yes |
-| `L9_DEFAULT_TENANT` | str | default | Fallback tenant ID (level 5 waterfall) | Yes |
-| `L9_PERPLEXITY_MAX_CONCURRENT` | int | 3 | Semaphore for concurrent Perplexity requests | Yes |
-| `L9_REDIS_TIMEOUT_SECONDS` | int | 5 | Redis socket timeout | Yes |
-| `CB_FAILURE_THRESHOLD` | int | 5 | Circuit breaker failure count before open | No (infra-standard) |
-| `CB_COOLDOWN_SECONDS` | int | 60 | Circuit breaker cooldown before half-open probe | No (infra-standard) |
-| `MIN_VALID` | int | 2 | Minimum valid Perplexity responses before synthesis | No |
-| `TESTING` | bool | False | Disables external calls in test mode | No (pytest standard) |
+## Outside Settings
 
-### CI Environment Variables (Not for Local Dev)
-
-| Variable | Set By | Purpose |
-|---|---|---|
-| `CODECOV_TOKEN` | GitHub Actions secret | Coverage upload |
-| `GITHUB_TOKEN` | GitHub Actions auto | Release drafter |
-| `SEMGREP_APP_TOKEN` | GitHub Actions secret | Semgrep cloud rules |
+OpenTelemetry and similar use standard `OTEL_*` / process env as described under `other_runtime_env` in [`env-contract.yaml`](docs/contracts/config/env-contract.yaml) (see `app/core/telemetry.py`).
 
 ---
 
 ## AWS Secrets Manager
 
 **STATUS: ASPIRATIONAL — NOT IMPLEMENTED.**
-AWS Secrets Manager is referenced in the architecture roadmap but is NOT currently implemented
-in any code path. Do NOT add AWS SDK calls expecting this infrastructure to exist.
-Track: GitHub issue label `infra-roadmap`.
+Do not add AWS SDK calls expecting this path until an issue with label `infra-roadmap` is closed.
 
 ---
 
-## Circuit Breaker Configuration
+## Startup failures
 
-`CB_FAILURE_THRESHOLD` and `CB_COOLDOWN_SECONDS` govern Neo4j circuit breaker behavior.
-See EXECUTION_FLOWS.md §Neo4j Unreachable for the full failure flow.
-
----
-
-## Startup Failure Interpretation
-
-When app fails to start with `ValidationError`:
-- The error lists ALL missing `L9Settings` fields by name.
-- Do NOT treat this as a code bug.
-- Fix: add missing variables to `.env` using `.env.example` as template.
-- The `.env.example` is the source of truth for all variable names and placeholder formats.
+On misconfiguration, pydantic-settings may raise `ValidationError` listing fields. Prefer fixing env values using **`.env.example`** and **`env-contract.yaml`** as references — not ad hoc renames (C-09 in [AGENTS.md](AGENTS.md) for *new* application-level vars: prefer `L9_` unless infrastructure-standard).

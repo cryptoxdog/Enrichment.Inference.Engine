@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
+from constellation_node_sdk.runtime.handlers import register_handler
 
 from app.core.config import get_settings
 from app.engines.graph_sync_client import GraphSyncClient
@@ -26,7 +27,6 @@ from app.engines.handlers import (
     handle_writeback,
     init_handlers,
 )
-from chassis import register_handler
 
 logger = structlog.get_logger(__name__)
 
@@ -45,25 +45,36 @@ def register(kb, idem_store=None, domain_reader=None) -> None:
     register_handler("discover", handle_discover)
     register_handler("simulate", handle_simulate)
     register_handler("writeback", handle_writeback)
-    register_handler("enrich_and_sync", _make_enrich_and_sync_handler(kb, idem_store))
+    register_handler("enrich-and-sync", _make_enrich_and_sync_handler(kb, idem_store))
 
     _graph_client = GraphSyncClient(
-        graph_url=settings.graph_node_url,
-        api_key=settings.inter_node_secret,
+        gate_url=settings.gate_url,
         source_node="enrichment-engine",
     )
 
     logger.info(
         "orchestration.registered",
-        handlers=["enrich","enrichbatch","converge","discover","simulate","writeback","enrich_and_sync"],
-        graph_url=settings.graph_node_url,
+        handlers=[
+            "enrich",
+            "enrichbatch",
+            "converge",
+            "discover",
+            "simulate",
+            "writeback",
+            "enrich-and-sync",
+        ],
+        gate_url=settings.gate_url,
     )
 
 
 def _make_enrich_and_sync_handler(kb, idem_store):
     """Composite: enrich -> persist -> graph sync -> score invalidate -> event emit."""
 
-    async def handle_enrich_and_sync(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def handle_enrich_and_sync(
+        tenant: str,
+        payload: dict[str, Any],
+        packet: Any | None = None,
+    ) -> dict[str, Any]:
         settings = get_settings()
         enrich_result = await handle_enrich(tenant, payload)
 
@@ -89,50 +100,72 @@ def _make_enrich_and_sync_handler(kb, idem_store):
                 idempotency_key=payload.get("idempotency_key"),
             )
         except Exception as exc:
-            logger.warning("orchestration.result_persist_failed", entity_id=entity_id, error=str(exc))
+            logger.warning(
+                "orchestration.result_persist_failed", entity_id=entity_id, error=str(exc)
+            )
 
         # Graph sync via GraphSyncClient
         if _graph_client:
             try:
                 sync_resp = await _graph_client.sync_entities(
                     entity_type=entity_type,
-                    batch=[{"entity_id": entity_id, "domain": domain,
+                    batch=[
+                        {
+                            "entity_id": entity_id,
+                            "domain": domain,
                             "fields": enrich_result.get("fields", {}),
-                            "confidence": enrich_result.get("confidence", 0.0)}],
+                            "confidence": enrich_result.get("confidence", 0.0),
+                        }
+                    ],
                     tenant=tenant,
-                    parent_packet_id=enrich_result.get("packet_id"),
+                    parent_packet=packet,
                 )
                 enrich_result["graph_sync_status"] = sync_resp.get("status", "unknown")
             except Exception as exc:
-                logger.warning("orchestration.graph_sync_failed", entity_id=entity_id, error=str(exc))
+                logger.warning(
+                    "orchestration.graph_sync_failed", entity_id=entity_id, error=str(exc)
+                )
                 enrich_result["graph_sync_status"] = "failed"
 
         # GAP-6: Packet-routed graph sync
         try:
             from app.engines.packet_router import get_router
+
             router = get_router(settings)
             await router.notify_graph_sync(
-                tenant_id=tenant, entity_id=entity_id,
-                fields=enrich_result.get("fields", {}), domain=domain,
+                tenant_id=tenant,
+                entity_id=entity_id,
+                fields=enrich_result.get("fields", {}),
+                domain=domain,
             )
         except Exception as exc:
-            logger.warning("orchestration.packet_graph_sync_failed", entity_id=entity_id, error=str(exc))
+            logger.warning(
+                "orchestration.packet_graph_sync_failed", entity_id=entity_id, error=str(exc)
+            )
 
         # GAP-1: Score invalidation via PacketRouter (replaces non-existent dispatch_to_score)
         try:
             from app.engines.packet_router import get_router
+
             router = get_router(settings)
             await router.notify_score_invalidate(
-                tenant_id=tenant, entity_id=entity_id, domain=domain,
+                tenant_id=tenant,
+                entity_id=entity_id,
+                domain=domain,
             )
         except Exception as exc:
-            logger.warning("orchestration.score_invalidate_failed", entity_id=entity_id, error=str(exc))
+            logger.warning(
+                "orchestration.score_invalidate_failed", entity_id=entity_id, error=str(exc)
+            )
 
         # GAP-2: Event emission via get_emitter() (replaces non-existent module-level emit())
         try:
             from app.services.event_emitter import get_emitter
+
             await get_emitter(settings).emit_enrichment_completed(
-                tenant_id=tenant, entity_id=entity_id, domain=domain,
+                tenant_id=tenant,
+                entity_id=entity_id,
+                domain=domain,
                 fields=enrich_result.get("fields", {}),
                 confidence=float(enrich_result.get("confidence", 0.0)),
                 tokens_used=int(enrich_result.get("tokens_used", 0)),
@@ -147,14 +180,19 @@ def _make_enrich_and_sync_handler(kb, idem_store):
 
 
 async def run_outcome_feedback(
-    outcome: dict[str, Any], tenant: str, parent_packet_id: str | None = None,
+    outcome: dict[str, Any],
+    tenant: str,
+    parent_packet: Any | None = None,
 ) -> dict[str, Any]:
     if not _graph_client:
         logger.warning("orchestration.outcome_no_graph_client")
         return {"status": "skipped", "reason": "no_graph_client"}
     resp = await _graph_client.send_outcome(
-        outcome=outcome, tenant=tenant, parent_packet_id=parent_packet_id,
+        outcome=outcome,
+        tenant=tenant,
+        parent_packet=parent_packet,
     )
-    logger.info("orchestration.outcome_sent",
-                entity_id=outcome.get("entity_id"), status=resp.get("status"))
+    logger.info(
+        "orchestration.outcome_sent", entity_id=outcome.get("entity_id"), status=resp.get("status")
+    )
     return resp

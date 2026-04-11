@@ -1,96 +1,102 @@
 """
-Unit tests for chassis_contract.py (inflate/deflate/delegate).
-Validates PacketEnvelope protocol invariants using the live engine implementation.
+Unit tests for TransportPacket root/child behavior.
 """
 
 from __future__ import annotations
 
 import pytest
+from constellation_node_sdk.transport import create_transport_packet
 
-from app.engines.chassis_contract import deflate_egress, delegate_to_node, inflate_ingress
-
-BASE_RAW = {
-    "action": "enrich",
-    "tenant": "acme",
-    "payload": {"entity_id": "e-001", "fields": {"name": "Alpha Recyclers"}},
-}
+BASE_PAYLOAD = {"entity_id": "e-001", "fields": {"name": "Alpha Recyclers"}}
 
 
-def test_inflate_produces_required_keys():
-    env = inflate_ingress(BASE_RAW)
-    for key in (
-        "packet_id",
-        "packet_type",
-        "action",
-        "payload",
-        "timestamp",
-        "address",
-        "tenant",
-        "content_hash",
-        "lineage",
-        "governance",
-        "hop_trace",
-    ):
-        assert key in env, f"Missing key: {key}"
+def test_create_transport_packet_produces_required_sections():
+    packet = create_transport_packet(
+        action="enrich",
+        tenant="acme",
+        payload=BASE_PAYLOAD,
+        source_node="client",
+        destination_node="gate",
+    )
+    assert packet.header.packet_id
+    assert packet.address.destination_node == "gate"
+    assert packet.tenant.org_id == "acme"
+    assert packet.security.payload_hash
+    assert packet.security.transport_hash
+    assert packet.lineage.generation == 0
 
 
-def test_inflate_computes_deterministic_hash():
-    env1 = inflate_ingress(BASE_RAW)
-    env2 = inflate_ingress(BASE_RAW)
-    assert env1["content_hash"] == env2["content_hash"]
+def test_create_transport_packet_computes_deterministic_hash():
+    packet1 = create_transport_packet(
+        action="enrich",
+        tenant="acme",
+        payload=BASE_PAYLOAD,
+        source_node="client",
+        destination_node="gate",
+    )
+    packet2 = create_transport_packet(
+        action="enrich",
+        tenant="acme",
+        payload=BASE_PAYLOAD,
+        source_node="client",
+        destination_node="gate",
+    )
+    assert packet1.security.payload_hash == packet2.security.payload_hash
 
 
-def test_inflate_rejects_tampered_hash():
-    raw = {**BASE_RAW, "content_hash": "bad_hash_value"}
-    with pytest.raises(ValueError, match="content_hash"):
-        inflate_ingress(raw)
+def test_derive_creates_child_packet():
+    packet = create_transport_packet(
+        action="enrich",
+        tenant="acme",
+        payload=BASE_PAYLOAD,
+        source_node="client",
+        destination_node="gate",
+    )
+    child = packet.derive(
+        action="sync",
+        payload={"entity_id": "e-001"},
+        source_node="enrichment-engine",
+        destination_node="gate",
+    )
+    assert child.header.packet_type == "request"
+    assert child.lineage.generation == 1
+    assert child.lineage.parent_id == packet.header.packet_id
 
 
-def test_inflate_appends_hop_trace():
-    env = inflate_ingress(BASE_RAW)
-    assert len(env["hop_trace"]) >= 1
-    assert env["hop_trace"][0]["node"] == "enrichment-engine"
+def test_derive_preserves_root_id():
+    packet = create_transport_packet(
+        action="enrich",
+        tenant="acme",
+        payload=BASE_PAYLOAD,
+        source_node="client",
+        destination_node="gate",
+    )
+    child = packet.derive(
+        action="sync",
+        payload={"entity_id": "e-001"},
+        source_node="enrichment-engine",
+        destination_node="gate",
+    )
+    assert child.lineage.root_id == packet.lineage.root_id
 
 
-def test_deflate_creates_result_packet():
-    env = inflate_ingress(BASE_RAW)
-    result = deflate_egress(env, {"material_grade": "A"})
-    assert result["packet_type"] == "enrichment_result"
-    assert result["payload"]["material_grade"] == "A"
-
-
-def test_deflate_increments_generation():
-    env = inflate_ingress(BASE_RAW)
-    result = deflate_egress(env, {})
-    assert result["lineage"]["generation"] == 1
-
-
-def test_deflate_hop_trace_has_respond_entry():
-    env = inflate_ingress(BASE_RAW)
-    result = deflate_egress(env, {})
-    actions = [h["action"] for h in result["hop_trace"]]
-    assert "respond" in actions
-
-
-def test_delegate_forces_audit_required():
-    env = inflate_ingress(BASE_RAW)
-    derived = delegate_to_node(env, "graph-service", ["read", "sync"])
-    assert derived["governance"]["audit_required"] is True
-
-
-def test_delegate_appends_delegation_chain():
-    env = inflate_ingress(BASE_RAW)
-    derived = delegate_to_node(env, "graph-service", ["sync"])
-    chain = derived["delegation_chain"]
-    assert len(chain) == 1
-    assert chain[0]["delegatee"] == "graph-service"
-
-
-def test_inflate_missing_action_raises():
+def test_create_transport_packet_rejects_blank_action():
     with pytest.raises(ValueError, match="action"):
-        inflate_ingress({"payload": {}})
+        create_transport_packet(
+            action="",
+            tenant="acme",
+            payload=BASE_PAYLOAD,
+            source_node="client",
+            destination_node="gate",
+        )
 
 
-def test_inflate_missing_payload_raises():
-    with pytest.raises(ValueError, match="payload"):
-        inflate_ingress({"action": "enrich"})
+def test_create_transport_packet_requires_dict_payload():
+    with pytest.raises(TypeError):
+        create_transport_packet(  # type: ignore[arg-type]
+            action="enrich",
+            tenant="acme",
+            payload=None,
+            source_node="client",
+            destination_node="gate",
+        )

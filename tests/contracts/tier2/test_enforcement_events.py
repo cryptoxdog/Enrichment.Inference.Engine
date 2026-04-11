@@ -12,7 +12,7 @@ Primary sources:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -53,7 +53,7 @@ def build_event(
         "domain": domain,
         "payload": payload or {},
         "correlation_id": correlation_id,
-        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "occurred_at": datetime.now(UTC).isoformat(),
     }
 
 
