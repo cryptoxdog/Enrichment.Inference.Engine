@@ -1,17 +1,19 @@
 """
-GAP-2 FIX: GRAPH → ENRICH bidirectional return channel.
+GRAPH → ENRICH return channel for inference results.
 
-Receives GRAPH inference outputs and converts them into deterministic
-EnrichmentTarget records that are injected back into the convergence loop
-as new Pass N+1 enrichment targets.
+Receives GRAPH inference outputs (via chassis /v1/execute) and converts them
+into EnrichmentTarget records for injection into the convergence loop.
 
-Architecture:
-  GRAPH.ConvergenceLoop
-      └─► GraphInferenceResultEnvelope (PacketEnvelope type=graph_inference_result)
-              └─► GraphToEnrichReturnChannel.submit()
-                      └─► EnrichmentTargetQueue (async)
-                              └─► convergence_controller.run_convergence_loop()
-                                      └─► Pass N+1 re-enrichment
+Architecture (L9 compliant):
+  GRAPH node
+      └─► POST /v1/execute (action=graph_inference_result)
+              └─► Gate Node (chassis routing)
+                      └─► ENRICH /v1/execute handler
+                              └─► GraphReturnChannel.submit()
+                                      └─► EnrichmentTargetQueue (async)
+                                              └─► convergence_controller Pass N+1
+
+This replaces direct GRAPH→ENRICH HTTP calls with proper chassis routing.
 """
 
 from __future__ import annotations
@@ -25,11 +27,10 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from .contract_enforcement import ContractViolationError
+
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Domain model
-# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class EnrichmentTarget:
@@ -38,11 +39,8 @@ class EnrichmentTarget:
     entity_id: str
     tenant_id: str
     field_name: str
-    # Inference-supplied seed value (may be None — forces discovery)
     seed_value: Any
-    # Confidence of the graph inference that produced this target
     source_confidence: float
-    # Trace back to the originating PacketEnvelope
     origin_packet_id: str
     origin_inference_rule: str
     created_at: float = field(default_factory=time.time)
@@ -63,24 +61,20 @@ class EnrichmentTarget:
 @dataclass
 class GraphInferenceResultEnvelope:
     """
-    Minimal representation of a PacketEnvelope[type=graph_inference_result].
+    Representation of a PacketEnvelope[type=graph_inference_result].
     Validated before injection; raises ContractViolationError on any violation.
     """
 
     packet_id: str
     tenant_id: str
-    # List of {entity_id, field, value, confidence, rule} dicts
     inference_outputs: list[dict[str, Any]]
     content_hash: str
     envelope_hash: str
 
-    # Minimum accepted confidence for a GRAPH output to generate a target
     CONFIDENCE_FLOOR: float = 0.55
 
     def validate(self) -> None:
         """Hard-fail if the envelope does not meet contract requirements."""
-        from engine.contract_enforcement import ContractViolationError  # Gap-1 fix
-
         if not self.packet_id:
             raise ContractViolationError("GraphInferenceResultEnvelope.packet_id is empty")
         if not self.tenant_id:
@@ -89,7 +83,7 @@ class GraphInferenceResultEnvelope:
             raise ContractViolationError("GraphInferenceResultEnvelope.content_hash is missing")
         if not self.envelope_hash:
             raise ContractViolationError("GraphInferenceResultEnvelope.envelope_hash is missing")
-        # Verify content hash
+
         payload_bytes = json.dumps(self.inference_outputs, sort_keys=True).encode()
         expected = hashlib.sha256(payload_bytes).hexdigest()
         if expected != self.content_hash:
@@ -127,26 +121,21 @@ class GraphInferenceResultEnvelope:
         return targets
 
 
-# ---------------------------------------------------------------------------
-# Return channel — singleton per process
-# ---------------------------------------------------------------------------
-
-class GraphToEnrichReturnChannel:
+class GraphReturnChannel:
     """
-    Async queue that bridges GRAPH inference outputs back to ENRICH.
+    Async queue bridging GRAPH inference outputs back to ENRICH convergence loop.
 
-    Usage (GRAPH side):
-        channel = GraphToEnrichReturnChannel.get_instance()
+    Usage (chassis handler):
+        channel = GraphReturnChannel.get_instance()
         await channel.submit(envelope)
 
-    Usage (ENRICH convergence_controller side):
+    Usage (convergence_controller):
         targets = await channel.drain(tenant_id="acme", timeout=0.5)
     """
 
-    _instance: GraphToEnrichReturnChannel | None = None
+    _instance: GraphReturnChannel | None = None
 
     def __init__(self, maxsize: int = 10_000) -> None:
-        # Per-tenant queues: tenant_id → asyncio.Queue[EnrichmentTarget]
         self._queues: dict[str, asyncio.Queue[EnrichmentTarget]] = {}
         self._maxsize = maxsize
         self._submitted: int = 0
@@ -154,7 +143,7 @@ class GraphToEnrichReturnChannel:
         self._rejected: int = 0
 
     @classmethod
-    def get_instance(cls) -> GraphToEnrichReturnChannel:
+    def get_instance(cls) -> GraphReturnChannel:
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -173,9 +162,9 @@ class GraphToEnrichReturnChannel:
         """
         Validate the envelope, convert outputs to targets, enqueue them.
         Returns the number of targets enqueued.
-        Hard-raises ContractViolationError if the envelope is invalid (Gap-1).
+        Raises ContractViolationError if the envelope is invalid.
         """
-        envelope.validate()  # raises on violation — no silent bypass
+        envelope.validate()
         targets = envelope.to_targets()
         q = self._queue_for(envelope.tenant_id)
         count = 0
@@ -193,7 +182,7 @@ class GraphToEnrichReturnChannel:
                 )
         self._submitted += count
         logger.info(
-            "GraphToEnrichReturnChannel: submitted %d targets for tenant=%s (packet=%s)",
+            "GraphReturnChannel: submitted %d targets for tenant=%s (packet=%s)",
             count,
             envelope.tenant_id,
             envelope.packet_id,
@@ -209,7 +198,6 @@ class GraphToEnrichReturnChannel:
     ) -> list[EnrichmentTarget]:
         """
         Non-blocking drain: collect up to max_targets from the tenant queue.
-        Returns immediately if the queue is empty after `timeout` seconds.
         Called by convergence_controller at the start of each new pass.
         """
         q = self._queue_for(tenant_id)
@@ -228,7 +216,7 @@ class GraphToEnrichReturnChannel:
         self._drained += len(targets)
         if targets:
             logger.info(
-                "GraphToEnrichReturnChannel: drained %d targets for tenant=%s",
+                "GraphReturnChannel: drained %d targets for tenant=%s",
                 len(targets),
                 tenant_id,
             )
@@ -243,18 +231,14 @@ class GraphToEnrichReturnChannel:
         }
 
 
-# ---------------------------------------------------------------------------
-# Integration helper: build a valid envelope from raw GRAPH output
-# ---------------------------------------------------------------------------
-
 def build_graph_inference_result_envelope(
     *,
     tenant_id: str,
     inference_outputs: list[dict[str, Any]],
 ) -> GraphInferenceResultEnvelope:
     """
-    Factory used by GRAPH ConvergenceLoop to produce a properly hashed envelope.
-    Call this instead of constructing GraphInferenceResultEnvelope directly.
+    Factory to build a properly hashed GraphInferenceResultEnvelope.
+    Used by GRAPH node when sending results via chassis.
     """
     payload_bytes = json.dumps(inference_outputs, sort_keys=True).encode()
     content_hash = hashlib.sha256(payload_bytes).hexdigest()
@@ -274,3 +258,28 @@ def build_graph_inference_result_envelope(
         content_hash=content_hash,
         envelope_hash=envelope_hash,
     )
+
+
+async def handle_graph_inference_result(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Chassis handler for action=graph_inference_result.
+    
+    Register this in the chassis router:
+        chassis.router.register_handler("graph_inference_result", handle_graph_inference_result)
+    """
+    envelope = GraphInferenceResultEnvelope(
+        packet_id=payload.get("packet_id", ""),
+        tenant_id=payload.get("tenant_id", ""),
+        inference_outputs=payload.get("inference_outputs", []),
+        content_hash=payload.get("content_hash", ""),
+        envelope_hash=payload.get("envelope_hash", ""),
+    )
+    
+    channel = GraphReturnChannel.get_instance()
+    count = await channel.submit(envelope)
+    
+    return {
+        "status": "accepted",
+        "targets_queued": count,
+        "packet_id": envelope.packet_id,
+    }

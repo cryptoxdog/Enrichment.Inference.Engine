@@ -1,17 +1,17 @@
 """
-GAP-3 FIX: Active inference function registry with real computation functions.
+Inference rule registry for the ENRICH convergence loop.
 
-Previously _RULE_REGISTRY was empty at startup, causing every `derived_from`
-inference rule that referenced a named rule to block with NO_RULE.
-This module registers all production inference functions and wires them
-into the DerivationGraph execution engine.
+Provides a decorator-based registration pattern for inference functions that
+derive field values from existing entity data. Rules are executed during
+convergence passes to fill gaps in entity profiles.
 
-Registration pattern:
-    @register_inference_rule("rule_name")
-    def my_rule(entity: dict, context: InferenceContext) -> InferenceResult:
+Usage:
+    @register_inference_rule("infer_company_size_tier")
+    def infer_company_size_tier(entity: dict, ctx: InferenceContext) -> InferenceResult | None:
         ...
 
-The inference engine calls: _RULE_REGISTRY[rule_name](entity, context)
+    # Execute a rule
+    result = execute_rule("infer_company_size_tier", entity, context)
 """
 
 from __future__ import annotations
@@ -24,9 +24,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
 
 @dataclass
 class InferenceContext:
@@ -35,7 +32,7 @@ class InferenceContext:
     domain_id: str
     pass_number: int
     known_fields: dict[str, Any] = field(default_factory=dict)
-    domain_kb: dict[str, Any] = field(default_factory=dict)   # from domain spec KB injection
+    domain_kb: dict[str, Any] = field(default_factory=dict)
     confidence_floor: float = 0.55
 
 
@@ -44,7 +41,7 @@ class InferenceResult:
     """Output of a single inference function execution."""
     field_name: str
     value: Any
-    confidence: float          # 0.0–1.0
+    confidence: float
     rule_name: str
     provenance: str = "inference"
     rationale: str = ""
@@ -61,10 +58,6 @@ class InferenceResult:
 
 
 InferenceFn = Callable[[dict[str, Any], InferenceContext], InferenceResult | None]
-
-# ---------------------------------------------------------------------------
-# Registry — populated by @register_inference_rule decorators below
-# ---------------------------------------------------------------------------
 
 _RULE_REGISTRY: dict[str, InferenceFn] = {}
 
@@ -99,7 +92,7 @@ def execute_rule(
     """
     Execute a registered inference rule. Returns None if the rule
     returns None (no confident inference). Raises KeyError if rule
-    is not registered (Gap-3: no silent NO_RULE block).
+    is not registered.
     """
     fn = get_rule(rule_name)
     try:
@@ -120,8 +113,6 @@ def execute_rule(
 
 # ===========================================================================
 # PRODUCTION INFERENCE RULES
-# Register all domain-agnostic rules here. Domain-specific rules are
-# loaded from domain KB via load_domain_rules() below.
 # ===========================================================================
 
 @register_inference_rule("infer_company_size_tier")
@@ -154,7 +145,6 @@ def infer_company_size_tier(entity: dict, ctx: InferenceContext) -> InferenceRes
             rule_name="infer_company_size_tier",
             rationale=f"employee_count={emp_n}",
         )
-    # fallback: revenue-only
     if rev_n is not None:
         if rev_n < 1_000_000:
             tier, conf = "micro", 0.70
@@ -180,7 +170,6 @@ def infer_email_domain_from_website(entity: dict, ctx: InferenceContext) -> Infe
     website = entity.get("website") or entity.get("website_url")
     if not website:
         return None
-    # Strip protocol and www
     domain = re.sub(r"^https?://", "", str(website).strip().lower())
     domain = re.sub(r"^www\.", "", domain)
     domain = domain.split("/")[0].split("?")[0]
@@ -199,11 +188,9 @@ def infer_email_domain_from_website(entity: dict, ctx: InferenceContext) -> Infe
 def infer_geography_from_postal_code(entity: dict, ctx: InferenceContext) -> InferenceResult | None:
     """Infer region/country from postal code prefix."""
     postal = entity.get("postal_code") or entity.get("zip_code")
-    country = entity.get("country")
     if not postal:
         return None
     postal_str = str(postal).strip().upper()
-    # US zip
     if re.match(r"^\d{5}(-\d{4})?$", postal_str):
         prefix = int(postal_str[:5])
         if prefix < 20000:
@@ -228,10 +215,7 @@ def infer_geography_from_postal_code(entity: dict, ctx: InferenceContext) -> Inf
 
 @register_inference_rule("infer_facility_tier_from_capacity")
 def infer_facility_tier_from_capacity(entity: dict, ctx: InferenceContext) -> InferenceResult | None:
-    """
-    Plastics vertical: infer facility_tier from processing_capacity_tons_per_year.
-    Uses domain_kb thresholds if available, else defaults.
-    """
+    """Plastics vertical: infer facility_tier from processing_capacity_tons_per_year."""
     capacity = entity.get("processing_capacity_tons_per_year") or entity.get("annual_capacity_tons")
     if capacity is None:
         return None
@@ -262,10 +246,7 @@ def infer_facility_tier_from_capacity(entity: dict, ctx: InferenceContext) -> In
 
 @register_inference_rule("infer_material_grade_from_mfi")
 def infer_material_grade_from_mfi(entity: dict, ctx: InferenceContext) -> InferenceResult | None:
-    """
-    Plastics vertical: infer material_grade from melt_flow_index (MFI g/10min).
-    Uses domain_kb mfi_grade_map if available.
-    """
+    """Plastics vertical: infer material_grade from melt_flow_index (MFI g/10min)."""
     mfi = entity.get("melt_flow_index") or entity.get("mfi")
     material = entity.get("material_type", "HDPE").upper()
     if mfi is None:
@@ -275,7 +256,6 @@ def infer_material_grade_from_mfi(entity: dict, ctx: InferenceContext) -> Infere
     except (TypeError, ValueError):
         return None
     kb = ctx.domain_kb.get("mfi_grade_map", {})
-    # Default HDPE thresholds — can be overridden by KB
     if material in ("HDPE", "PE"):
         grade_map = kb.get("HDPE", [
             (0.5,  "HD_pipe",       0.88),
@@ -299,10 +279,7 @@ def infer_material_grade_from_mfi(entity: dict, ctx: InferenceContext) -> Infere
 
 @register_inference_rule("infer_contamination_tolerance")
 def infer_contamination_tolerance(entity: dict, ctx: InferenceContext) -> InferenceResult | None:
-    """
-    Plastics vertical: infer contamination_tolerance from facility_tier and material_grade.
-    Only fires if both fields are known.
-    """
+    """Plastics vertical: infer contamination_tolerance from facility_tier and material_grade."""
     tier = entity.get("facility_tier")
     grade = entity.get("material_grade")
     if not tier or not grade:
@@ -323,10 +300,7 @@ def infer_contamination_tolerance(entity: dict, ctx: InferenceContext) -> Infere
 
 @register_inference_rule("infer_icp_fit_score")
 def infer_icp_fit_score(entity: dict, ctx: InferenceContext) -> InferenceResult | None:
-    """
-    Generic ICP fit scoring: weighted sum of known firmographic signals.
-    Returns a 0.0–1.0 score in the 'icp_fit_score' field.
-    """
+    """Generic ICP fit scoring: weighted sum of known firmographic signals."""
     score = 0.0
     factors = 0
     if entity.get("company_size_tier") in ("mid_market", "enterprise", "large_enterprise"):
@@ -351,7 +325,6 @@ def infer_icp_fit_score(entity: dict, ctx: InferenceContext) -> InferenceResult 
         factors += 1
     if factors == 0:
         return None
-    # Confidence scales with number of contributing factors
     conf = min(0.55 + (factors * 0.06), 0.90)
     return InferenceResult(
         field_name="icp_fit_score",
@@ -388,20 +361,10 @@ def infer_buyer_persona(entity: dict, ctx: InferenceContext) -> InferenceResult 
     return InferenceResult("buyer_persona", "unknown", 0.55, "infer_buyer_persona", rationale=f"title={title} — no match")
 
 
-# ---------------------------------------------------------------------------
-# Dynamic domain rule loader (Gap-3: KB injection pathway)
-# ---------------------------------------------------------------------------
-
 def load_domain_rules(domain_kb: dict[str, Any]) -> int:
     """
     Load domain-specific inference rules from domain KB.
     Returns count of rules registered.
-
-    The KB may contain a 'inference_rules' list of:
-        {name: str, field: str, conditions: [...], value: Any, confidence: float}
-
-    Simple condition-based rules are auto-registered as closures.
-    Complex rules should be registered via @register_inference_rule in domain pack files.
     """
     rules_spec = domain_kb.get("inference_rules", [])
     registered = 0
@@ -410,7 +373,7 @@ def load_domain_rules(domain_kb: dict[str, Any]) -> int:
         if not rule_name:
             continue
         if rule_name in _RULE_REGISTRY:
-            continue  # already registered — don't overwrite
+            continue
         _register_condition_rule(rule_name, spec)
         registered += 1
     logger.info("Loaded %d domain-specific inference rules from KB", registered)
