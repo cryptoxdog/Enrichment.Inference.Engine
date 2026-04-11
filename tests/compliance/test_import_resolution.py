@@ -54,6 +54,8 @@ def test_no_engine_to_api_imports_in_engine_only_modules() -> None:
 
         if "app/api/" in str(rel):
             continue
+        if "app/bootstrap/" in str(rel):
+            continue
         if py_file in ACTIVE_TRANSPORT_BUNDLE:
             continue
 

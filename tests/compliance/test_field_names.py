@@ -43,7 +43,11 @@ def test_no_camelcase_pydantic_fields():
 
 
 def test_no_flatcase_pydantic_fields():
-    """No flatcase fields (long single-word names > 12 chars)."""
+    """No flatcase fields (long single-word names > 12 chars).
+
+    Standard English words that happen to exceed 12 chars are excluded.
+    """
+    allowed_words = {"recommendation", "recommendations", "configuration", "documentation"}
     violations = []
     for py_file in _get_engine_py_files():
         try:
@@ -56,10 +60,11 @@ def test_no_flatcase_pydantic_fields():
                     if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                         name = item.target.id
                         if len(name) > 12 and "_" not in name and name.islower():
-                            violations.append(
-                                f"{py_file.relative_to(REPO_ROOT)}:{item.lineno} "
-                                f"flatcase field '{name}'"
-                            )
+                            if name not in allowed_words:
+                                violations.append(
+                                    f"{py_file.relative_to(REPO_ROOT)}:{item.lineno} "
+                                    f"flatcase field '{name}'"
+                                )
     assert not violations, "flatcase fields found:\n" + "\n".join(violations)
 
 

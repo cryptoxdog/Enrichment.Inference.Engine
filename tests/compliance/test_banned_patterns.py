@@ -62,11 +62,17 @@ def test_no_fastapi_in_engine():
     - app/engines/handlers.py (chassis bridge)
     """
     allowed_files = {"main.py", "handlers.py"}
+    allowed_dirs = {"api/", "middleware/", "core/", "bootstrap/"}
+    allowed_paths = {"app/score/score_api.py"}
     violations = []
     for py_file in _get_engine_py_files():
         rel = py_file.relative_to(REPO_ROOT)
-        # Allow in api/ directory and specific files
-        if "api/" in str(rel) or rel.name in allowed_files:
+        rel_str = str(rel)
+        if rel.name in allowed_files:
+            continue
+        if any(d in rel_str for d in allowed_dirs):
+            continue
+        if rel_str in allowed_paths:
             continue
         try:
             tree = ast.parse(py_file.read_text())

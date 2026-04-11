@@ -67,8 +67,8 @@ class GraphInferenceConsumer:
                 mkstream=True,
             )
             logger.info("consumer_group_created", extra={"stream": GRAPH_INFERENCE_STREAM})
-        except Exception:
-            pass
+        except aioredis.ResponseError:
+            logger.debug("consumer_group_already_exists", extra={"stream": GRAPH_INFERENCE_STREAM})
         self._running = True
         logger.info("graph_inference_consumer_started")
 

@@ -76,8 +76,8 @@ class SchemaPromotionWorker:
                 id="0",
                 mkstream=True,
             )
-        except Exception:
-            pass
+        except aioredis.ResponseError:
+            logger.debug("consumer_group_already_exists", extra={"stream": DISCOVERED_STREAM})
         self._running = True
         logger.info("schema_promotion_worker_started")
 

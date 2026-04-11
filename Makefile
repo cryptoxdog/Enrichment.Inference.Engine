@@ -5,6 +5,9 @@ SERVICE_NAME ?= enrichment-api
 COMPOSE_FILE ?= docker-compose.prod.yml
 COVERAGE_MIN ?= 60
 
+PYTHON := $(shell if [ -x "$(CURDIR)/.venv/bin/python" ]; then printf '%s' "$(CURDIR)/.venv/bin/python"; else command -v python3; fi)
+PYTEST := $(PYTHON) -m pytest
+
 # ============================================================
 # SETUP
 # ============================================================
@@ -16,31 +19,31 @@ setup:
 # TESTING — TIERED
 # ============================================================
 test:  ## Quick: unit tests only
-	pytest tests/ -v --tb=short -x
+	$(PYTEST) tests/ -v --tb=short -x
 
 test-unit:  ## Unit tests only
-	pytest tests/unit/ -v --tb=short
+	$(PYTEST) tests/unit/ -v --tb=short
 
 test-integration:  ## Integration tests (requires services)
-	pytest tests/integration/ -v --tb=short -m integration
+	$(PYTEST) tests/integration/ -v --tb=short -m integration
 
 test-compliance:  ## Architecture compliance tests
-	pytest tests/compliance/ -v --tb=short
+	$(PYTEST) tests/compliance/ -v --tb=short
 
 test-ci:  ## CI-level tests (contract enforcement, loader tests)
-	pytest tests/ci/ -v --tb=short
+	$(PYTEST) tests/ci/ -v --tb=short
 
 test-contracts:  ## Repository contract call enforcement only
-	pytest tests/ci/test_repository_contract_calls.py -v --tb=short
+	$(PYTEST) tests/ci/test_repository_contract_calls.py -v --tb=short
 
 test-all:  ## Full test suite with coverage
 	ruff check .
 	ruff format --check .
 	mypy app
-	pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
+	$(PYTEST) tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
 
 test-watch:  ## Watch mode for unit tests
-	pytest-watch tests/unit/ -- -v --tb=short
+	$(PYTEST) tests/unit/ -- -v --tb=short -w
 
 # ============================================================
 # QUALITY — LINT + TYPE CHECK
@@ -58,19 +61,19 @@ lint-fix:  ## Auto-fix lint and format issues
 # AUDIT — 27-RULE ENGINE
 # ============================================================
 audit:  ## Run 27-rule audit engine (informational)
-	python tools/audit_engine.py
+	$(PYTHON) tools/audit_engine.py
 
 audit-strict:  ## Run 27-rule audit engine (fail on CRITICAL/HIGH)
-	python tools/audit_engine.py --strict
+	$(PYTHON) tools/audit_engine.py --strict
 
 audit-json:  ## Run 27-rule audit engine (JSON output)
-	python tools/audit_engine.py --json
+	$(PYTHON) tools/audit_engine.py --json
 
 # ============================================================
 # CONTRACT VERIFICATION
 # ============================================================
 verify:  ## Verify contract manifest integrity
-	python tools/verify_contracts.py
+	$(PYTHON) tools/verify_contracts.py
 
 # ============================================================
 # AGENT WORKFLOW — THE UNIVERSAL GATES
@@ -83,10 +86,10 @@ agent-check:  ## THE universal gate. Agents run this before every commit.
 	@echo "=== [1/7] LINT ===" && ruff check .
 	@echo "=== [2/7] FORMAT ===" && ruff format --check .
 	@echo "=== [3/7] TYPES ===" && mypy app
-	@echo "=== [4/7] UNIT TESTS ===" && pytest tests/unit/ tests/compliance/ -v --tb=short -x
-	@echo "=== [5/7] CI TESTS ===" && pytest tests/ci/ -v --tb=short -x
-	@echo "=== [6/7] AUDIT ===" && python tools/audit_engine.py --strict
-	@echo "=== [7/7] CONTRACTS ===" && python tools/verify_contracts.py
+	@echo "=== [4/7] UNIT TESTS ===" && $(PYTEST) tests/unit/ tests/compliance/ -v --tb=short -x
+	@echo "=== [5/7] CI TESTS ===" && $(PYTEST) tests/ci/ -v --tb=short -x
+	@echo "=== [6/7] AUDIT ===" && $(PYTHON) tools/audit_engine.py --strict
+	@echo "=== [7/7] CONTRACTS ===" && $(PYTHON) tools/verify_contracts.py
 	@echo ""
 	@echo "╔══════════════════════════════════════════════╗"
 	@echo "║  ALL 7 GATES PASSED ✓                         ║"
@@ -99,7 +102,7 @@ agent-fix:  ## Auto-fix what can be fixed
 agent-full:  ## Full agent workflow: fix → check → coverage
 	$(MAKE) agent-fix
 	$(MAKE) agent-check
-	pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
+	$(PYTEST) tests/ -v --tb=short --cov=app --cov-report=term-missing
 
 # ============================================================
 # PR PIPELINE — local parity with GitHub CI + L9 + docs

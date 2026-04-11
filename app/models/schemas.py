@@ -46,7 +46,7 @@ class EnrichRequest(BaseModel):
     # What fields to enrich — JSON dict of {field_name: type_string}
     schema_: dict[str, str] | None = Field(
         default=None,
-        alias="schema",
+        validation_alias="schema",
         description="Target fields: {field_api_name: type}.",
     )
 
