@@ -5,6 +5,7 @@ node:
   contract_version: "1.0.0"
   contract_pack_root: docs/contracts
   tracked_contracts:
+    - docs/contracts/VERIFICATION_MATRIX.md
     - docs/contracts/api/openapi.yaml
     - docs/contracts/agents/protocols/packet-envelope.yaml
     - docs/contracts/agents/tool-schemas/_index.yaml

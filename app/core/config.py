@@ -14,7 +14,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     apollo_api_key: str = ""
     hunter_api_key: str = ""
 
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+
     ceg_base_url: str = "http://localhost:8001"
 
     graph_node_url: str = "http://localhost:8001"
@@ -78,7 +81,10 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=(".env", ".env.local"),
+        env_file_encoding="utf-8",
+    )
 
     @model_validator(mode="after")
     def align_legacy_token_budget(self) -> Settings:

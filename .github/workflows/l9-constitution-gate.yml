@@ -1,3 +1,6 @@
+# L9 Constitution Gate — verifies node.constitution.yaml, inventories, and contract-bound PR edits.
+# Human-maintained accuracy matrix: docs/contracts/VERIFICATION_MATRIX.md
+
 name: L9 Constitution Gate
 
 on:

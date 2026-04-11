@@ -23,6 +23,13 @@
 `.coderabbit.yaml` in repository root is the primary CodeRabbit configuration.
 This file provides governance-layer context that supplements it.
 
+## Paid tier — enablement checklist
+
+1. **GitHub App** — [coderabbit.ai](https://coderabbit.ai) → install the CodeRabbit app on your org or this repository.
+2. **Dashboard** — Grant repo access, pick plan, enable PR reviews (automatic reviews are driven by `.coderabbit.yaml`).
+3. **Optional Telegram** — Repository secret `TELEGRAM_BOT_TOKEN` + variable `TELEGRAM_CHAT_ID` for [`.github/workflows/coderabbit-notify.yml`](.github/workflows/coderabbit-notify.yml).
+4. **Tune behavior** — Edit [`.coderabbit.yaml`](.coderabbit.yaml) (`reviews.profile`, `auto_review`, `path_filters`, `chat`). Schema: [CodeRabbit configuration reference](https://docs.coderabbit.ai/reference/configuration).
+
 ## Review Behavior
 
 - **Auto-approve**: PRs where all phases of AI_AGENT_REVIEW_CHECKLIST.md pass with 0 CRITICAL, 0 HIGH violations.

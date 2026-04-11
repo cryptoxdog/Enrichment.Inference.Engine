@@ -1,6 +1,6 @@
 # Workflow State — Enrichment.Inference.Engine
 
-**Last Updated:** 2026-03-30
+**Last Updated:** 2026-04-07
 **Current Phase:** PHASE 2 — Implementation (Gap Closure)
 
 ---
@@ -51,6 +51,25 @@ The Enrichment.Inference.Engine is the Layer 2 ENRICH service in the L9 constell
 
 **Overall Progress:** ~40% of identified gaps closed
 
+### gap-fixes/ Status (2026-04-07)
+
+**Status:** ⏸️ BLOCKED — Awaiting SDK chassis integration patterns
+
+The `gap-fixes/` folder contains 10 production-ready gap fixes (Gap-1 through Gap-10) that have NOT been integrated into `app/`. Integration is blocked until the SDK chassis defines:
+- PacketEnvelope validation patterns
+- Handler registration lifecycle
+- Startup wiring conventions
+
+| Gap | Coverage in app/ | Notes |
+|-----|-----------------|-------|
+| Gap-1 Contract Enforcement | 0% | `ContractViolationError` not in app/ |
+| Gap-2 Return Channel | 0% | `GraphToEnrichReturnChannel` not in app/ |
+| Gap-3 Rule Registry | 30% | `_RULE_REGISTRY` exists but empty |
+| Gap-5 Audit Persistence | 0% | No PostgreSQL audit wiring |
+| Gap-9 v1 Bridge Guard | 0% | `inference_bridge.py` still importable |
+
+**Files ready for integration:** See `TODO.md` → "gap-fixes/ Integration" section
+
 ---
 
 ## Decision Log
@@ -97,5 +116,6 @@ See `TODO.md` for prioritized task list.
 
 ## Recent Sessions (7-day window)
 
+- 2026-04-07: Gap analysis of `gap-fixes/` vs `app/` — 10 gap fixes identified as NOT integrated, blocked on SDK chassis
 - 2026-03-30: GMP-ENRICH-001 — Consensus-mode enrichment merge (14 TODOs completed)
 - 2026-03-30: Gap analysis audit — 4 reference documents analyzed, status report generated

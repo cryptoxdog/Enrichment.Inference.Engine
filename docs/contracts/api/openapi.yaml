@@ -1,15 +1,15 @@
 # ═══════════════════════════════════════════════════════════════
 # Contract: Unified OpenAPI Specification
 # Source:   app/main.py, app/api/v1/*, app/models/schemas.py
-# Version:  2.3.0
-# Updated:  2026-04-05
+# Version:  2.3.1
+# Updated:  2026-04-07
 # ═══════════════════════════════════════════════════════════════
 
 openapi: "3.1.0"
 
 info:
   title: L9 ENRICH — Domain Enrichment API
-  version: "2.3.0"
+  version: "2.3.1"
   description: |
     Universal domain-aware entity enrichment. Layer 2 of the L9 three-layer
     intelligence stack. Serves Salesforce Apex callouts, Odoo async_executor,
@@ -471,6 +471,38 @@ components:
           description: Identity of the reviewer.
       x-source-file: app/api/v1/discover.py:47
       additionalProperties: false
+
+  responses:
+    Unauthorized:
+      description: Missing X-API-Key header
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+          example:
+            detail: "Missing X-API-Key header"
+    Forbidden:
+      description: Invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+          example:
+            detail: "Invalid API key"
+    ValidationError:
+      description: Request validation error (Pydantic)
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ValidationErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
+          example:
+            detail: "Internal enrichment error"
 
 paths:
   # ── Enrichment ─────────────────────────────────────────────
@@ -1143,38 +1175,6 @@ paths:
         "404":
           description: Entity or field not found
       x-source-file: app/api/v1/fields.py
-
-  responses:
-    Unauthorized:
-      description: Missing X-API-Key header
-      content:
-        application/json:
-          schema:
-            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
-          example:
-            detail: "Missing X-API-Key header"
-    Forbidden:
-      description: Invalid API key
-      content:
-        application/json:
-          schema:
-            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
-          example:
-            detail: "Invalid API key"
-    ValidationError:
-      description: Request validation error (Pydantic)
-      content:
-        application/json:
-          schema:
-            $ref: "./schemas/error-responses.yaml#/components/schemas/ValidationErrorResponse"
-    InternalError:
-      description: Internal server error
-      content:
-        application/json:
-          schema:
-            $ref: "./schemas/error-responses.yaml#/components/schemas/ErrorResponse"
-          example:
-            detail: "Internal enrichment error"
 
 tags:
   - name: enrichment
