@@ -1,15 +1,11 @@
 """
-Domain Enrichment API v2.3.0 — Constellation-wired
-===================================================
-POST /api/v1/enrich         single entity (Salesforce + Odoo)
-POST /api/v1/enrich/batch   batch up to 50
-GET  /api/v1/health         health + KB + circuit breaker
-POST /v1/execute            L9 chassis PacketEnvelope
-POST /v1/outcomes           match outcome feedback
+Domain Enrichment API v2.3.0 — Constellation-wired.
 
-Integration fix applied (PR#22 merge pass):
-    GAP-3: converge.configure() called in lifespan with LoopStateStore,
-           ProfileRegistry, domain_specs, kb_resolver, and idem_store.
+Gap pack adaptations:
+- startup warnings for missing API/LLM keys
+- domain_reader created during lifespan
+- orchestration register() receives domain_reader
+- converge.configure() receives loaded domain specs instead of an empty mapping
 """
 
 from __future__ import annotations
@@ -29,6 +25,7 @@ from .core.auth import verify_api_key
 from .core.config import Settings, get_settings
 from .core.logging_config import setup_logging
 from .core.telemetry import setup_telemetry
+from .engines.domain_yaml_reader import DomainYamlReader
 from .engines.enrichment_orchestrator import breaker, enrich_batch, enrich_entity
 from .engines.orchestration_layer import register as register_orchestration
 from .middleware.rate_limiter import RateLimitMiddleware
@@ -46,28 +43,30 @@ logger = structlog.get_logger("main")
 
 _kb: KBResolver | None = None
 _idem: IdempotencyStore | None = None
+_domain_reader: DomainYamlReader | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load KB, connect Redis, init persistence, configure converge module."""
-    global _kb, _idem
+    """Startup: load KB, init idempotency/persistence, configure convergence wiring."""
+    global _kb, _idem, _domain_reader
 
     settings = get_settings()
     setup_logging(settings.log_level)
+    settings.warn_missing_keys()
 
     _kb = KBResolver(settings.kb_dir)
+    _domain_reader = DomainYamlReader(settings.domains_dir)
 
     try:
         _idem = IdempotencyStore(settings.redis_url)
         logger.info("redis_connected", url=settings.redis_url)
-    except Exception as e:
-        logger.warning("redis_unavailable", error=str(e))
+    except Exception as exc:
+        logger.warning("redis_unavailable", error=str(exc))
         _idem = None
 
-    register_orchestration(kb=_kb, idem_store=_idem)
+    register_orchestration(kb=_kb, idem_store=_idem, domain_reader=_domain_reader)
 
-    # Persistence layer
     from .services import pg_store
     from .services.event_emitter import get_emitter
 
@@ -75,7 +74,6 @@ async def lifespan(app: FastAPI):
     get_emitter(settings)
     logger.info("pg_store_initialized")
 
-    # GAP-3: Converge endpoint dependency injection
     from .api.v1 import converge as converge_module
     from .services.enrichment_profile import ProfileRegistry
 
@@ -89,10 +87,18 @@ async def lifespan(app: FastAPI):
         loop_state_store = _fallback_loop_store()
 
     profile_registry = ProfileRegistry()
+    domain_specs: dict[str, dict[str, object]] = {}
+    if _domain_reader:
+        for domain_id in _domain_reader.list_domains():
+            try:
+                domain_specs[domain_id] = _domain_reader.load(domain_id).raw_spec
+            except Exception as exc:
+                logger.warning("domain_spec_load_failed", domain=domain_id, error=str(exc))
+
     converge_module.configure(
         state_store=loop_state_store,
         profile_registry=profile_registry,
-        domain_specs={},
+        domain_specs=domain_specs,
         kb_resolver=_kb,
         idem_store=_idem,
     )
@@ -100,6 +106,7 @@ async def lifespan(app: FastAPI):
         "converge_module_configured",
         profiles=profile_registry.list_profiles(),
         state_backend="redis" if _idem else "memory",
+        domains=sorted(domain_specs.keys()),
     )
 
     logger.info("api_started", version="2.3.0")
@@ -113,6 +120,7 @@ async def lifespan(app: FastAPI):
     await _pg.close_engine()
     _kb = None
     _idem = None
+    _domain_reader = None
 
 
 def _fallback_loop_store():
@@ -133,7 +141,9 @@ def _fallback_loop_store():
             return self._data.get(run_id)
 
         async def list_active(self, domain: str | None = None) -> list[LoopState]:
-            return [s for s in self._data.values() if domain is None or s.domain == domain]
+            return [
+                state for state in self._data.values() if domain is None or state.domain == domain
+            ]
 
     return _InMemory()
 
@@ -195,9 +205,9 @@ async def enrich_batch_endpoint(
     start = time.monotonic()
     results = await enrich_batch(request.entities, settings, _kb, _idem)
     elapsed = int((time.monotonic() - start) * 1000)
-    succeeded = sum(1 for r in results if r.state == "completed")
-    failed = sum(1 for r in results if r.state == "failed")
-    tokens = sum(r.tokens_used for r in results)
+    succeeded = sum(1 for result in results if result.state == "completed")
+    failed = sum(1 for result in results if result.state == "failed")
+    tokens = sum(result.tokens_used for result in results)
     return BatchEnrichResponse(
         results=results,
         total=len(results),

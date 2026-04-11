@@ -22,6 +22,7 @@ from ...engines.convergence.loop_state import LoopState, LoopStateStore, LoopSta
 from ...engines.convergence.schema_proposer import ApprovalDecision
 from ...engines.convergence.schema_proposer import apply as apply_proposals
 from ...engines.convergence.schema_proposer import propose as propose_schema
+from ...engines.convergence_controller import run_convergence_loop
 from ...models.schemas import EnrichRequest
 from ...services.crm_field_scanner import (
     CRMField,
@@ -130,7 +131,6 @@ async def converge_single(
     GAP-4: Run full multi-pass convergence via convergence_controller.run_convergence_loop().
     """
     from ...engines.convergence.convergence_config import ConvergenceConfig
-    from ...engines.convergence_controller import run_convergence_loop
 
     store = _get_state_store()
 
@@ -195,7 +195,6 @@ async def converge_batch(
     GAP-9: Batch convergence. Accepts inline entity list; returns actual counts.
     """
     from ...engines.convergence.convergence_config import ConvergenceConfig
-    from ...engines.convergence_controller import run_convergence_loop
 
     registry = _get_profile_registry()
     store = _get_state_store()

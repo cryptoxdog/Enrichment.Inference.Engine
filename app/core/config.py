@@ -2,19 +2,23 @@
 Settings — single source of truth for all configuration.
 Loaded once at startup from env vars / .env file.
 
-Integration fix applied (PR#21 merge pass):
-    GAP-7: max_budget_tokens added as canonical field. convergence_controller.py
-           reads getattr(settings, "max_budget_tokens", ...) and previously fell
-           back to 30 000 because only max_budget_tokens_default existed.
-           max_budget_tokens_default kept for backward compat.
+Gap pack adaptations:
+- keep `max_budget_tokens` canonical
+- accept deprecated aliases `max_tokens` and `token_budget`
+- keep `perplexity_api_key` safe as empty string
+- expose `warn_missing_keys()` for startup diagnostics
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
+import structlog
 from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = structlog.get_logger("core.config")
 
 
 class Settings(BaseSettings):
@@ -71,6 +75,8 @@ class Settings(BaseSettings):
 
     max_budget_tokens: int = 50_000
     max_budget_tokens_default: int = 50_000
+    max_tokens: int = 50_000
+    token_budget: int = 50_000
     token_rate_usd_per_1k: float = 0.005
 
     cb_failure_threshold: int = 5
@@ -78,16 +84,73 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_inputs(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+
+        data = dict(values)
+        if data.get("perplexity_api_key") is None:
+            data["perplexity_api_key"] = ""
+
+        alias_candidates = (
+            data.get("max_budget_tokens"),
+            data.get("max_tokens"),
+            data.get("token_budget"),
+            data.get("max_budget_tokens_default"),
+        )
+        for candidate in alias_candidates:
+            if candidate not in (None, ""):
+                normalized = int(candidate)
+                data["max_budget_tokens"] = normalized
+                data.setdefault("max_tokens", normalized)
+                data.setdefault("token_budget", normalized)
+                break
+
+        return data
 
     @model_validator(mode="after")
     def align_legacy_token_budget(self) -> Settings:
-        """If only MAX_BUDGET_TOKENS_DEFAULT was customized, apply it to max_budget_tokens."""
-        if self.max_budget_tokens == 50_000 and self.max_budget_tokens_default != 50_000:
-            self.max_budget_tokens = self.max_budget_tokens_default
+        """Keep token budget aliases synchronized after settings resolution."""
+        alias_value = self.max_budget_tokens
+        if self.max_tokens != 50_000 and self.max_budget_tokens == 50_000:
+            alias_value = self.max_tokens
+        elif self.token_budget != 50_000 and self.max_budget_tokens == 50_000:
+            alias_value = self.token_budget
+        elif (
+            self.max_budget_tokens_default != 50_000
+            and self.max_budget_tokens == 50_000
+            and self.max_tokens == 50_000
+            and self.token_budget == 50_000
+        ):
+            alias_value = self.max_budget_tokens_default
+
+        self.max_budget_tokens = int(alias_value)
+        self.max_tokens = int(alias_value)
+        self.token_budget = int(alias_value)
         return self
 
+    def warn_missing_keys(self) -> None:
+        if not self.perplexity_api_key:
+            logger.warning(
+                "config.perplexity_api_key_missing",
+                hint="Set PERPLEXITY_API_KEY to enable Sonar enrichment passes.",
+            )
+        if not self.api_key_hash:
+            logger.warning(
+                "config.api_key_hash_missing",
+                hint="Set API_KEY_HASH so authenticated endpoints can validate callers.",
+            )
 
-@lru_cache
+
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()

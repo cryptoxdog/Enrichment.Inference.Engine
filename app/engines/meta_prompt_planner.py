@@ -18,7 +18,6 @@ from typing import Any, Literal
 import structlog
 
 from ..models.loop_schemas import PassContext
-from ..services.domain_yaml_reader import DomainSpec
 
 logger = structlog.get_logger("meta_prompt_planner")
 
@@ -38,7 +37,7 @@ class MetaPromptPlanner:
 
     def __init__(
         self,
-        domain_spec: DomainSpec,
+        domain_spec: dict[str, Any] | None,
         rule_registry: Any = None,  # RuleRegistry from inference.rule_loader
         unlock_index: dict[str, list[str]] | None = None,
     ):
