@@ -1,12 +1,17 @@
 # ═══════════════════════════════════════════════════════════════
 # Contract: Environment Variable Contract
 # Source:   app/core/config.py:Settings (pydantic-settings BaseSettings)
-# Version:  2.5.1
-# Updated:  2026-04-07
+# Version:  2.5.2
+# Updated:  2026-04-10
 # ═══════════════════════════════════════════════════════════════
 #
 # Scope: variables below map 1:1 to Settings fields. Env names follow Pydantic
 # defaults (field_name → FIELD_NAME). No extras that Settings does not load.
+#
+# Integration architecture: Third-party platforms (CRMs, data vendors, etc.)
+# should integrate through the gate/SDK and chassis actions (PacketEnvelope), not
+# new ad-hoc service clients in this repo. Variables for Salesforce, HubSpot,
+# waterfall providers, and similar remain for legacy or transitional direct use.
 #
 # Files: .env then .env.local (later wins). .env.local is gitignored.
 # GitHub Actions: use the same names for repository/org secrets when injecting

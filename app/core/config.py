@@ -2,6 +2,10 @@
 Settings — single source of truth for all configuration.
 Loaded once at startup from env vars / .env file.
 
+Platform integrations: Prefer the L9 gate/SDK and chassis actions (PacketEnvelope)
+for third-party systems. Direct CRM/waterfall env fields below remain for legacy or
+transitional code paths; new work should not add bespoke HTTP integrations here.
+
 Integration fix applied (PR#21 merge pass):
     GAP-7: max_budget_tokens added as canonical field. convergence_controller.py
            reads getattr(settings, "max_budget_tokens", ...) and previously fell
@@ -40,6 +44,7 @@ class Settings(BaseSettings):
     odoo_password: str = ""
     crm_mapping_path: str = "config/crm/odoo_mapping.yaml"
 
+    # Legacy / direct CRM & enrichment providers (prefer gate/SDK for new integrations).
     salesforce_client_id: str = ""
     salesforce_client_secret: str = ""
     salesforce_username: str = ""
