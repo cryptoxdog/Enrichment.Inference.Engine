@@ -16,6 +16,16 @@
 # ENVIRONMENT in app/core/telemetry.py) — see other_runtime_env at file end.
 
 variables:
+  # ── Core ────────────────────────────────────────────────────
+  - name: APP_ENV
+    type: string
+    required: false
+    default: development
+    description: Application environment (development, staging, production).
+    sensitive: false
+    source: env
+    validation: "development | staging | production"
+
   # ── Perplexity Sonar ────────────────────────────────────────
   - name: PERPLEXITY_API_KEY
     type: secret
