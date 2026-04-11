@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from score_models import (
+from .score_models import (
     FieldContribution,
     MissingField,
     ScoreRecord,

@@ -16,7 +16,8 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from score_models import (
+
+from .score_models import (
     BatchScoreRequest,
     ScoreDimension,
     ScoreTier,

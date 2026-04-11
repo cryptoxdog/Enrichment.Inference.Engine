@@ -13,7 +13,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
-from score_models import (
+from .score_models import (
     ScoreDimension,
     ScoreRecord,
     ScoreTier,
