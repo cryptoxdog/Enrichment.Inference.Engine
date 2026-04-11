@@ -16,7 +16,7 @@
 {{PROTECTED_FILES — e.g.:
 - `core/kernel_loader.py` — Kernel initialization
 - `docker-compose.yml` — Infrastructure configuration
-- `core/schemas/packet_envelope.py` — Protocol definitions
+- `constellation_node_sdk.transport` / `docs/contracts/agents/protocols/packet-envelope.yaml` — Transport protocol SSOT
 }}
 
 ---

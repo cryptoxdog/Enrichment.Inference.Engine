@@ -9,46 +9,73 @@
 # token_estimate: 1217
 # ssot_for: [directory-structure, module-boundaries, codeowners-map]
 # load_when: [new_file, directory_question, ownership_question]
-# references: [AGENT.md, .github/CODEOWNERS, AGENTS.md]
+# references: [AGENTS.md, .github/CODEOWNERS, REPO_MAP.md]
 # --- /L9_META ---
 
 # REPO_MAP.md — Repository Structure Map
 
-**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
+**VERSION**: 2.1.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-11
 
 > SSOT for directory structure and module ownership.
-> Module boundary rules (chassis/engine separation): see AGENT.md C-01.
+> Module boundary rules (transport/API vs engine separation): see AGENTS.md C-01/C-21.
 > Execution flows for entry points: see EXECUTION_FLOWS.md.
 
 ---
 
 ## Module Boundary (SSOT — All Other Docs Reference Here)
 
-CHASSIS (FastAPI layer): app/main.py, app/api/, app/engines/handlers.py
-  May import: fastapi, engine.*, app.models.*
+API / TRANSPORT SURFACE:
+- `app/main.py`
+- `app/api/`
+- SDK runtime registration surface
+- Production transport ingress is SDK-owned `/v1/execute`
 
-ENGINE (Business logic — chassis-agnostic): engine/, app/engines/ (excl. handlers.py), app/score/, app/health/, app/services/
-  MUST NOT import: fastapi
+May import:
+- `fastapi`
+- `constellation_node_sdk`
+- `app.models.*`
+- engine/service modules needed for delegation
 
-MODELS (Schema — frozen Pydantic v2): app/models/
-  Imported by both chassis and engine
+ENGINE (Business logic — transport-agnostic):
+- `engine/`
+- `app/engines/` (except transport-adjacent registration/wiring files)
+- `app/score/`
+- `app/health/`
+- `app/services/`
+
+MUST NOT import:
+- `fastapi` in pure engine modules
+
+MODELS (Schema — frozen Pydantic v2):
+- `app/models/`
+- Imported by both runtime/API and engine layers
+
+DEPRECATED COMPATIBILITY ARTIFACTS:
+- `chassis/envelope.py`
+- `chassis/router.py`
+- `chassis/registry.py`
+
+These are not part of the active production dispatch path.
 
 ---
 
 ## Directory Map
 
-| Directory | Purpose | Owner | Agent Tier | CODEOWNERS |
+| Directory / File | Purpose | Owner | Agent Tier | CODEOWNERS |
 |---|---|---|---|---|
-| app/ | FastAPI application root | Platform | T2+ | @cryptoxdog |
+| app/ | FastAPI application root + SDK runtime assembly | Platform | T2+ | @cryptoxdog |
+| app/main.py | SDK transport ingress bootstrap + mounted app surface | Platform | T4 | @cryptoxdog |
 | app/api/ | HTTP route handlers | API team | T3+ | @cryptoxdog |
+| app/api/v1/chassis_endpoint.py | Transport-adjacent app routes (not `/v1/execute`) | Platform | T4 | @cryptoxdog |
 | app/engines/ | Core enrichment engine modules | Engine team | T3+ | @cryptoxdog |
-| chassis/ | Transport wire envelope + router (no FastAPI in envelope) | Platform | T4 | @cryptoxdog |
-| app/engines/handlers.py | Request handlers | Platform | T4 | @cryptoxdog |
-| app/engines/graph_sync_client.py | Graph protocol | Platform | T4 | @cryptoxdog |
+| app/engines/handlers.py | Engine action handlers | Platform | T4 | @cryptoxdog |
+| app/engines/orchestration_layer.py | Canonical SDK handler registration + orchestration wiring | Platform | T4 | @cryptoxdog |
+| app/engines/graph_sync_client.py | Gate transport client | Platform | T4 | @cryptoxdog |
 | app/models/ | Pydantic v2 schemas (frozen) | Schema team | T5 | @cryptoxdog |
 | app/score/ | Scoring engine | Score team | T3+ | @cryptoxdog |
 | app/health/ | Health check logic | Health team | T3+ | @cryptoxdog |
-| app/services/ | External service clients | Services team | T3+ | @cryptoxdog |
+| app/services/ | External service clients and support services | Services team | T3+ | @cryptoxdog |
+| app/services/chassis_handlers.py | Supplemental SDK inbound handler registrations | Platform | T4 | @cryptoxdog |
 | engine/ | Chassis-agnostic engine utilities | Engine team | T3+ | @cryptoxdog |
 | engine/utils/security.py | sanitize_label(), auth utils | Platform | T4 | @cryptoxdog |
 | kb/ | Knowledge base YAML rule files | Knowledge team | T5 | @cryptoxdog |
@@ -59,9 +86,8 @@ MODELS (Schema — frozen Pydantic v2): app/models/
 | tests/ci/ | CI contract enforcement tests | Platform | T2+ | @cryptoxdog |
 | tools/ | Audit + verification scripts | Platform | T2+ | @cryptoxdog |
 | tools/audit_engine.py | 27-rule audit engine | Platform | T2+ | @cryptoxdog |
-| tools/verify_contracts.py | L9_META contract verification | Platform | T2+ | @cryptoxdog |
-| docs/ | Documentation and audits | Any | T1+ | — |
-| chassis/ | Chassis abstraction layer | Platform | T3+ | @cryptoxdog |
+| tools/verify_contracts.py | Contract verifier | Platform | T2+ | @cryptoxdog |
+| chassis/ | Deprecated compatibility artifacts only | Platform | READ-ONLY unless migration review | @cryptoxdog |
 | codegen/ | Code generation templates | Platform | T2+ | @cryptoxdog |
 | config/ | Application config modules | Platform | T3+ | @cryptoxdog |
 | domains/ | Domain spec YAML files | Domain teams | T3+ | @cryptoxdog |
@@ -82,16 +108,29 @@ MODELS (Schema — frozen Pydantic v2): app/models/
 
 | File | Purpose | Agent Relevance |
 |---|---|---|
-| app/main.py | FastAPI app entrypoint | Entry point for all HTTP traffic |
-| chassis/envelope.py | T4 — inflate/deflate wire envelope | No `app/` imports; pair with router |
-| app/engines/handlers.py | T4 — request handlers | Sync with transport contract bundle (AGENTS.md C-13) |
-| constellation_node_sdk.transport | TransportPacket | SDK types — do not redefine locally |
-| engine/utils/security.py | sanitize_label() | Always use for Cypher strings |
-| tools/audit_engine.py | 27-rule audit engine | Run via make audit |
-| tools/verify_contracts.py | L9_META verifier (SHA: 2d30a79) | Run via make verify — confirmed present |
-| .cursorrules | 20 contracts for Cursor | Always loaded by Cursor |
-| pyproject.toml | Build + tool config | SSOT for ruff/mypy/pytest config |
-| .github/CODEOWNERS | Required reviewer map | Route T4/T5 PRs accordingly |
+| `app/main.py` | SDK runtime app entrypoint | Owns production `/v1/execute` ingress |
+| `app/api/v1/chassis_endpoint.py` | Supplemental transport-adjacent routes | Keep separate from SDK runtime ingress |
+| `app/services/chassis_handlers.py` | Supplemental SDK inbound handler registration | Align with runtime actions |
+| `app/engines/orchestration_layer.py` | Canonical SDK action registration | Lockstep with handlers/runtime |
+| `app/engines/handlers.py` | Action implementations | Must match registered runtime actions |
+| `app/engines/graph_sync_client.py` | Gate-only outbound transport | No raw peer HTTP |
+| `engine/utils/security.py` | sanitize_label() | Always use for Cypher labels |
+| `tools/audit_engine.py` | 27-rule audit engine | Run via `make audit` |
+| `tools/verify_contracts.py` | Contract verification | Run via `make verify` |
+| `pyproject.toml` | Build + tool config | SSOT for ruff/mypy/pytest config |
+| `.github/CODEOWNERS` | Required reviewer map | Route T4/T5 PRs accordingly |
+
+---
+
+## Deprecated Files
+
+These files are intentionally excluded from the live transport constitution:
+
+- `chassis/envelope.py`
+- `chassis/router.py`
+- `chassis/registry.py`
+
+Do not use them as the source of truth for production runtime behavior.
 
 ---
 
@@ -111,7 +150,7 @@ MODELS (Schema — frozen Pydantic v2): app/models/
 
 | Entry Point | Command | Flow |
 |---|---|---|
-| HTTP API | uvicorn app.main:app --host 0.0.0.0 --port 8000 | See EXECUTION_FLOWS.md HTTP Request Flow |
-| Dev server | make dev (docker compose) | See EXECUTION_FLOWS.md Initialization Sequence |
-| Audit | make audit | tools/audit_engine.py — standalone |
-| Contract verify | make verify | tools/verify_contracts.py — standalone |
+| SDK transport runtime | `uvicorn app.main:app --host 0.0.0.0 --port 8000` | See EXECUTION_FLOWS.md Transport Execution Flow |
+| Dev server | `make dev` | See EXECUTION_FLOWS.md Initialization Sequence |
+| Audit | `make audit` | tools/audit_engine.py — standalone |
+| Contract verify | `make verify` | tools/verify_contracts.py — standalone |

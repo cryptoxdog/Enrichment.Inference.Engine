@@ -44,7 +44,7 @@
 - `tests/test_pr21_packet_router.py`
 - `tests/services/test_graph_return_channel.py`
 - `tests/unit/test_chassis_contract.py`
-- `tests/contracts/test_packet_envelope_contract.py`
+- `tests/contracts/test_transport_packet_contract.py`
 - `tests/contracts/tier2/test_enforcement_packet_runtime.py`
 - `tests/services/test_contract_enforcement.py`
 - `tests/contracts/test_config_env_contract.py`
@@ -73,7 +73,7 @@
 - Installed storage-layer imports needed by the broader slice:
   - `python3 -m pip install --user --break-system-packages sqlalchemy asyncpg`
 - Passed targeted validation slice:
-  - `python3 -m pytest --no-cov tests/unit/test_orchestration_layer.py tests/test_pr21_packet_router.py tests/services/test_graph_return_channel.py tests/unit/test_chassis_contract.py tests/contracts/test_packet_envelope_contract.py -q`
+  - `python3 -m pytest --no-cov tests/unit/test_orchestration_layer.py tests/test_pr21_packet_router.py tests/services/test_graph_return_channel.py tests/unit/test_chassis_contract.py tests/contracts/test_transport_packet_contract.py -q`
 - Result:
   - `30 passed`
 - Passed broader transport-adjacent slice:

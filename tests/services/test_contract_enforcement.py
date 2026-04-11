@@ -7,14 +7,14 @@ from app.services.contract_enforcement import (
     build_enrich_result_packet,
     build_graph_sync_packet,
     build_schema_proposal_packet,
-    enforce_packet_envelope,
+    enforce_transport_packet,
 )
 
 
 def test_bare_dict_rejected():
     """Bare dict should be rejected because the contract surface is TransportPacket."""
     with pytest.raises(ContractViolationError):
-        enforce_packet_envelope(
+        enforce_transport_packet(
             {"entity_type": "account", "batch": []},
             expected_type="graph_sync",
         )
@@ -28,7 +28,7 @@ def test_type_mismatch_raises():
         batch=[{"id": "1"}],
     )
     with pytest.raises(ContractViolationError, match="mismatch"):
-        enforce_packet_envelope(pkt, expected_type="enrich_request")
+        enforce_transport_packet(pkt, expected_type="enrich_request")
 
 
 def test_valid_graph_sync_passes():
@@ -38,7 +38,7 @@ def test_valid_graph_sync_passes():
         entity_type="account",
         batch=[{"id": "1"}],
     )
-    result = enforce_packet_envelope(pkt, expected_type="graph_sync")
+    result = enforce_transport_packet(pkt, expected_type="graph_sync")
     assert result.header.action == "graph-sync"
     assert result.security.payload_hash
     assert result.security.transport_hash
@@ -50,7 +50,7 @@ def test_schema_proposal_type_allowed():
         tenant_id="t1",
         proposed_fields=[{"name": "facility_tier", "type": "string"}],
     )
-    result = enforce_packet_envelope(pkt, expected_type="schema_proposal")
+    result = enforce_transport_packet(pkt, expected_type="schema_proposal")
     assert result.header.action == "schema-proposal"
 
 
@@ -63,7 +63,7 @@ def test_enrich_result_type_allowed():
         confidence=0.85,
         pass_count=2,
     )
-    result = enforce_packet_envelope(pkt, expected_type="enrich_result")
+    result = enforce_transport_packet(pkt, expected_type="enrich_result")
     assert result.header.action == "enrich-result"
     assert result.payload["entity_id"] == "ent_123"
 
@@ -77,7 +77,7 @@ def test_missing_required_field_rejected():
     )
     pkt = pkt.model_copy(update={"payload": {"entity_type": "account"}})
     with pytest.raises(ContractViolationError, match="batch"):
-        enforce_packet_envelope(pkt, expected_type="graph_sync")
+        enforce_transport_packet(pkt, expected_type="graph_sync")
 
 
 def test_unknown_packet_type_rejected():
@@ -88,4 +88,4 @@ def test_unknown_packet_type_rejected():
         batch=[{"id": "1"}],
     )
     with pytest.raises(ContractViolationError, match="not in the allowed set"):
-        enforce_packet_envelope(pkt, expected_type="unknown_type")
+        enforce_transport_packet(pkt, expected_type="unknown_type")

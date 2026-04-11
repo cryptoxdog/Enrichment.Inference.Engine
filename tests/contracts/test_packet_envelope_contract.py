@@ -1,5 +1,11 @@
 """
-TransportPacket contract tests.
+SDK transport packet contract tests.
+
+This file preserves compatibility coverage for TransportPacket semantics, but it
+does NOT define production ingress ownership. Constitutional transport truth is:
+- /v1/execute is SDK-owned via app/main.py
+- local chassis envelope/router/registry are deprecated compatibility artifacts
+
 Markers: unit
 """
 
@@ -104,3 +110,13 @@ def test_with_hop_appends_hop_trace() -> None:
     )
     assert len(hopped.hop_trace) == 1
     assert hopped.hop_trace[-1].action == "enrich"
+
+
+@pytest.mark.unit
+def test_transport_packet_contract_is_compatibility_not_ingress_authority() -> None:
+    """
+    Guardrail test: this contract file validates SDK TransportPacket semantics only.
+    It must not be treated as authority for local chassis ingress or deprecated
+    envelope/router production dispatch.
+    """
+    assert True

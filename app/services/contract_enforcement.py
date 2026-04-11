@@ -1,9 +1,4 @@
-"""
-TransportPacket contract enforcement for Gate-routed inter-node communication.
-
-The function names are preserved to avoid a broad call-site rewrite, but the
-underlying contract is the SDK `TransportPacket`.
-"""
+"""TransportPacket contract enforcement for Gate-routed inter-node communication."""
 
 from __future__ import annotations
 
@@ -59,14 +54,12 @@ _REQUIRED_PAYLOAD_FIELDS: dict[str, list[str]] = {
 }
 
 
-def enforce_packet_envelope(
+def enforce_transport_packet(
     packet: Any,
     *,
     expected_type: str,
 ) -> TransportPacket:
-    """
-    Validate that `packet` is a well-formed TransportPacket of `expected_type`.
-    """
+    """Validate that `packet` is a well-formed TransportPacket of `expected_type`."""
     if not isinstance(packet, TransportPacket):
         raise ContractViolationError(f"Expected a TransportPacket, got {type(packet).__name__}")
 
@@ -114,7 +107,7 @@ def build_graph_sync_packet(
         classification="internal",
         compliance_tags=("GRAPH_SYNC",),
     )
-    enforce_packet_envelope(packet, expected_type="graph_sync")
+    enforce_transport_packet(packet, expected_type="graph_sync")
     return packet
 
 
@@ -135,7 +128,7 @@ def build_schema_proposal_packet(
         classification="internal",
         compliance_tags=("SCHEMA_EVOLUTION",),
     )
-    enforce_packet_envelope(packet, expected_type="schema_proposal")
+    enforce_transport_packet(packet, expected_type="schema_proposal")
     return packet
 
 
@@ -163,7 +156,7 @@ def build_enrich_result_packet(
         classification="internal",
         compliance_tags=("ENRICH_RESULT",),
     )
-    enforce_packet_envelope(packet, expected_type="enrich_result")
+    enforce_transport_packet(packet, expected_type="enrich_result")
     return packet
 
 

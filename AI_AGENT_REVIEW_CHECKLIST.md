@@ -30,32 +30,33 @@ Apply this verdict BEFORE writing any inline comments.
 | 0 | 1-2 | REQUEST_CHANGES — must fix before merge |
 | 0 | 3+ | REQUEST_CHANGES — tag @platform-team |
 | 1+ | any | REQUEST_CHANGES — tag @platform-team |
-| SEC-001 or ARCH-001 | any | REQUEST_CHANGES — tag @platform-team + add security label |
+| SEC-001 or ARCH-001 or ARCH-003 | any | REQUEST_CHANGES — tag @platform-team + add security/architecture label |
 
 ---
 
 ## Phase 1 — STOP: Merge-Blocking Violations (Check First)
 
-- [ ] C-01 / ARCH-001: `from fastapi import` outside allowed modules ([AGENTS.md](AGENTS.md) C-01: typically `app/api/`, `app/main.py`, `app/engines/handlers.py`)?
+- [ ] C-01 / ARCH-001: `from fastapi import` outside allowed modules?
 - [ ] C-06 / SEC-002/003: eval(, exec(, compile(, pickle.loads( present?
 - [ ] C-07 / SEC-001: Cypher f-string without sanitize_label()?
-- [ ] C-08 / SEC-007: yaml.load( without Loader=yaml.SafeLoader?
+- [ ] C-08 / SEC-007: yaml.load( without SafeLoader?
 - [ ] C-10: Hardcoded API key, token, or credential?
-- [ ] C-13: Transport/dispatch contract drift — changes to envelope ingress/egress or action registration without paired updates in the same PR? (Canonical modules include `chassis/envelope.py`, `app/services/chassis_handlers.py`, `app/api/v1/chassis_endpoint.py`, and `app/engines/handlers.py` / orchestration; see [AGENTS.md](AGENTS.md) C-13 intent.)
-- [ ] C-11: `TransportPacket` / chassis wire envelope mutated in place after construction?
+- [ ] C-11: SDK transport objects mutated in place after construction?
+- [ ] C-13: Active transport/runtime bundle drift — changes to runtime ingress, handler registration, dispatch, or Gate transport without paired updates to the active bundle?
+- [ ] C-21: Does this PR reintroduce production reliance on deprecated `chassis/envelope.py`, `chassis/router.py`, or `chassis/registry.py`?
 - [ ] C-16: Python less than 3.12 syntax or backport import present?
 
 ---
 
 ## Phase 2 — STOP: Contract Violations
 
-- [ ] C-02: Handler signatures match the contract in [AGENTS.md](AGENTS.md) C-02 (`async def handle_*(tenant, payload, settings, neo4j, redis)` or documented SDK handler shape)?
-- [ ] C-03: All Neo4j queries include WHERE n.tenant_id = $tenant?
+- [ ] C-02: Handler signatures match production contract (`async def handle_*(tenant: str, payload: dict[str, Any]) -> dict[str, Any]`) unless explicitly documented SDK extension is used?
+- [ ] C-03: All Neo4j queries include tenant scoping?
 - [ ] C-04: No print() in app/ or engine/ (structlog only)?
 - [ ] C-05: No Optional[, List[, Dict[ — use T or None, list[T], dict[K,V]?
-- [ ] C-09: New env vars use L9_ prefix?
+- [ ] C-09: New env vars use L9_ prefix or documented exception?
 - [ ] C-12: No Field(alias=...) in Pydantic models?
-- [ ] C-14: New ACTION_REGISTRY entry has handler + test in same PR?
+- [ ] C-14: New SDK action registration has handler + test in same PR?
 - [ ] C-17: No camelCase Python field names?
 - [ ] C-20: New template-managed files have L9_META header?
 
@@ -74,8 +75,8 @@ Apply this verdict BEFORE writing any inline comments.
 ## Phase 4 — VERIFY: Tests
 
 - [ ] Tests added/updated for all changed logic?
-- [ ] All tests have at least one pytest marker (unit, integration, slow)?
-- [ ] Integration tests do not depend on external services without mocking?
+- [ ] All tests have at least one pytest marker where required?
+- [ ] Integration tests do not depend on external services without mocking or declared integration harness?
 - [ ] Coverage does not drop below 60%?
 
 ---
@@ -84,44 +85,44 @@ Apply this verdict BEFORE writing any inline comments.
 
 ### New Feature PR
 - [ ] T-tier assessed and appropriate reviewers assigned?
-- [ ] New env vars documented in [`docs/contracts/config/env-contract.yaml`](docs/contracts/config/env-contract.yaml) and summarized in [CONFIG_ENV_CONTRACT.md](CONFIG_ENV_CONTRACT.md) / `.env.example`?
-- [ ] New files listed in FILE_INDEX_FOR_AGENTS.md?
+- [ ] New env vars documented in config docs / `.env.example`?
+- [ ] New files listed in repo governance docs when required?
 
 ### Bug Fix PR
 - [ ] Root cause identified in PR description?
 - [ ] Regression test added for the exact failure case?
 
 ### Dependency Update PR
-- [ ] License compatibility verified (no GPL-only deps in MIT-licensed module)?
-- [ ] Import restriction compliance preserved (C-01 chassis boundary)?
+- [ ] Import restriction compliance preserved?
+- [ ] SDK runtime / Gate transport compatibility preserved?
 
 ### CI Workflow Change PR
-- [ ] No merge-blocking gate converted to non-blocking without new WAIVER in CI_WHITELIST_REGISTER.md?
+- [ ] No merge-blocking gate converted to non-blocking without explicit waiver?
 
 ### Documentation-Only PR
-- [ ] No doc changes contradict INVARIANTS.md rules?
-- [ ] No doc changes contradict CONFIG_ENV_CONTRACT.md variable list?
+- [ ] No doc changes contradict AGENTS.md / INVARIANTS.md / runtime truth?
 
-### Config Change PR (pyproject.toml, .env.example)
-- [ ] Ruff ignore list unchanged (INV-17)?
-- [ ] New env vars follow L9_ prefix (INV-20)?
-- [ ] Coverage threshold not lowered (INV-9)?
+### Config Change PR
+- [ ] Ruff ignore list unchanged?
+- [ ] Coverage threshold not lowered?
+- [ ] Transport/runtime bundle references remain correct?
 
 ---
 
 ## Review Comment Templates
 
 ### Contract Violation
-```
+```text
 CONTRACT C-{N} VIOLATION — {rule-name}
 File: {path} Line: {line}
 Found: {offending_code}
 Required: {corrected_code}
-Evidence: [AGENTS.md](AGENTS.md) Forbidden Patterns / Architectural Contracts (C-{N})
-```
+Evidence: AGENTS.md Architectural Contracts (C-{N})
+````
 
 ### Tier Escalation Required
-```
+
+```text
 TIER ESCALATION — T{N} change requires {0/1/2} reviewer(s)
 File: {path}
 Reason: Modifying {file} is a T{N} operation per AGENTS.md Autonomy Tiers.
@@ -129,7 +130,8 @@ Action: Add [NEEDS-2-REVIEWERS] to PR title and request additional review.
 ```
 
 ### Non-Blocking Suggestion
-```
+
+```text
 SUGGESTION (non-blocking) — {title}
 File: {path} Line: {line}
 Consider: {suggestion}
@@ -137,8 +139,9 @@ Reference: {contract_or_invariant_id}
 ```
 
 ### Approve Comment
-```
-All 20 contracts verified — no violations found.
+
+```text
+All active contracts verified — no violations found.
 Tier assessment: T{N} — {0/1/2} reviewer(s) required.
 make agent-check gates: [confirmed passing / please confirm before merge].
 ```

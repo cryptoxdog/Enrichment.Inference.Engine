@@ -95,7 +95,8 @@ def error_responses() -> dict:
 
 
 @pytest.fixture(scope="session")
-def packet_envelope_contract() -> dict:
+def transport_packet_contract() -> dict:
+    """YAML contract for transport wire shape (on-disk name: packet-envelope.yaml)."""
     return load_yaml(AGENTS_DIR / "protocols" / "packet-envelope.yaml")
 
 

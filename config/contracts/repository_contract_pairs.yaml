@@ -1,15 +1,27 @@
 # Repository Contract Pairs Catalog — Enrichment.Inference.Engine
-# ================================================================
+# =================================================================
 # Enforces method/param call validity repo-wide via AST scanning.
-# Adapted from L9 10X CI pack for enrichment engine domain.
+# Revised for SDK transport runtime constitution.
+#
+# Active constitutional truth:
+# - /v1/execute is SDK-owned
+# - SDK handler registration is canonical
+# - Gate/transport actions are canonical
+#
+# Deprecated compatibility artifacts:
+# - chassis/envelope.py
+# - chassis/router.py
+# - chassis/registry.py
+#
+# Local envelope/router semantics are not active constitutional enforcement targets.
 
-schema_version: "1.0.0"
+schema_version: "2.0.0"
 
 dora_metadata:
   created_at: "2026-03-25T00:00:00Z"
-  updated_at: "2026-03-25T00:00:00Z"
-  updated_by: "l9-ci-architect"
-  purpose: "Repository-wide method/param contract enforcement for enrichment engine"
+  updated_at: "2026-04-11T00:00:00Z"
+  updated_by: "l9-review-remediation"
+  purpose: "Repository-wide method/param contract enforcement for SDK transport runtime"
 
 scan:
   include_globs:
@@ -26,49 +38,54 @@ scan:
     - "tests/fixtures/**"
 
 pairs:
-  # ── Chassis Contract: inflate_ingress packet_type ────────────
-  - method: "inflate_ingress"
-    param: "packet_type"
-    allowed_literals:
-      - "enrichment_request"
-    dynamic_policy: "hybrid_warn"
-    severity: "error"
-    description: "inflate_ingress must produce enrichment_request packet_type"
-
-  # ── Chassis Contract: deflate_egress packet_type ─────────────
-  - method: "deflate_egress"
-    param: "packet_type"
-    allowed_literals:
-      - "enrichment_result"
-    dynamic_policy: "hybrid_warn"
-    severity: "error"
-    description: "deflate_egress must produce enrichment_result packet_type"
-
-  # ── Handler Registry: ACTION_REGISTRY action keys ────────────
-  - method: "ACTION_REGISTRY"
+  # ── SDK Runtime Registration: canonical action registration ─────
+  - method: "register_handler"
     param: "action"
     allowed_literals:
       - "enrich"
       - "enrichbatch"
       - "converge"
       - "discover"
+      - "simulate"
+      - "writeback"
+      - "enrich-and-sync"
+      - "graph-inference-result"
+      - "community-export"
+      - "schema-proposal"
     dynamic_policy: "hybrid_warn"
     severity: "error"
-    description: "Handler action must be a registered chassis action"
+    description: "SDK runtime action must be from the active registered action set"
 
-  # ── Graph Sync Client: _build_envelope action ────────────────
-  - method: "_build_envelope"
+  # ── SDK Runtime Config: allowed_actions constitutional bundle ───
+  - method: "NodeRuntimeConfig"
+    param: "allowed_actions"
+    allowed_literals:
+      - "community-export"
+      - "converge"
+      - "discover"
+      - "enrich"
+      - "enrich-and-sync"
+      - "enrichbatch"
+      - "graph-inference-result"
+      - "schema-proposal"
+      - "simulate"
+      - "writeback"
+    dynamic_policy: "prove_dynamic"
+    severity: "error"
+    description: "SDK runtime allowed_actions must match the active transport/runtime constitution"
+
+  # ── Gate Transport: Graph sync client action set ────────────────
+  - method: "_build_packet"
     param: "action"
     allowed_literals:
       - "sync"
       - "match"
       - "outcome"
-      - "resolve"
     dynamic_policy: "hybrid_warn"
     severity: "error"
-    description: "Graph sync envelope action must be from the known set"
+    description: "GraphSyncClient packet action must be from the canonical Gate transport action set"
 
-  # ── ScoreDimension enum enforcement ──────────────────────────
+  # ── ScoreDimension enum enforcement ─────────────────────────────
   - method: "ScoreDimensionResult"
     param: "dimension"
     allowed_literals:
@@ -81,7 +98,7 @@ pairs:
     severity: "error"
     description: "Score dimension must be from ScoreDimension enum"
 
-  # ── FieldSource enum enforcement ─────────────────────────────
+  # ── FieldSource enum enforcement ────────────────────────────────
   - method: "FieldConfidence"
     param: "source"
     allowed_literals:
@@ -94,7 +111,7 @@ pairs:
     severity: "error"
     description: "FieldConfidence source must be from FieldSource enum"
 
-  # ── HealthAction enum enforcement ────────────────────────────
+  # ── HealthAction enum enforcement ───────────────────────────────
   - method: "HealthRecommendation"
     param: "action"
     allowed_literals:
@@ -108,7 +125,7 @@ pairs:
     severity: "error"
     description: "Health recommendation action must be from HealthAction enum"
 
-  # ── AssessmentScope enum enforcement ─────────────────────────
+  # ── AssessmentScope enum enforcement ────────────────────────────
   - method: "assess"
     param: "scope"
     allowed_literals:
@@ -120,7 +137,7 @@ pairs:
     severity: "error"
     description: "Assessment scope must be from AssessmentScope enum"
 
-  # ── ConvergenceMode enum enforcement ─────────────────────────
+  # ── ConvergenceMode enum enforcement ────────────────────────────
   - method: "ConvergeRequest"
     param: "mode"
     allowed_literals:
@@ -131,7 +148,7 @@ pairs:
     severity: "error"
     description: "Convergence mode must be from ConvergenceMode enum"
 
-  # ── LoopStatus enum enforcement ──────────────────────────────
+  # ── LoopStatus enum enforcement ─────────────────────────────────
   - method: "LoopState"
     param: "status"
     allowed_literals:
@@ -166,23 +183,22 @@ dynamic_sources:
     - kind: "enum_member"
       pattern: "LoopStatus.*"
       trust_level: "proven"
-    - kind: "enum_member"
-      pattern: "ScoreSource.*"
-      trust_level: "proven"
-    - kind: "attribute_chain"
-      pattern: "self.source"
-      trust_level: "semi_proven"
-    - kind: "attribute_chain"
-      pattern: "self.dimension"
-      trust_level: "semi_proven"
     - kind: "variable"
       pattern: "action"
-      trust_level: "semi_proven"
-    - kind: "variable"
-      pattern: "packet_type"
       trust_level: "semi_proven"
 
 baseline:
   file: "config/contracts/contract_baseline_counts.json"
   drift_threshold_percent: 10
   drift_policy: "warn"
+
+deprecated_compatibility_artifacts:
+  - path: "chassis/envelope.py"
+    status: "deprecated"
+    enforcement_mode: "informational_only"
+  - path: "chassis/router.py"
+    status: "deprecated"
+    enforcement_mode: "informational_only"
+  - path: "chassis/registry.py"
+    status: "deprecated"
+    enforcement_mode: "informational_only"
