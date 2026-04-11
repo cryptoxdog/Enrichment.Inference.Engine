@@ -113,6 +113,12 @@ def make_enrich_response(**overrides: Any) -> dict[str, Any]:
         "state": "completed",
     }
     base.update(overrides)
+    # Enforce invariants: state='failed' requires failure_reason
+    if base.get("state") == "failed" and base.get("failure_reason") is None:
+        base["failure_reason"] = "Unspecified failure"
+    # Enforce invariants: state='completed' must not have failure_reason
+    if base.get("state") == "completed" and base.get("failure_reason") is not None:
+        base["failure_reason"] = None
     return base
 
 
