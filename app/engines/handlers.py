@@ -66,6 +66,8 @@ async def _persist_and_sync(
     entity_id = payload.get("entity_id", payload.get("entity", {}).get("id", "unknown"))
     domain = payload.get("domain", settings.default_domain)
 
+    import asyncio
+
     # GAP-5: Persist to PostgreSQL via ResultStore
     try:
         from ..models.schemas import EnrichResponse
@@ -73,15 +75,20 @@ async def _persist_and_sync(
 
         store = ResultStore(tenant_id=tenant)
         resp_obj = EnrichResponse.model_validate(response_dict)
-        await store.persist_enrich_response(
-            response=resp_obj,
-            entity_id=entity_id,
-            object_type=object_type,
-            domain=domain,
-            idempotency_key=payload.get("idempotency_key"),
+        await asyncio.wait_for(
+            store.persist_enrich_response(
+                response=resp_obj,
+                entity_id=entity_id,
+                object_type=object_type,
+                domain=domain,
+                idempotency_key=payload.get("idempotency_key"),
+            ),
+            timeout=30.0,
         )
         logger.info("handlers.result_persisted", entity_id=entity_id, tenant=tenant, domain=domain)
-    except Exception as exc:
+    except TimeoutError:
+        logger.warning("handlers.result_persist_timeout", entity_id=entity_id, tenant=tenant)
+    except (ConnectionError, OSError, RuntimeError) as exc:
         logger.warning("handlers.result_persist_failed", entity_id=entity_id, error=str(exc))
 
     # GAP-6: Graph sync via PacketRouter
@@ -89,11 +96,14 @@ async def _persist_and_sync(
         from ..engines.packet_router import NodeTarget, get_router
 
         router = get_router(settings)
-        await router.notify_graph_sync(
-            tenant_id=tenant,
-            entity_id=entity_id,
-            fields=response_dict.get("fields", {}),
-            domain=domain,
+        await asyncio.wait_for(
+            router.notify_graph_sync(
+                tenant_id=tenant,
+                entity_id=entity_id,
+                fields=response_dict.get("fields", {}),
+                domain=domain,
+            ),
+            timeout=15.0,
         )
         router.route_fire_and_forget(
             target=NodeTarget.SCORE,
@@ -101,7 +111,9 @@ async def _persist_and_sync(
             tenant_id=tenant,
             payload={"entity_id": entity_id, "domain": domain},
         )
-    except Exception as exc:
+    except TimeoutError:
+        logger.warning("handlers.graph_sync_timeout", entity_id=entity_id, tenant=tenant)
+    except (ConnectionError, OSError) as exc:
         logger.warning("handlers.graph_sync_failed", entity_id=entity_id, error=str(exc))
 
 
@@ -136,7 +148,7 @@ async def handle_converge(tenant: str, payload: dict[str, Any]) -> dict[str, Any
     request = EnrichRequest.model_validate(payload)
 
     domain_hints: dict[str, Any] = {}
-    inference_rules: list[dict] = []
+    inference_rules: list[dict[str, Any]] = []
 
     domain_id = payload.get("domain_id")
     node_label = payload.get("node_label")
@@ -222,7 +234,7 @@ async def handle_simulate(tenant: str, payload: dict[str, Any]) -> dict[str, Any
         try:
             config = _domain_reader.load(domain_id)
             domain_spec = config.raw_spec if hasattr(config, "raw_spec") else {}
-        except Exception as exc:
+        except (FileNotFoundError, ValueError, OSError) as exc:
             logger.warning("simulate_domain_spec_load_failed", domain_id=domain_id, error=str(exc))
 
     seed_stats, enriched_stats, _seed_ents, _enr_ents = simulate(

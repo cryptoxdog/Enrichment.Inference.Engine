@@ -7,13 +7,13 @@ allocates budget proportionally.
 
 from __future__ import annotations
 
-import logging
 from enum import StrEnum
 from typing import Any, Protocol
 
+import structlog
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SelectionMode(StrEnum):

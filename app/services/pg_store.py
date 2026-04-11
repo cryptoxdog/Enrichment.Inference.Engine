@@ -87,7 +87,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     async with _session_factory() as session, session.begin():
         try:
             yield session
-        except Exception:
+        except BaseException:
             await session.rollback()
             raise
 
@@ -107,9 +107,9 @@ async def save_enrichment_result(
     pass_count: int,
     state: str = "completed",
     quality_tier: str = "unknown",
-    inferences: list | None = None,
-    kb_fragment_ids: list | None = None,
-    feature_vector: dict | None = None,
+    inferences: list[dict[str, Any]] | None = None,
+    kb_fragment_ids: list[str] | None = None,
+    feature_vector: dict[str, Any] | None = None,
     domain: str | None = None,
     idempotency_key: str | None = None,
     failure_reason: str | None = None,
@@ -258,12 +258,12 @@ async def update_convergence_run(
     current_pass: int | None = None,
     state: str | None = None,
     convergence_reason: str | None = None,
-    accumulated_fields: dict | None = None,
-    accumulated_confidences: dict | None = None,
-    pass_results: list | None = None,
+    accumulated_fields: dict[str, Any] | None = None,
+    accumulated_confidences: dict[str, float] | None = None,
+    pass_results: list[dict[str, Any]] | None = None,
     total_tokens: int | None = None,
     total_cost_usd: float | None = None,
-    schema_proposals: list | None = None,
+    schema_proposals: list[dict[str, Any]] | None = None,
     domain_yaml_version_after: str | None = None,
 ) -> None:
     """Partial update — only provided kwargs are written to the database."""
@@ -333,8 +333,8 @@ async def save_schema_proposal(
     source: str,
     fill_rate: float,
     avg_confidence: float,
-    sample_values: list | None = None,
-    value_distribution: dict | None = None,
+    sample_values: list[Any] | None = None,
+    value_distribution: dict[str, Any] | None = None,
     proposed_gate: str | None = None,
     proposed_scoring_dimension: str | None = None,
     yaml_diff: str | None = None,

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-
+import structlog
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 DEFAULT_RATE_PER_1K = 0.005  # USD per 1K tokens (sonar-reasoning default)
 
@@ -49,11 +48,11 @@ class CostTracker:
             self._tokens_per_pass.append(0)
         self._tokens_per_pass[pass_number - 1] = tokens_used
         logger.debug(
-            "cost_tracker.record: pass=%d tokens=%d total=%d/%d",
-            pass_number,
-            tokens_used,
-            self._tokens_used,
-            self._max_tokens,
+            "cost_tracker.record",
+            pass_number=pass_number,
+            tokens=tokens_used,
+            total=self._tokens_used,
+            budget=self._max_tokens,
         )
 
     @property

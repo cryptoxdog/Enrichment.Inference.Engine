@@ -7,13 +7,13 @@ on a batch, the system proposes schema changes based on what it found.
 from __future__ import annotations
 
 import copy
-import logging
 import statistics
 from typing import Any
 
+import structlog
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 MIN_FILL_RATE = 0.60
 MIN_AVG_CONFIDENCE = 0.70

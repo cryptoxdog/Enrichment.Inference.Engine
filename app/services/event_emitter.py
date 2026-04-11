@@ -121,13 +121,27 @@ class EventEmitter:
 
     async def _publish_safe(self, event: EnrichmentEvent) -> None:
         try:
-            await self._backend.publish(event)
+            await asyncio.wait_for(self._backend.publish(event), timeout=5.0)
+        except TimeoutError:
+            logger.warning(
+                "event_emit_timeout",
+                event_type=event.event_type.value,
+                entity_id=event.entity_id,
+            )
+        except (ConnectionError, OSError) as exc:
+            logger.warning(
+                "event_emit_connection_error",
+                event_type=event.event_type.value,
+                entity_id=event.entity_id,
+                error=str(exc),
+            )
         except Exception as exc:
             logger.warning(
                 "event_emit_failed",
                 event_type=event.event_type.value,
                 entity_id=event.entity_id,
                 error=str(exc),
+                exc_info=True,
             )
 
     async def emit(self, event: EnrichmentEvent) -> None:

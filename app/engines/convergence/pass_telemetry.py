@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
+import structlog
 from pydantic import BaseModel, Field
 
 from ...models.loop_schemas import PassResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 DIMINISHING_RETURNS_MIN_IMPROVEMENT = 0.05  # 5%
 

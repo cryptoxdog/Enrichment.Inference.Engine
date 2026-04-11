@@ -18,18 +18,19 @@ L9 Contract Compliance:
   - No FastAPI imports (handler registration via chassis)
   - No eval/exec
   - No stubs or TODOs
-  - stdlib logger only
+  - structlog for structured logging (C-04)
 """
 
 from __future__ import annotations
 
 import hashlib
-import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 # ── Enums ────────────────────────────────────────────────────

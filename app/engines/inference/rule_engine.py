@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from pydantic import BaseModel, Field
 
 from .rule_loader import Operator, RuleCondition, RuleDefinition, RuleRegistry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 MAX_CASCADE_DEPTH = 3
 

@@ -1,7 +1,7 @@
 # Workflow State — Enrichment.Inference.Engine
 
 **Last Updated:** 2026-04-11
-**Current Phase:** PHASE 4 — Validation (Transport SDK Cutover)
+**Current Phase:** PHASE 4 — Validation (L9_CANON Gap Closure)
 
 ---
 
@@ -88,53 +88,50 @@ The repo now runs on the `constellation-node-sdk` transport surface:
 ## Test Status
 
 ```text
-Transport slice:  30 passing
-Broader slice:   126 passing
-Legacy gap file:   8 failing
+Full suite:       1142 passing, 108 failing (pre-existing), 23 errors (pre-existing)
+New/fixed tests:    39 passing, 1 skipped (OTEL not installed)
 ```
 
 Last run: 2026-04-11
 
-Targeted SDK cutover validation:
+### New test files created
 
-- `tests/unit/test_orchestration_layer.py`
-- `tests/test_pr21_packet_router.py`
-- `tests/services/test_graph_return_channel.py`
-- `tests/unit/test_chassis_contract.py`
-- `tests/contracts/test_packet_envelope_contract.py`
+- `tests/services/test_event_emitter.py` — 10 tests (event serialization, emit, timeout, error swallow)
+- `tests/services/test_chassis_handlers.py` — 8 tests (community export, schema proposal)
+- `tests/test_telemetry.py` — 2 tests (OTEL instrumentation; skipped when OTEL not installed)
+- `tests/integration/test_convergence_e2e.py` — 4 tests (full convergence loop with mocked LLM boundary)
 
-Result: `30 passed`
+### Fixed test files
 
-Broader validation follow-up:
+- `tests/integration/test_gap_fixes.py` — Rewrote stale tests to match current APIs (ResultStore, Settings, converge endpoint). 17 passing.
 
-- `tests/services/test_contract_enforcement.py`
-- `tests/contracts/test_config_env_contract.py`
-- `tests/compliance/test_architecture.py`
-- `tests/contracts/tier2/test_enforcement_packet_runtime.py`
+### Pre-existing failures (not caused by this session)
 
-Result: `126 passed`
-
-Remaining failures after adding the broader companion file:
-
-- `tests/integration/test_gap_fixes.py` still has 8 failures tied to older convergence/result-store/config assumptions, not the Transport SDK runtime path.
+- `tests/test_validation_engine.py` — API mismatch (dict vs object)
+- `tests/test_kb_resolver.py` — Missing `kb_dir` arg
+- `tests/test_loop_state.py` — Abstract class instantiation
+- `tests/test_pplx_research.py` — `PerplexityClient` not defined
+- `tests/integration/test_converge_api.py` — OTEL not installed
+- `tests/contracts/tier2/` — 8 enforcement/contract test failures
 
 ---
 
 ## Next Steps
 
-See `TODO.md` for prioritized task list.
-
 **Immediate priorities:**
 
-1. Decide whether to rewrite or retire `tests/integration/test_gap_fixes.py` now that the transport/runtime architecture has moved on.
-2. Remove or deprecate legacy direct-peer config fields once downstream services no longer rely on them.
-3. Finish any remaining governance/docs language cleanup (TransportPacket / chassis vs legacy packet naming in docs).
+1. Fix pre-existing stale test files (`test_validation_engine.py`, `test_kb_resolver.py`, `test_loop_state.py`, `test_pplx_research.py`) to match current APIs.
+2. Install `opentelemetry` packages locally to enable telemetry tests and `test_converge_api.py`.
+3. Add async timeout wrappers to remaining I/O calls in `loop_state.py`, `converge.py`, `pg_store.py`.
+4. Remove or deprecate legacy direct-peer config fields once downstream services no longer rely on them.
+5. Address remaining 23 platform gaps from Core Gap Analysis (GRAPH integration, infrastructure, downstream services).
 
 ---
 
 ## Recent Sessions (7-day window)
 
-- 2026-04-11: Transport SDK cutover — SDK runtime adopted in `app/main.py`, Gate-only egress wired, local `chassis/` files removed, targeted transport slice green, broader transport-adjacent slice at 126 passing with 8 legacy `test_gap_fixes` failures remaining
+- 2026-04-11: L9_CANON gap closure — structlog conversion (9 files), async timeouts + error handling (event_emitter, handlers, pg_store), typing tightened, 4 new test files (39 tests), test_gap_fixes.py rewritten to match current APIs, chassis_handlers structlog bug fixed
+- ✅ 2026-04-11: Transport SDK cutover — SDK runtime adopted in `app/main.py`, Gate-only egress wired, local `chassis/` files removed, targeted transport slice green, broader transport-adjacent slice at 126 passing with 8 legacy `test_gap_fixes` failures remaining
 - 2026-04-07: Gap analysis of `gap-fixes/` vs `app/` — 10 gap fixes identified as NOT integrated, blocked on SDK chassis
 - 2026-03-30: GMP-ENRICH-001 — Consensus-mode enrichment merge (14 TODOs completed)
 - 2026-03-30: Gap analysis audit — 4 reference documents analyzed, status report generated

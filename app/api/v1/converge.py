@@ -10,9 +10,9 @@ Integration fixes applied (PR#22 merge pass):
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -31,7 +31,7 @@ from ...services.crm_field_scanner import (
 )
 from ...services.enrichment_profile import EnrichmentProfile, ProfileRegistry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["convergence"], dependencies=[Depends(verify_api_key)])
 

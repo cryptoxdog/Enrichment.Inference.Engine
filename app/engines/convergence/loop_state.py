@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import abc
-import logging
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+import structlog
 from pydantic import BaseModel, Field
 
 from ...models.field_confidence import FieldConfidenceMap
 from ...models.loop_schemas import CostSummary, PassResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 DEFAULT_TTL_SECONDS = 86400  # 24h
 
@@ -63,14 +63,16 @@ class LoopStateStore(abc.ABC):
             return None
         if state.status != LoopStatus.RUNNING:
             logger.info(
-                "loop_state.resume: run %s is %s, not resumable", run_id, state.status.value
+                "loop_state.resume_skipped",
+                run_id=run_id,
+                status=state.status.value,
             )
             return None
         logger.info(
-            "loop_state.resume: run=%s pass=%d fields=%d",
-            run_id,
-            state.current_pass,
-            len(state.accumulated_fields),
+            "loop_state.resumed",
+            run_id=run_id,
+            current_pass=state.current_pass,
+            fields=len(state.accumulated_fields),
         )
         return state
 

@@ -85,8 +85,8 @@ async def handle_schema_proposal(
 
     logger.info(
         "schema_proposal.received",
-        tenant_id,
-        len(proposed_fields),
+        tenant_id=tenant_id,
+        field_count=len(proposed_fields),
     )
 
     # In production, this would queue for review or auto-apply
