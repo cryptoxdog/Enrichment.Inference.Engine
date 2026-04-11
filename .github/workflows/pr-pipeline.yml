@@ -419,11 +419,11 @@ jobs:
             PYTHONPATH=. python tools/audit_engine.py --strict || echo "⚠️ Contract audit warnings (non-blocking)"
           fi
 
-      - name: L9 Contract Verification (if available)
+      - name: L9 Contract Verification (merge-blocking)
         run: |
           if [ -f "tools/verify_contracts.py" ]; then
             echo "Running L9 contract verification..."
-            PYTHONPATH=. python tools/verify_contracts.py || echo "⚠️ Contract verification warnings (non-blocking)"
+            PYTHONPATH=. python tools/verify_contracts.py
           fi
 
   # ────────────────────────────────────────────────────────────────────────

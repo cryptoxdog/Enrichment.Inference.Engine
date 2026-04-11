@@ -40,7 +40,9 @@ This document defines the rules of engagement for AI agents (Manus, Copilot, Cur
 | `app/engines/orchestration_layer.py` | T4 | Canonical SDK handler registration + cross-node orchestration wiring |
 | `app/engines/handlers.py` | T4 | Engine action handlers — must stay aligned with runtime registrations |
 | `app/engines/graph_sync_client.py` | T4 | Gate transport contract |
-| `app/models/` (all files) | T5 | Pydantic schema — downstream breaking change risk |
+| `app/models/` (all files) | T5 | Pydantic schema — downstream breaking change risk (`app/models/loop_schemas.py`, `app/models/field_confidence.py`) |
+| `app/score/score_models.py` | T5 | Score schema contract |
+| `app/health/health_models.py` | T5 | Health schema contract |
 | `kb/` rule files | T5 | Knowledge base — requires review + CI green |
 | `.github/workflows/` | T2 | CI pipeline integrity |
 | `AGENTS.md`, `CLAUDE.md`, `GUARDRAILS.md` | T4 | Governance documents |
