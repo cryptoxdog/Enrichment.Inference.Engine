@@ -56,6 +56,7 @@ from .packet_enforcement import (
     registered_actions,
     validate_ingress_packet,
 )
+from .workers import GraphInferenceConsumer, SchemaPromotionWorker
 
 __all__ = [
     # action_authority.py
@@ -108,4 +109,7 @@ __all__ = [
     "allocate_budget",
     "DEFAULT_PROFILES",
     "ProfileRegistry",
+    # workers
+    "GraphInferenceConsumer",
+    "SchemaPromotionWorker",
 ]
