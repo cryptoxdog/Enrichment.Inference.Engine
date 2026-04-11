@@ -36,9 +36,9 @@ PERPLEXITY_URL = "https://api.perplexity.ai/chat/completions"
 # Context files to include (in priority order, truncated to fit token budget)
 # These are the repo rules that code review agents need to know
 CONTEXT_FILES = [
-    ("AGENTS.md", 12000),          # Agent rules, tiers, prohibited actions, directory ownership
-    ("ARCHITECTURE.md", 8000),     # System architecture, components, data flow
-    ("CLAUDE.md", 4000),           # AI coding context, contracts summary
+    ("AGENTS.md", 12000),  # Agent rules, tiers, prohibited actions, directory ownership
+    ("ARCHITECTURE.md", 8000),  # System architecture, components, data flow
+    ("CLAUDE.md", 4000),  # AI coding context, contracts summary
 ]
 
 BASE_SYSTEM_PROMPT = """You are a senior Python engineer performing a code review for an L9 constellation engine.
@@ -47,7 +47,7 @@ BASE_SYSTEM_PROMPT = """You are a senior Python engineer performing a code revie
 
 1. **Contract Violations**: Check against the L9 contracts provided in context
 2. **Security**: injection, auth bypass, SSRF, path traversal, unvalidated input
-3. **Architecture**: Chassis boundary violations, direct HTTP calls between nodes, missing PacketEnvelope
+3. **Architecture**: Chassis boundary violations, direct HTTP calls between nodes, missing TransportPacket / Gate routing
 4. **Bugs**: logic errors, None dereference, missing awaits on async calls
 5. **Concurrency**: race conditions, deadlocks, unbounded task fan-out
 6. **Error handling**: bare except, swallowed exceptions
@@ -56,7 +56,7 @@ BASE_SYSTEM_PROMPT = """You are a senior Python engineer performing a code revie
 
 - Engine NEVER imports FastAPI, Starlette, or HTTP libraries
 - Engine NEVER creates routes — only action handlers
-- All inter-node communication uses PacketEnvelope via chassis
+- Inter-node communication uses TransportPacket via Gate/SDK and chassis wire envelopes where applicable
 - Cypher queries MUST use sanitize_label() for labels/types
 - No eval(), exec(), pickle.load(), yaml.load() without SafeLoader
 - No hardcoded secrets
@@ -96,6 +96,7 @@ def get_api_key() -> str:
 
     try:
         from app.core.config import get_settings
+
         settings = get_settings()
         if settings.perplexity_api_key:
             return settings.perplexity_api_key
@@ -113,6 +114,7 @@ def get_model() -> str:
     """Get Perplexity model from app config or default."""
     try:
         from app.core.config import get_settings
+
         settings = get_settings()
         if settings.perplexity_model:
             return settings.perplexity_model
@@ -124,7 +126,7 @@ def get_model() -> str:
 def load_context_files() -> str:
     """Load repo context files for the review prompt."""
     context_parts = []
-    
+
     for filename, max_chars in CONTEXT_FILES:
         filepath = PROJECT_ROOT / filename
         if filepath.exists():
@@ -135,10 +137,10 @@ def load_context_files() -> str:
                 context_parts.append(f"## {filename}\n\n{content}")
             except Exception as e:
                 print(f"Warning: Could not read {filename}: {e}", file=sys.stderr)
-    
+
     if not context_parts:
         return ""
-    
+
     return "# REPOSITORY CONTEXT\n\n" + "\n\n---\n\n".join(context_parts)
 
 
@@ -158,7 +160,7 @@ Output STRICT JSON (no markdown fences):
 }
 If no issues: {"issues": [], "summary": "No issues found.", "block": false}
 """
-    
+
     context = load_context_files()
     if context:
         return f"{context}\n\n---\n\n{BASE_SYSTEM_PROMPT}"
@@ -171,7 +173,7 @@ def call_review(code: str, api_key: str, model: str, system_prompt: str) -> dict
     max_code_chars = 80_000
     if len(code) > max_code_chars:
         code = code[:max_code_chars] + "\n\n... [code truncated]"
-    
+
     payload = {
         "model": model,
         "messages": [
@@ -181,7 +183,7 @@ def call_review(code: str, api_key: str, model: str, system_prompt: str) -> dict
         "temperature": 0.1,
         "max_tokens": 4096,
     }
-    
+
     with httpx.Client(timeout=180) as client:
         resp = client.post(
             PERPLEXITY_URL,
@@ -194,22 +196,27 @@ def call_review(code: str, api_key: str, model: str, system_prompt: str) -> dict
         resp.raise_for_status()
 
     content = resp.json()["choices"][0]["message"]["content"]
-    
+
     # Strip markdown fences if present
     content = content.strip()
     if content.startswith("```"):
         lines = content.split("\n")
         content = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-    
+
     try:
         return json.loads(content)
     except json.JSONDecodeError:
         # Try to extract JSON from the response
         import re
-        match = re.search(r'\{.*\}', content, re.DOTALL)
+
+        match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:
             return json.loads(match.group())
-        return {"issues": [], "summary": f"Failed to parse response: {content[:200]}", "block": False}
+        return {
+            "issues": [],
+            "summary": f"Failed to parse response: {content[:200]}",
+            "block": False,
+        }
 
 
 def get_staged_diff() -> str:
@@ -251,10 +258,10 @@ def print_results(result: dict) -> bool:
         sev = issue.get("severity", "?").upper()
         cat = issue.get("category", "")
         icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡"}.get(sev, "⚪")
-        
+
         desc = issue.get("description", "")
         contract_ref = issue.get("contract_ref", "")
-        
+
         print(f"  {icon} [{sev}] {desc}")
         if cat:
             print(f"     Category: {cat}")
@@ -283,16 +290,23 @@ Examples:
   python tools/ai_review.py --mode file --diff-path pr.diff
   python tools/ai_review.py --mode files --paths app/main.py app/services/foo.py
   python tools/ai_review.py --mode staged --no-context  # Skip contract context
-        """
+        """,
     )
-    parser.add_argument("--mode", choices=["staged", "file", "files"], default="staged",
-                        help="Review mode: staged git changes, diff file, or specific files")
+    parser.add_argument(
+        "--mode",
+        choices=["staged", "file", "files"],
+        default="staged",
+        help="Review mode: staged git changes, diff file, or specific files",
+    )
     parser.add_argument("--diff-path", help="Path to diff file (mode=file)")
     parser.add_argument("--paths", nargs="*", help="File paths to review (mode=files)")
     parser.add_argument("--model", default=None, help="Perplexity model (default: from config)")
     parser.add_argument("--no-block", action="store_true", help="Never exit non-zero")
-    parser.add_argument("--no-context", action="store_true", 
-                        help="Skip loading repo context (faster, generic review)")
+    parser.add_argument(
+        "--no-context",
+        action="store_true",
+        help="Skip loading repo context (faster, generic review)",
+    )
     args = parser.parse_args()
 
     api_key = get_api_key()
@@ -327,10 +341,10 @@ Examples:
     # Build prompt with or without context
     include_context = not args.no_context
     system_prompt = build_system_prompt(include_context)
-    
+
     context_status = "with L9 contracts" if include_context else "generic"
     print(f"🔍 Running AI review ({model}, {context_status})...")
-    
+
     result = call_review(code, api_key, model, system_prompt)
     should_block = print_results(result)
 

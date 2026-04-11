@@ -9,7 +9,7 @@
 # defaults (field_name → FIELD_NAME). No extras that Settings does not load.
 #
 # Integration architecture: Third-party platforms (CRMs, data vendors, etc.)
-# should integrate through the gate/SDK and chassis actions (PacketEnvelope), not
+# should integrate through the gate/SDK and TransportPacket actions, not
 # new ad-hoc service clients in this repo. Variables for Salesforce, HubSpot,
 # waterfall providers, and similar remain for legacy or transitional direct use.
 #
@@ -21,6 +21,79 @@
 # ENVIRONMENT in app/core/telemetry.py) — see other_runtime_env at file end.
 
 variables:
+  # ── Docker Compose ─────────────────────────────────────────
+  - name: COMPOSE_PROJECT_NAME
+    type: string
+    required: false
+    default: eie
+    description: Docker Compose project name prefix for container naming.
+    sensitive: false
+    source: env
+
+  - name: APP_PORT
+    type: integer
+    required: false
+    default: 8000
+    description: Host port to expose the API container.
+    sensitive: false
+    source: env
+
+  - name: POSTGRES_USER
+    type: string
+    required: false
+    default: enrich
+    description: PostgreSQL user for docker-compose postgres service.
+    sensitive: false
+    source: env
+
+  - name: POSTGRES_PASSWORD
+    type: secret
+    required: false
+    default: changeme
+    description: PostgreSQL password for docker-compose postgres service.
+    sensitive: true
+    source: env
+
+  - name: POSTGRES_DB
+    type: string
+    required: false
+    default: enrich
+    description: PostgreSQL database name for docker-compose postgres service.
+    sensitive: false
+    source: env
+
+  - name: GRAFANA_PORT
+    type: integer
+    required: false
+    default: 3000
+    description: Host port to expose Grafana dashboard.
+    sensitive: false
+    source: env
+
+  - name: GRAFANA_ADMIN_USER
+    type: string
+    required: false
+    default: admin
+    description: Grafana admin username.
+    sensitive: false
+    source: env
+
+  - name: GRAFANA_ADMIN_PASSWORD
+    type: secret
+    required: false
+    default: admin
+    description: Grafana admin password.
+    sensitive: true
+    source: env
+
+  - name: GRAFANA_ROOT_URL
+    type: url
+    required: false
+    default: http://localhost:3000
+    description: Grafana external URL for links and redirects.
+    sensitive: false
+    source: env
+
   # ── Core ────────────────────────────────────────────────────
   - name: APP_ENV
     type: string
@@ -194,56 +267,6 @@ variables:
     sensitive: false
     source: env
 
-  # ── Salesforce CRM ──────────────────────────────────────────
-  - name: SALESFORCE_CLIENT_ID
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce Connected App client ID.
-    sensitive: true
-    source: env
-
-  - name: SALESFORCE_CLIENT_SECRET
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce Connected App client secret.
-    sensitive: true
-    source: env
-
-  - name: SALESFORCE_USERNAME
-    type: string
-    required: false
-    default: ""
-    description: Salesforce username.
-    sensitive: false
-    source: env
-
-  - name: SALESFORCE_PASSWORD
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce password.
-    sensitive: true
-    source: env
-
-  - name: SALESFORCE_SECURITY_TOKEN
-    type: secret
-    required: false
-    default: ""
-    description: Salesforce security token (often appended to password).
-    sensitive: true
-    source: env
-
-  # ── HubSpot CRM ─────────────────────────────────────────────
-  - name: HUBSPOT_ACCESS_TOKEN
-    type: secret
-    required: false
-    default: ""
-    description: HubSpot private app access token.
-    sensitive: true
-    source: env
-
   # ── Enrichment sources (waterfall) ─────────────────────────
   - name: CLEARBIT_API_KEY
     type: secret
@@ -302,11 +325,19 @@ variables:
     sensitive: false
     source: env
 
+  - name: GATE_URL
+    type: url
+    required: false
+    default: http://localhost:8080
+    description: Gate service base URL for SDK runtime and Gate-only egress.
+    sensitive: false
+    source: env
+
   - name: GRAPH_NODE_URL
     type: url
     required: false
     default: http://localhost:8001
-    description: GRAPH node URL for packet routing.
+    description: Legacy direct GRAPH node URL. Deprecated in favor of GATE_URL.
     sensitive: false
     source: env
 
@@ -314,7 +345,7 @@ variables:
     type: url
     required: false
     default: http://localhost:8002
-    description: SCORE node URL.
+    description: Legacy direct SCORE node URL. Deprecated in favor of GATE_URL.
     sensitive: false
     source: env
 
@@ -322,7 +353,7 @@ variables:
     type: url
     required: false
     default: http://localhost:8003
-    description: ROUTE node URL.
+    description: Legacy direct ROUTE node URL. Deprecated in favor of GATE_URL.
     sensitive: false
     source: env
 
@@ -442,13 +473,6 @@ required_for_odoo_integration:
   - ODOO_DB
   - ODOO_USERNAME
   - ODOO_PASSWORD
-
-required_for_salesforce_integration:
-  - SALESFORCE_CLIENT_ID
-  - SALESFORCE_CLIENT_SECRET
-  - SALESFORCE_USERNAME
-  - SALESFORCE_PASSWORD
-  - SALESFORCE_SECURITY_TOKEN
 
 # ═══════════════════════════════════════════════════════════════
 # Env read outside Settings (documentary only)

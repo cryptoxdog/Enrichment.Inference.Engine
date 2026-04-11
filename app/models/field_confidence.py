@@ -80,7 +80,7 @@ class FieldConfidenceMap(BaseModel):
 
     The map is the canonical per-field confidence payload embedded in every
     ``PassResult`` and ``ConvergeResponse``.  Downstream services deserialise
-    this directly from the PacketEnvelope payload.
+    this directly from the TransportPacket payload.
     """
 
     fields: dict[str, FieldConfidence] = Field(default_factory=dict)
@@ -143,7 +143,7 @@ class FieldConfidenceMap(BaseModel):
     # -- Serialisation ------------------------------------------------------
 
     def to_flat_dict(self) -> dict[str, dict[str, Any]]:
-        """PacketEnvelope-friendly serialisation (no Pydantic wrapping)."""
+        """TransportPacket-friendly serialisation (no Pydantic wrapping)."""
         return {name: fc.model_dump(mode="json") for name, fc in self.fields.items()}
 
     @classmethod

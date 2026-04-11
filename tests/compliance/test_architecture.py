@@ -94,29 +94,20 @@ def test_enum_classes_use_str_mixin():
     assert not violations, "Enum classes without str mixin:\n" + "\n".join(violations)
 
 
-def test_chassis_contract_exists():
-    """The chassis contract module must exist and have required functions."""
-    import ast
+def test_sdk_runtime_entrypoints_exist():
+    """The app must expose SDK runtime integration and a transport boundary."""
+    main_module = ENGINE_DIR / "main.py"
+    assert main_module.exists(), "main.py missing"
 
-    chassis = ENGINE_DIR / "engines" / "chassis_contract.py"
-    assert chassis.exists(), "chassis_contract.py missing"
-
-    tree = ast.parse(chassis.read_text())
-    func_names = {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-
-    required = {"inflate_ingress", "deflate_egress", "delegate_to_node"}
-    missing = required - func_names
-    assert not missing, f"chassis_contract.py missing functions: {missing}"
+    content = main_module.read_text()
+    assert "create_node_app" in content, "main.py must create the SDK node runtime"
+    assert "NodeRuntimeConfig" in content, "main.py must define SDK runtime configuration"
 
 
 def test_handlers_registry_exists():
-    """The handlers module must have an ACTION_REGISTRY."""
-    handlers = ENGINE_DIR / "engines" / "handlers.py"
-    assert handlers.exists(), "handlers.py missing"
+    """The live runtime wiring must register handlers through the SDK registry."""
+    orchestration = ENGINE_DIR / "engines" / "orchestration_layer.py"
+    assert orchestration.exists(), "orchestration_layer.py missing"
 
-    content = handlers.read_text()
-    assert "ACTION_REGISTRY" in content, "handlers.py missing ACTION_REGISTRY"
+    content = orchestration.read_text()
+    assert "register_handler" in content, "orchestration_layer.py must register runtime handlers"

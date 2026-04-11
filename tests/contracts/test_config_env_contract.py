@@ -43,6 +43,7 @@ REQUIRED_ENV_VARS = {
     "OPENAI_API_KEY": {"type": "secret", "required": False, "sensitive": True},
     "ANTHROPIC_API_KEY": {"type": "secret", "required": False, "sensitive": True},
     "CEG_BASE_URL": {"type": "url", "required": False, "sensitive": False},
+    "GATE_URL": {"type": "url", "required": False, "sensitive": False},
     "GRAPH_NODE_URL": {"type": "url", "required": False, "sensitive": False},
     "SCORE_NODE_URL": {"type": "url", "required": False, "sensitive": False},
     "ROUTE_NODE_URL": {"type": "url", "required": False, "sensitive": False},

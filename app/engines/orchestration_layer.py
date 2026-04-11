@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
+from constellation_node_sdk.runtime.handlers import register_handler
 
 from app.core.config import get_settings
 from app.engines.graph_sync_client import GraphSyncClient
@@ -26,7 +27,6 @@ from app.engines.handlers import (
     handle_writeback,
     init_handlers,
 )
-from chassis import register_handler
 
 logger = structlog.get_logger(__name__)
 
@@ -45,11 +45,10 @@ def register(kb, idem_store=None, domain_reader=None) -> None:
     register_handler("discover", handle_discover)
     register_handler("simulate", handle_simulate)
     register_handler("writeback", handle_writeback)
-    register_handler("enrich_and_sync", _make_enrich_and_sync_handler(kb, idem_store))
+    register_handler("enrich-and-sync", _make_enrich_and_sync_handler(kb, idem_store))
 
     _graph_client = GraphSyncClient(
-        graph_url=settings.graph_node_url,
-        api_key=settings.inter_node_secret,
+        gate_url=settings.gate_url,
         source_node="enrichment-engine",
     )
 
@@ -62,16 +61,20 @@ def register(kb, idem_store=None, domain_reader=None) -> None:
             "discover",
             "simulate",
             "writeback",
-            "enrich_and_sync",
+            "enrich-and-sync",
         ],
-        graph_url=settings.graph_node_url,
+        gate_url=settings.gate_url,
     )
 
 
 def _make_enrich_and_sync_handler(kb, idem_store):
     """Composite: enrich -> persist -> graph sync -> score invalidate -> event emit."""
 
-    async def handle_enrich_and_sync(tenant: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def handle_enrich_and_sync(
+        tenant: str,
+        payload: dict[str, Any],
+        packet: Any | None = None,
+    ) -> dict[str, Any]:
         settings = get_settings()
         enrich_result = await handle_enrich(tenant, payload)
 
@@ -115,7 +118,7 @@ def _make_enrich_and_sync_handler(kb, idem_store):
                         }
                     ],
                     tenant=tenant,
-                    parent_packet_id=enrich_result.get("packet_id"),
+                    parent_packet=packet,
                 )
                 enrich_result["graph_sync_status"] = sync_resp.get("status", "unknown")
             except Exception as exc:
@@ -179,7 +182,7 @@ def _make_enrich_and_sync_handler(kb, idem_store):
 async def run_outcome_feedback(
     outcome: dict[str, Any],
     tenant: str,
-    parent_packet_id: str | None = None,
+    parent_packet: Any | None = None,
 ) -> dict[str, Any]:
     if not _graph_client:
         logger.warning("orchestration.outcome_no_graph_client")
@@ -187,7 +190,7 @@ async def run_outcome_feedback(
     resp = await _graph_client.send_outcome(
         outcome=outcome,
         tenant=tenant,
-        parent_packet_id=parent_packet_id,
+        parent_packet=parent_packet,
     )
     logger.info(
         "orchestration.outcome_sent", entity_id=outcome.get("entity_id"), status=resp.get("status")

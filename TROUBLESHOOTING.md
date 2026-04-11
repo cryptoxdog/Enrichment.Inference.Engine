@@ -67,7 +67,7 @@ See CI_WHITELIST_REGISTER.md §Agent Response to CI Failures for the full decisi
 | Using `Optional[X]` | compliance-terminology CI failure | Use `X | None` |
 | Using `List[X]` | compliance-terminology CI failure | Use `list[X]` |
 | Using `print()` in engine code | compliance-terminology CI failure | Use `structlog.get_logger().info(...)` |
-| Mutating PacketEnvelope | `pydantic.error_wrappers.ValidationError: Instance is frozen` | Never mutate — create new instance |
+| Mutating `TransportPacket` / frozen models | `ValidationError` or SDK guard failure | Never mutate — create a new packet / derived dict |
 | Missing test marker | pytest collection warning | Add `@pytest.mark.unit` or `@pytest.mark.integration` |
 | Yaml.load() without SafeLoader | SEC-007 audit failure | Use `yaml.safe_load()` |
 | Adding ruff ignore | INV-17 violation | Do NOT add ruff ignores — frozen list |

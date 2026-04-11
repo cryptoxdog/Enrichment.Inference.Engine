@@ -19,14 +19,14 @@ import structlog
 
 from ..core.config import get_settings
 from ..engines.convergence_controller import run_convergence_loop
+from ..engines.domain_yaml_reader import DomainYamlReader
 from ..engines.enrichment_orchestrator import enrich_batch, enrich_entity
 from ..engines.schema_discovery import SchemaDiscoveryEngine
 from ..models.schemas import BatchEnrichRequest, EnrichRequest
 from ..services.crm.base import CRMType
 from ..services.crm.writeback import WriteBackOrchestrator
-from ..services.domain_yaml_reader import DomainYamlReader
 from ..services.idempotency import IdempotencyStore
-from ..services.kbresolver import KBResolver
+from ..services.kb_resolver import KBResolver
 from ..services.simulation_bridge import (
     analyze_leverage,
     brief_to_dict,
@@ -97,7 +97,7 @@ async def _persist_and_sync(
         )
         router.route_fire_and_forget(
             target=NodeTarget.SCORE,
-            action="score_invalidate",
+            action="score-invalidate",
             tenant_id=tenant,
             payload={"entity_id": entity_id, "domain": domain},
         )

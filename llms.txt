@@ -15,6 +15,6 @@
 ## Docs
 
 - [TESTING.md](TESTING.md): Test strategy, coverage thresholds, fixture patterns
-- [CONTRIBUTING.md](CONTRIBUTING.md): Contribution guide
+- [REPO_MAP.md](REPO_MAP.md): Directory map, module boundaries, tier ownership
 - [CHANGELOG.md](CHANGELOG.md): Version history
 - [SECURITY.md](SECURITY.md): Vulnerability disclosure policy

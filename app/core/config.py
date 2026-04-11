@@ -2,7 +2,7 @@
 Settings — single source of truth for all configuration.
 Loaded once at startup from env vars / .env file.
 
-Platform integrations: Prefer the L9 gate/SDK and chassis actions (PacketEnvelope)
+Platform integrations: Prefer the L9 Gate/SDK and TransportPacket actions
 for third-party systems. Direct CRM/waterfall env fields below remain for legacy or
 transitional code paths; new work should not add bespoke HTTP integrations here.
 
@@ -63,6 +63,8 @@ class Settings(BaseSettings):
 
     ceg_base_url: str = "http://localhost:8001"
 
+    gate_url: str = "http://localhost:8080"
+    # Legacy direct peer URLs retained for backward-compatible config loading only.
     graph_node_url: str = "http://localhost:8001"
     score_node_url: str = "http://localhost:8002"
     route_node_url: str = "http://localhost:8003"
@@ -89,6 +91,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"),
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     @model_validator(mode="after")

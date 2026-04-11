@@ -1,88 +1,81 @@
-# --- L9_META ---
-# l9_schema: 1
-# origin: l9-template
-# engine: enrichment
-# layer: [governance]
-# tags: [L9_TEMPLATE, agent, claude, delta]
-# owner: platform
-# status: active
-# token_estimate: 210
-# ssot_for: [claude-specific-delta]
-# load_when: [claude_code, claude_pr_review]
-# references: [AGENT.md, GUARDRAILS.md, ARCHITECTURE.md]
-# --- /L9_META ---
+# CLAUDE.md — Claude-Specific Instructions
 
-# CLAUDE.md — Claude-Specific Delta
-
-**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
-
-> Delta-only file. AGENT.md is the primary governance document. Load AGENT.md first.
-> This file contains ONLY Claude-specific overrides and additions not in AGENT.md.
+> **Primary document**: `AGENTS.md` — read that first.
+> This file contains Claude-specific additions only.
 
 ---
 
-## Claude-Specific Loading Order
+## Loading Order
 
-1. AGENT_BOOTSTRAP.md — context strategy
-2. AGENT.md — all contracts, tiers, forbidden patterns
-3. GUARDRAILS.md — all prohibitions
-4. ARCHITECTURE.md — system topology
-5. This file — Claude delta only
+1. `AGENTS.md` — contracts, tiers, forbidden patterns
+2. `ARCHITECTURE.md` — system topology
+3. This file — Claude-specific guidance
 
 ---
 
-## Terminology Corrections (Claude Output Guard)
+## Output Guidelines
 
-Do NOT use these phrases in responses or code comments:
+### Banned Phrases
+
+Do NOT use vague language. Be specific.
 
 | Banned | Use Instead |
-|---|---|
-| "best practices" | Cite the specific contract ID (e.g., C-07 requires...) |
+|--------|-------------|
+| "best practices" | Cite the specific contract (e.g., "C-07 requires...") |
 | "as needed" | Specify the exact condition |
 | "you may want to" | Make a binary recommendation |
-| "consider using" | State whether it is required or optional per contract |
-| "it depends" | State which invariant or contract governs the decision |
-| "generally speaking" | Reference the specific rule that applies |
+| "consider using" | State whether required or optional per contract |
+| "it depends" | State which contract governs the decision |
+| "generally speaking" | Reference the specific rule |
 
 ---
 
-## Claude Review Output Format
+## PR Review Format
 
-When producing PR review comments, use this exact template:
+### For Violations
 
 ```
 CONTRACT C-{N} VIOLATION — {rule-name}
 File: {path} Line: {line}
 Found: {offending_code}
 Required: {corrected_code}
-Evidence: AGENT.md Forbidden Patterns, .cursorrules CONTRACT {N}
 ```
 
-For approvals:
+### For Approvals
+
 ```
-All 20 contracts verified. No violations found.
-Tier assessment: T{N} change. {0/1/2} reviewers required.
-make agent-check gates: [verified / not verified — request confirmation]
+All contracts verified. No violations found.
+Tier: T{N} change — {0/1/2} reviewers required.
 ```
 
 ---
 
-## Ruff Ignore List — Complete (Do Not Restate Inline)
+## CI Response
 
-Do NOT restate these in code comments. Reference pyproject.toml [tool.ruff.lint] ignore.
-Full list as of SHA 358d15d: E501, TC001, TC002, TC003, SIM105, TRY003, TRY400, ARG001, ARG002, ARG003, B007, B008.
+| Failed Job | Action |
+|------------|--------|
+| `validate` | Fix syntax/YAML first |
+| `lint-ruff` | Run `make agent-fix` |
+| `lint-mypy` | Log warning only (WAIVER-001) |
+| `test` | Fix tests, ensure coverage >= 60% |
+| `compliance-*` | Fix the violation |
+| `security-*` | Log warning only (waivers apply) |
 
 ---
 
-## CI Response Protocol
+## Ruff Ignores
 
-| CI Step Fails | Claude Action |
-|---|---|
-| validate | Fix Python syntax or YAML before any other work |
-| lint-ruff | Run make agent-fix then re-push |
-| lint-mypy | Log warning; do not block (WAIVER-001) |
-| test (coverage < 60%) | Add tests until coverage >= 60% |
-| compliance-chassis | Remove FastAPI import from engine/; verify handler boundary |
-| compliance-terminology | Replace print(), Optional[], List[], Dict[] |
-| security-pip-audit | Log warning; do not block (WAIVER-002) |
-| semgrep | Read .semgrep/ rules, fix violation, escalate if unclear |
+Do not add `# noqa` comments for these — they're globally ignored in `pyproject.toml`:
+
+`E501`, `TC001`, `TC002`, `TC003`, `SIM105`, `TRY003`, `TRY400`, `ARG001`, `ARG002`, `ARG003`, `B007`, `B008`
+
+---
+
+## Key Commands
+
+```bash
+make agent-check  # Full 7-gate validation
+make agent-fix    # Auto-fix lint/format
+make test         # Run tests
+make verify       # Contract verification
+```

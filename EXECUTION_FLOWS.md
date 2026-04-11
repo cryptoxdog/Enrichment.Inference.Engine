@@ -40,7 +40,7 @@ Resolved in order — first match wins:
 1. HTTP header X-Tenant-ID
 2. Subdomain extraction (tenant.api.domain.com)
 3. API key prefix mapping (keys prefixed with tenant slug)
-4. PacketEnvelope.tenant field (from request body)
+4. `tenant` / `tenant_id` on transport payload (from `/v1/execute` body or SDK packet)
 5. Default tenant fallback (L9_DEFAULT_TENANT env var)
 
 If no level resolves: returns HTTP 400 {"error": "tenant_resolution_failed"}.

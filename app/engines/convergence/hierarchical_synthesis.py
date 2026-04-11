@@ -13,7 +13,7 @@ Purpose:
 Dependencies:
   app.models.enrichment   — EnrichResponse, ConvergenceState, FieldResult
   app.engines.convergence — ConvergenceConfig
-  PacketEnvelope          — immutable I/O boundary
+  TransportPacket          — immutable I/O boundary
 
 L9 Compliance:
   - Feature-flagged via ConvergenceConfig; no ambient state
@@ -210,7 +210,7 @@ def attach_composites_to_feature_vector(
 ) -> EnrichResponse:
     """
     Return a new EnrichResponse with composite nodes embedded in feature_vector.
-    Does not mutate the original response (PacketEnvelope immutability).
+    Does not mutate the original response (TransportPacket immutability).
     """
     if not nodes:
         return response
@@ -223,7 +223,7 @@ def attach_composites_to_feature_vector(
         "hierarchical_synthesis.attached",
         extra={"node_count": len(nodes)},
     )
-    return response.replace(feature_vector=updated_fv)
+    return response.model_copy(update={"feature_vector": updated_fv})
 
 
 # ── High-level orchestration entry point ─────────────────────────────────────

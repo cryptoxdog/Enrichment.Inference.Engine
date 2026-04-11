@@ -1,6 +1,6 @@
 """
 chassis/middleware.py
-FastAPI middleware that traces every PacketEnvelope at the chassis boundary.
+FastAPI middleware that traces transport requests at the chassis boundary.
 Emits: packet_id, action, tenant, latency_ms, status to structlog.
 Consumed by Prometheus/Grafana via the observability stack.
 """

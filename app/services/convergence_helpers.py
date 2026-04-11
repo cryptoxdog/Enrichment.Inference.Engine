@@ -13,7 +13,7 @@ These helpers are called by the convergence controller during enrichment passes.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +21,16 @@ logger = logging.getLogger(__name__)
 def extract_per_field_confidence(feature_vector: dict[str, Any]) -> dict[str, float]:
     """
     Extract per-field confidence scores from a feature vector.
-    
+
     Falls back through multiple resolution strategies:
     1. Explicit per_field_confidence dict
     2. field_scores nested dict
     3. Flat confidence applied to all non-meta fields
     4. Empty dict (caller treats all fields as uncertain)
-    
+
     Args:
         feature_vector: Entity feature vector from enrichment pass
-        
+
     Returns:
         Dict mapping field names to confidence scores (0.0-1.0)
     """
@@ -48,13 +48,16 @@ def extract_per_field_confidence(feature_vector: dict[str, Any]) -> dict[str, fl
             flat_val = float(flat)
         except (TypeError, ValueError):
             flat_val = 0.0
-        _META_KEYS = {"confidence", "overall_confidence", "pass_number",
-                      "entity_id", "tenant_id", "per_field_confidence", "field_scores"}
-        return {
-            k: flat_val
-            for k in feature_vector
-            if k not in _META_KEYS
+        meta_keys = {
+            "confidence",
+            "overall_confidence",
+            "pass_number",
+            "entity_id",
+            "tenant_id",
+            "per_field_confidence",
+            "field_scores",
         }
+        return {k: flat_val for k in feature_vector if k not in meta_keys}
 
     logger.debug(
         "extract_per_field_confidence: no confidence data found in feature_vector keys=%s",
@@ -74,12 +77,12 @@ async def apply_return_channel_targets(
     matching targets as seed values into the entity's known_fields.
 
     Called at the start of each convergence pass (pass_number >= 2).
-    
+
     Args:
         entity: Entity dict to potentially update
         tenant_id: Tenant ID for queue lookup
         timeout: Max time to wait for queue drain
-        
+
     Returns:
         The (possibly updated) entity dict
     """
@@ -117,17 +120,17 @@ async def emit_schema_proposal(
     tenant_id: str,
 ) -> dict[str, Any]:
     """
-    Emit a schema_proposal PacketEnvelope for newly discovered fields.
-    
+    Emit a schema-proposal TransportPacket for newly discovered fields.
+
     Called from convergence_controller whenever schema_discovery
     produces new field proposals.
-    
+
     Args:
         proposed_fields: List of field proposal dicts
         tenant_id: Tenant ID
-        
+
     Returns:
-        The emitted packet dict, or empty dict if no fields
+        The emitted packet payload, or empty dict if no fields
     """
     from .contract_enforcement import build_schema_proposal_packet
 
@@ -139,14 +142,14 @@ async def emit_schema_proposal(
         proposed_fields=proposed_fields,
         provenance="convergence_loop_schema_discovery",
     )
-    
+
     logger.info(
         "Emitted schema_proposal packet for tenant=%s with %d new fields (packet_id=%s)",
         tenant_id,
         len(proposed_fields),
-        packet["packet_id"],
+        packet.header.packet_id,
     )
-    return packet
+    return cast("dict[str, Any]", packet.model_dump_json_dict())
 
 
 class DomainSpecRequiredError(TypeError):
@@ -156,14 +159,14 @@ class DomainSpecRequiredError(TypeError):
 def enforce_domain_spec(domain_spec: Any, caller: str = "run_convergence_loop") -> None:
     """
     Enforce that domain_spec is provided.
-    
+
     Domain spec is MANDATORY. Callers that omit it get domain-blind
     enrichment with no sonar optimization.
-    
+
     Args:
         domain_spec: The domain spec to validate
         caller: Name of calling function for error message
-        
+
     Raises:
         DomainSpecRequiredError: If domain_spec is None
     """

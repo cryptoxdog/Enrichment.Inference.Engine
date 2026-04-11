@@ -53,7 +53,10 @@ def check_critical_files() -> list[str]:
         "app/main.py",
         "app/engines/__init__.py",
         "app/engines/handlers.py",
-        "app/engines/chassis_contract.py",
+        "chassis/envelope.py",
+        "chassis/router.py",
+        "app/api/v1/chassis_endpoint.py",
+        "app/services/chassis_handlers.py",
         "pyproject.toml",
         "requirements-ci.txt",
     ]

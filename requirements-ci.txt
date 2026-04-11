@@ -9,6 +9,8 @@
 
 # ── Runtime dependencies ─────────────────────────────────────────────────────
 aiofiles>=23.0.0
+asyncpg
+constellation-node-sdk @ git+https://github.com/cryptoxdog/Gate_SDK.git@main
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 httpx>=0.27.0
@@ -16,8 +18,15 @@ pydantic>=2.9.0
 pydantic-settings>=2.6.0
 pyyaml>=6.0
 redis>=5.0.0
+sqlalchemy
 structlog>=24.0.0
 perplexityai>=0.2.0
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
+opentelemetry-exporter-otlp-proto-grpc>=1.27.0
+opentelemetry-instrumentation-fastapi>=0.48b0
+opentelemetry-instrumentation-httpx>=0.48b0
+opentelemetry-instrumentation-redis>=0.48b0
 
 # ── Lint & type checking ─────────────────────────────────────────────────────
 ruff>=0.4.0,<1.0.0

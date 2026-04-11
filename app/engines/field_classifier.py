@@ -485,7 +485,7 @@ class DomainClassification:
     calibrated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for PacketEnvelope.metadata observability."""
+        """Serialize for TransportPacket.metadata observability."""
         return {
             "domain": self.domain,
             "field_map": {k: v.value for k, v in self.field_map.items()},

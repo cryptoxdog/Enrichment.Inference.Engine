@@ -1,26 +1,25 @@
 # ═══════════════════════════════════════════════════════════════
-# Contract: L9 PacketEnvelope Protocol
-# Source:   chassis/envelope.py, chassis/router.py, chassis/registry.py
-#           app/api/v1/chassis_endpoint.py
-# Version:  1.0.0
-# Updated:  2026-04-05
+# Contract: L9 TransportPacket Runtime Protocol
+# Source:   constellation_node_sdk runtime + app/main.py
+# Version:  2.0.0
+# Updated:  2026-04-11
 # ═══════════════════════════════════════════════════════════════
 
-protocol_name: L9PacketEnvelope
-version: "1.0.0"
+protocol_name: L9TransportPacketRuntime
+version: "2.0.0"
 description: |
-  The L9 chassis node-to-node wire protocol. Every L9 constellation node
-  implements inflate_ingress / deflate_egress. The enrichment engine is the
-  destination node `enrichment-engine`.
+  The L9 Gate_SDK node-to-node wire protocol. The enrichment engine receives
+  canonical TransportPacket requests through the SDK-owned `/v1/execute`
+  runtime and returns canonical TransportPacket responses.
 
-  Flow: raw HTTP body → inflate_ingress → route to handler → deflate_egress → wire-format result
+  Flow: raw HTTP body -> SDK validation -> registered handler -> TransportPacket response
 
 source_node_field: source_node
 destination_node: enrichment-engine
 transport: HTTP POST /v1/execute
-auth: X-API-Key header (same key as external API)
+auth: SDK transport validation / Gate-managed routing
 
-# ── Ingress (inflate_ingress) ──────────────────────────────
+# ── Ingress (TransportPacket request) ──────────────────────
 ingress_schema:
   type: object
   required:
@@ -30,8 +29,8 @@ ingress_schema:
     action:
       type: string
       description: |
-        Handler action to invoke. Must have a registered handler in chassis.registry.
-      enum: [enrich, enrichbatch, converge, discover, enrich_and_sync, writeback]
+        Handler action to invoke. Must have a registered handler in the SDK runtime registry.
+      enum: [enrich, enrichbatch, converge, discover, enrich-and-sync, writeback]
     payload:
       type: object
       description: Action-specific payload. Must be a dict (not null, not array).
@@ -97,7 +96,7 @@ ingress_schema:
       items:
         type: object
 
-# ── Egress (deflate_egress) ────────────────────────────────
+# ── Egress (TransportPacket response) ──────────────────────
 egress_schema:
   type: object
   properties:
@@ -138,7 +137,7 @@ egress_schema:
     lineage:
       type: object
       description: |
-        parent_ids set to [ingress.packet_id].
+        parent_id set to ingress packet id.
         generation incremented by 1.
     governance:
       type: object
@@ -155,7 +154,7 @@ egress_schema:
             type: string
           timestamp:
             type: string
-      description: Appended with enrichment-engine respond entry.
+      description: Appended by the SDK runtime with enrichment-engine completion metadata.
     delegation_chain:
       type: array
 
@@ -181,7 +180,7 @@ registered_handlers:
     source_file: app/engines/orchestration_layer.py
     description: Schema discovery for a domain entity.
 
-  - action: enrich_and_sync
+  - action: enrich-and-sync
     handler: handle_enrich_and_sync
     source_file: app/engines/orchestration_layer.py
     description: Enrich then sync result to GRAPH node.
@@ -217,4 +216,3 @@ error_modes:
     raises: Exception
     http_status: 500
     message: "Internal enrichment error"
-

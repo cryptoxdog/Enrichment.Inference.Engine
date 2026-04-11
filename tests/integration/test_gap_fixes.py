@@ -110,16 +110,14 @@ class TestGraphSyncAndScoreInvalidationHooks:
         from app.core.config import Settings
         from app.services import graph_sync_hooks
 
-        mock_settings = Settings(graph_service_url="https://graph-node:8000", perplexity_api_key="")
+        mock_settings = Settings(gate_url="https://gate-node:8080", perplexity_api_key="")
         monkeypatch.setattr(graph_sync_hooks, "get_settings", lambda: mock_settings)
         mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        with patch("httpx.AsyncClient") as mock_client:
-            instance = AsyncMock()
-            instance.post = AsyncMock(return_value=mock_response)
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=instance)
-            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_response.header.packet_id = "pkt-response"
+        with patch.object(graph_sync_hooks, "GateClient") as mock_client:
+            instance = MagicMock()
+            instance.send_to_gate = AsyncMock(return_value=mock_response)
+            mock_client.return_value = instance
             await graph_sync_hooks.trigger_graph_sync(
                 entity_id="e1",
                 tenant_id="t1",
@@ -128,10 +126,10 @@ class TestGraphSyncAndScoreInvalidationHooks:
                 lineage_id="lin_001",
                 packet_id="pkt_001",
             )
-        instance.post.assert_called_once()
-        call_kwargs = instance.post.call_args
-        assert "/v1/sync" in call_kwargs[0][0]
-        assert call_kwargs[1]["headers"]["X-L9-Lineage"] == "lin_001"
+        instance.send_to_gate.assert_awaited_once()
+        sent_packet = instance.send_to_gate.await_args.args[0]
+        assert sent_packet.header.action == "graph-sync"
+        assert sent_packet.payload["lineage_id"] == "lin_001"
 
     @pytest.mark.asyncio
     async def test_trigger_graph_sync_skips_when_no_url(self, monkeypatch):
@@ -139,9 +137,9 @@ class TestGraphSyncAndScoreInvalidationHooks:
         from app.services import graph_sync_hooks
 
         monkeypatch.setattr(
-            graph_sync_hooks, "get_settings", lambda: Settings(perplexity_api_key="")
+            graph_sync_hooks, "get_settings", lambda: Settings(gate_url="", perplexity_api_key="")
         )
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch.object(graph_sync_hooks, "GateClient") as mock_client:
             await graph_sync_hooks.trigger_graph_sync(
                 entity_id="e1",
                 tenant_id="t1",
@@ -157,23 +155,23 @@ class TestGraphSyncAndScoreInvalidationHooks:
         from app.core.config import Settings
         from app.services import graph_sync_hooks
 
-        mock_settings = Settings(score_service_url="https://score-node:8001", perplexity_api_key="")
+        mock_settings = Settings(gate_url="https://gate-node:8080", perplexity_api_key="")
         monkeypatch.setattr(graph_sync_hooks, "get_settings", lambda: mock_settings)
         mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        with patch("httpx.AsyncClient") as mock_client:
-            instance = AsyncMock()
-            instance.post = AsyncMock(return_value=mock_response)
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=instance)
-            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_response.header.packet_id = "pkt-response"
+        with patch.object(graph_sync_hooks, "GateClient") as mock_client:
+            instance = MagicMock()
+            instance.send_to_gate = AsyncMock(return_value=mock_response)
+            mock_client.return_value = instance
             await graph_sync_hooks.invalidate_score_cache(
                 entity_id="e1",
                 tenant_id="t1",
                 lineage_id="lin_002",
                 packet_id="pkt_002",
             )
-        instance.post.assert_called_once()
-        assert "/v1/invalidate" in instance.post.call_args[0][0]
+        instance.send_to_gate.assert_awaited_once()
+        sent_packet = instance.send_to_gate.await_args.args[0]
+        assert sent_packet.header.action == "score-invalidate"
 
 
 class TestConvergeEndpointExecutesController:

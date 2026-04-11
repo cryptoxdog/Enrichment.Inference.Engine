@@ -1,28 +1,16 @@
 """
-PacketEnvelope contract enforcement for L9 chassis communication.
+TransportPacket contract enforcement for Gate-routed inter-node communication.
 
-All inter-node data flows must pass through enforce_packet_envelope() before
-processing. This ensures content_hash, envelope_hash, and required fields are
-validated - no silent bypass paths.
-
-Usage:
-    from app.services.contract_enforcement import enforce_packet_envelope, ContractViolationError
-
-    # Validate incoming packet
-    envelope = enforce_packet_envelope(raw_payload, expected_type="enrich_request")
-
-    # Build outbound packets
-    packet = build_graph_sync_packet(tenant_id="acme", entity_type="Account", batch=[...])
+The function names are preserved to avoid a broad call-site rewrite, but the
+underlying contract is the SDK `TransportPacket`.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
-import time
-import uuid
 from typing import Any
+
+from constellation_node_sdk.transport import TransportPacket, create_transport_packet
 
 logger = logging.getLogger(__name__)
 
@@ -42,31 +30,32 @@ class ContractViolationError(RuntimeError):
         logger.error(msg)
 
 
-# Allowed packet types for L9 ENRICH node
-_ALLOWED_PACKET_TYPES: frozenset[str] = frozenset([
-    "enrich_request",
-    "enrich_result",
-    "inference_result",
-    "graph_sync",
-    "graph_inference_result",
-    "schema_proposal",
-    "community_export",
-    "health_check",
-    "admin_command",
-])
+_ACTION_ALIASES = {
+    "admin_command": "admin-command",
+    "community_export": "community-export",
+    "enrich_request": "enrich-request",
+    "enrich_result": "enrich-result",
+    "graph_inference_result": "graph-inference-result",
+    "graph_sync": "graph-sync",
+    "health_check": "health-check",
+    "inference_result": "inference-result",
+    "schema_proposal": "schema-proposal",
+}
+
+_ALLOWED_ACTIONS: frozenset[str] = frozenset(_ACTION_ALIASES.values())
 
 
 # Required fields per packet type
-_REQUIRED_FIELDS: dict[str, list[str]] = {
-    "enrich_request": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "entity_id"],
-    "enrich_result": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "entity_id", "enriched_fields"],
-    "inference_result": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "inference_outputs"],
-    "graph_sync": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "entity_type", "batch"],
-    "graph_inference_result": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "inference_outputs"],
-    "schema_proposal": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "proposed_fields"],
-    "community_export": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "communities"],
-    "health_check": ["packet_id", "tenant_id"],
-    "admin_command": ["packet_id", "tenant_id", "content_hash", "envelope_hash", "subaction"],
+_REQUIRED_PAYLOAD_FIELDS: dict[str, list[str]] = {
+    "admin-command": ["subaction"],
+    "community-export": ["communities"],
+    "enrich-request": ["entity_id"],
+    "enrich-result": ["entity_id", "enriched_fields"],
+    "graph-inference-result": ["inference_outputs"],
+    "graph-sync": ["entity_type", "batch"],
+    "health-check": [],
+    "inference-result": ["inference_outputs"],
+    "schema-proposal": ["proposed_fields"],
 }
 
 
@@ -74,90 +63,38 @@ def enforce_packet_envelope(
     packet: Any,
     *,
     expected_type: str,
-) -> dict[str, Any]:
+) -> TransportPacket:
     """
-    Validate that `packet` is a well-formed PacketEnvelope of `expected_type`.
-
-    Checks:
-      1. packet is a dict (or Pydantic model with .model_dump())
-      2. packet_type matches expected_type
-      3. packet_type is in _ALLOWED_PACKET_TYPES
-      4. All required fields for the type are present
-      5. content_hash matches SHA-256 of the canonical content payload
-      6. envelope_hash is present and non-empty
-
-    Returns the validated dict.
-    Raises ContractViolationError on ANY failure — no silent returns.
+    Validate that `packet` is a well-formed TransportPacket of `expected_type`.
     """
-    if hasattr(packet, "model_dump"):
-        packet = packet.model_dump(mode="python")
-    if not isinstance(packet, dict):
-        raise ContractViolationError(
-            f"Expected a dict or Pydantic model, got {type(packet).__name__}",
-        )
+    if not isinstance(packet, TransportPacket):
+        raise ContractViolationError(f"Expected a TransportPacket, got {type(packet).__name__}")
 
-    packet_id = packet.get("packet_id", "<no_id>")
+    normalized_type = _normalize_action(expected_type)
+    packet_id = str(packet.header.packet_id)
+    actual_action = packet.header.action
 
-    actual_type = packet.get("packet_type") or packet.get("type")
-    if actual_type != expected_type:
+    if normalized_type not in _ALLOWED_ACTIONS:
         raise ContractViolationError(
-            f"packet_type mismatch: expected={expected_type!r} got={actual_type!r}",
+            f"action={normalized_type!r} is not in the allowed set",
             packet_id=packet_id,
         )
 
-    if expected_type not in _ALLOWED_PACKET_TYPES:
+    if actual_action != normalized_type:
         raise ContractViolationError(
-            f"packet_type={expected_type!r} is not in the allowed set",
+            f"action mismatch: expected={normalized_type!r} got={actual_action!r}",
             packet_id=packet_id,
         )
 
-    required = _REQUIRED_FIELDS.get(expected_type, [])
+    required = _REQUIRED_PAYLOAD_FIELDS.get(normalized_type, [])
     for field_name in required:
-        if field_name not in packet or packet[field_name] is None:
+        if field_name not in packet.payload or packet.payload[field_name] is None:
             raise ContractViolationError(
-                f"Missing or null required field '{field_name}' for type={expected_type!r}",
-                packet_id=packet_id,
-            )
-
-    if "content_hash" in required:
-        _verify_content_hash(packet, expected_type, packet_id)
-
-    if "envelope_hash" in required:
-        if not packet.get("envelope_hash"):
-            raise ContractViolationError(
-                "envelope_hash is empty",
+                f"Missing or null required field '{field_name}' for action={normalized_type!r}",
                 packet_id=packet_id,
             )
 
     return packet
-
-
-def _verify_content_hash(
-    packet: dict[str, Any],
-    packet_type: str,
-    packet_id: str,
-) -> None:
-    """Recompute SHA-256 over the canonical content payload and compare."""
-    _HASH_EXCLUDED = {
-        "content_hash", "envelope_hash", "packet_id", "packet_type",
-        "type", "created_at", "lineage", "tenant_context"
-    }
-    content_payload = {k: v for k, v in packet.items() if k not in _HASH_EXCLUDED}
-    try:
-        payload_bytes = json.dumps(content_payload, sort_keys=True, default=str).encode()
-    except (TypeError, ValueError) as exc:
-        raise ContractViolationError(
-            f"Cannot serialize content payload for hash verification: {exc}",
-            packet_id=packet_id,
-        ) from exc
-
-    expected_hash = hashlib.sha256(payload_bytes).hexdigest()
-    actual_hash = packet.get("content_hash", "")
-    if expected_hash != actual_hash:
-        raise ContractViolationError(
-            f"content_hash mismatch: expected={expected_hash!r} got={actual_hash!r}",
-            packet_id=packet_id,
-        )
 
 
 def build_graph_sync_packet(
@@ -165,41 +102,18 @@ def build_graph_sync_packet(
     tenant_id: str,
     entity_type: str,
     batch: list[dict[str, Any]],
-    tenant_context: dict[str, Any] | None = None,
-    lineage: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build a contract-compliant graph_sync PacketEnvelope for sending to GRAPH node."""
-    content_payload: dict[str, Any] = {
-        "entity_type": entity_type,
-        "batch": batch,
-    }
-    if tenant_context:
-        content_payload["tenant_context"] = tenant_context
-
-    payload_bytes = json.dumps(content_payload, sort_keys=True, default=str).encode()
-    content_hash = hashlib.sha256(payload_bytes).hexdigest()
-
-    packet_id = f"gs_{uuid.uuid4().hex}"
-    envelope_meta = {"packet_id": packet_id, "tenant_id": tenant_id, "content_hash": content_hash}
-    envelope_hash = hashlib.sha256(
-        json.dumps(envelope_meta, sort_keys=True).encode()
-    ).hexdigest()
-
-    packet = {
-        "packet_id": packet_id,
-        "packet_type": "graph_sync",
-        "tenant_id": tenant_id,
-        "entity_type": entity_type,
-        "batch": batch,
-        "content_hash": content_hash,
-        "envelope_hash": envelope_hash,
-        "created_at": time.time(),
-    }
-    if tenant_context:
-        packet["tenant_context"] = tenant_context
-    if lineage:
-        packet["lineage"] = lineage
-
+) -> TransportPacket:
+    """Build a contract-compliant graph-sync TransportPacket for sending to Gate."""
+    packet = create_transport_packet(
+        action="graph-sync",
+        payload={"entity_type": entity_type, "batch": batch},
+        tenant=tenant_id,
+        source_node="enrichment-engine",
+        destination_node="gate",
+        reply_to="enrichment-engine",
+        classification="internal",
+        compliance_tags=("GRAPH_SYNC",),
+    )
     enforce_packet_envelope(packet, expected_type="graph_sync")
     return packet
 
@@ -209,30 +123,18 @@ def build_schema_proposal_packet(
     tenant_id: str,
     proposed_fields: list[dict[str, Any]],
     provenance: str = "schema_discovery",
-) -> dict[str, Any]:
-    """Build a contract-compliant schema_proposal PacketEnvelope."""
-    content_payload: dict[str, Any] = {
-        "proposed_fields": proposed_fields,
-        "provenance": provenance,
-    }
-    payload_bytes = json.dumps(content_payload, sort_keys=True, default=str).encode()
-    content_hash = hashlib.sha256(payload_bytes).hexdigest()
-    packet_id = f"sp_{uuid.uuid4().hex}"
-    envelope_meta = {"packet_id": packet_id, "tenant_id": tenant_id, "content_hash": content_hash}
-    envelope_hash = hashlib.sha256(
-        json.dumps(envelope_meta, sort_keys=True).encode()
-    ).hexdigest()
-
-    packet = {
-        "packet_id": packet_id,
-        "packet_type": "schema_proposal",
-        "tenant_id": tenant_id,
-        "proposed_fields": proposed_fields,
-        "provenance": provenance,
-        "content_hash": content_hash,
-        "envelope_hash": envelope_hash,
-        "created_at": time.time(),
-    }
+) -> TransportPacket:
+    """Build a contract-compliant schema-proposal TransportPacket."""
+    packet = create_transport_packet(
+        action="schema-proposal",
+        payload={"proposed_fields": proposed_fields, "provenance": provenance},
+        tenant=tenant_id,
+        source_node="enrichment-engine",
+        destination_node="gate",
+        reply_to="enrichment-engine",
+        classification="internal",
+        compliance_tags=("SCHEMA_EVOLUTION",),
+    )
     enforce_packet_envelope(packet, expected_type="schema_proposal")
     return packet
 
@@ -244,37 +146,27 @@ def build_enrich_result_packet(
     enriched_fields: dict[str, Any],
     confidence: float,
     pass_count: int,
-    lineage: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build a contract-compliant enrich_result PacketEnvelope."""
-    content_payload: dict[str, Any] = {
-        "entity_id": entity_id,
-        "enriched_fields": enriched_fields,
-        "confidence": confidence,
-        "pass_count": pass_count,
-    }
-    payload_bytes = json.dumps(content_payload, sort_keys=True, default=str).encode()
-    content_hash = hashlib.sha256(payload_bytes).hexdigest()
-    packet_id = f"er_{uuid.uuid4().hex}"
-    envelope_meta = {"packet_id": packet_id, "tenant_id": tenant_id, "content_hash": content_hash}
-    envelope_hash = hashlib.sha256(
-        json.dumps(envelope_meta, sort_keys=True).encode()
-    ).hexdigest()
-
-    packet = {
-        "packet_id": packet_id,
-        "packet_type": "enrich_result",
-        "tenant_id": tenant_id,
-        "entity_id": entity_id,
-        "enriched_fields": enriched_fields,
-        "confidence": confidence,
-        "pass_count": pass_count,
-        "content_hash": content_hash,
-        "envelope_hash": envelope_hash,
-        "created_at": time.time(),
-    }
-    if lineage:
-        packet["lineage"] = lineage
-
+) -> TransportPacket:
+    """Build a contract-compliant enrich-result TransportPacket."""
+    packet = create_transport_packet(
+        action="enrich-result",
+        payload={
+            "entity_id": entity_id,
+            "enriched_fields": enriched_fields,
+            "confidence": confidence,
+            "pass_count": pass_count,
+        },
+        tenant=tenant_id,
+        source_node="enrichment-engine",
+        destination_node="gate",
+        reply_to="enrichment-engine",
+        classification="internal",
+        compliance_tags=("ENRICH_RESULT",),
+    )
     enforce_packet_envelope(packet, expected_type="enrich_result")
     return packet
+
+
+def _normalize_action(name: str) -> str:
+    normalized = name.strip().lower()
+    return _ACTION_ALIASES.get(normalized, normalized.replace("_", "-"))

@@ -42,7 +42,7 @@ MODELS (Schema — frozen Pydantic v2): app/models/
 | app/ | FastAPI application root | Platform | T2+ | @cryptoxdog |
 | app/api/ | HTTP route handlers | API team | T3+ | @cryptoxdog |
 | app/engines/ | Core enrichment engine modules | Engine team | T3+ | @cryptoxdog |
-| app/engines/chassis_contract.py | Dispatch contract | Platform | T4 | @cryptoxdog |
+| chassis/ | Transport wire envelope + router (no FastAPI in envelope) | Platform | T4 | @cryptoxdog |
 | app/engines/handlers.py | Request handlers | Platform | T4 | @cryptoxdog |
 | app/engines/graph_sync_client.py | Graph protocol | Platform | T4 | @cryptoxdog |
 | app/models/ | Pydantic v2 schemas (frozen) | Schema team | T5 | @cryptoxdog |
@@ -83,9 +83,9 @@ MODELS (Schema — frozen Pydantic v2): app/models/
 | File | Purpose | Agent Relevance |
 |---|---|---|
 | app/main.py | FastAPI app entrypoint | Entry point for all HTTP traffic |
-| app/engines/chassis_contract.py | T4 — dispatch contract | Do not modify without T4 gate |
-| app/engines/handlers.py | T4 — request handlers | Sync with chassis_contract.py always |
-| app/models/packet.py | PacketEnvelope (frozen) | Do not mutate instances |
+| chassis/envelope.py | T4 — inflate/deflate wire envelope | No `app/` imports; pair with router |
+| app/engines/handlers.py | T4 — request handlers | Sync with transport contract bundle (AGENTS.md C-13) |
+| constellation_node_sdk.transport | TransportPacket | SDK types — do not redefine locally |
 | engine/utils/security.py | sanitize_label() | Always use for Cypher strings |
 | tools/audit_engine.py | 27-rule audit engine | Run via make audit |
 | tools/verify_contracts.py | L9_META verifier (SHA: 2d30a79) | Run via make verify — confirmed present |

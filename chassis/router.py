@@ -1,6 +1,6 @@
 """
 chassis/router.py
-Packet router — the ONLY entry point for inbound PacketEnvelopes.
+Packet router — the ONLY entry point for inbound transport wire envelopes (dict payloads through inflate/deflate).
 
 Flow:
     raw HTTP body

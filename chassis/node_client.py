@@ -1,7 +1,7 @@
 """
 chassis/node_client.py
 Generic constellation node HTTP client.
-Any node can call any other node using this client + the PacketEnvelope protocol.
+Any node can call any other node using this client + the constellation transport protocol (wire envelopes / TransportPacket).
 
 Usage:
     from chassis.node_client import NodeClient
@@ -31,7 +31,7 @@ BACKOFF_BASE = 1.5
 class NodeClient:
     """
     Typed wrapper for POST /v1/execute on any constellation node.
-    Handles PacketEnvelope construction, signing, retry, and hop_trace.
+    Handles transport envelope construction, signing, retry, and hop_trace.
     """
 
     def __init__(
@@ -56,7 +56,7 @@ class NodeClient:
         parent_packet_id: str | None = None,
         intent: str = "",
     ) -> dict[str, Any]:
-        """Send a PacketEnvelope and return the response envelope."""
+        """Send a transport envelope and return the response envelope."""
         envelope = self._build(action, payload, tenant, parent_packet_id, intent)
         return await self._send(envelope)
 

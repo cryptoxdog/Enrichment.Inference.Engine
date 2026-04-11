@@ -18,16 +18,16 @@ import os
 import time
 from typing import Annotated
 
+import structlog
 from constellation_node_sdk import LifecycleHook, NodeRuntimeConfig, create_node_app
 from constellation_node_sdk.runtime.handlers import clear_handlers
-import structlog
 from fastapi import Depends
 
+from .api.v1.attestation import router as attestation_router
 from .api.v1.chassis_endpoint import router as chassis_router
 from .api.v1.converge import router as converge_router
 from .api.v1.discover import router as discover_router
 from .api.v1.fields import router as fields_router
-from .score.score_api import router as score_router
 from .core.auth import verify_api_key
 from .core.config import Settings, get_settings
 from .core.logging_config import setup_logging
@@ -42,6 +42,7 @@ from .models.schemas import (
     EnrichResponse,
     HealthCheckResponse,
 )
+from .score.score_api import router as score_router
 from .services.idempotency import IdempotencyStore
 from .services.kb_resolver import KBResolver
 
@@ -184,6 +185,7 @@ app = create_node_app(
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 setup_telemetry(app)
 
+app.include_router(attestation_router)
 app.include_router(chassis_router)
 app.include_router(converge_router)
 app.include_router(discover_router)

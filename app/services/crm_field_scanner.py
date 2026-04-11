@@ -549,7 +549,7 @@ def generate_discovery_report(
     )
 
 
-# ── Serialization for PacketEnvelope ────────────────────────
+# ── Serialization for TransportPacket ────────────────────────
 
 
 def scan_result_to_dict(result: ScanResult) -> dict[str, Any]:

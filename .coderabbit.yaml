@@ -53,7 +53,7 @@ reviews:
     3. No FastAPI imports in engine/ - chassis owns HTTP
     4. No raw HTTP calls between nodes - use delegate_to_node()
     5. No direct writes to packetstore - use ingest_packet()
-    6. No redefining PacketEnvelope/TenantContext/ExecuteRequest - import from l9-core
+    6. No redefining TransportPacket or SDK transport types — import from constellation_node_sdk (not ad-hoc copies)
     7. No configuring structlog or logging.basicConfig in engine/ - chassis does it
     8. No bare except: clauses
     9. No NotImplementedError stubs

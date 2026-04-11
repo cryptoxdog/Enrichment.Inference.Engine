@@ -9,12 +9,12 @@
 # token_estimate: 1465
 # ssot_for: [file-lookup, file-modification-rules, token-budgets]
 # load_when: [new_file_creation, file_lookup, onboarding]
-# references: [AGENT.md, REPO_MAP.md]
+# references: [AGENTS.md, REPO_MAP.md]
 # --- /L9_META ---
 
 # FILE_INDEX_FOR_AGENTS.md — File Lookup Index
 
-**VERSION**: 2.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
+**VERSION**: 2.1.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-11
 
 ---
 
@@ -22,12 +22,12 @@
 
 | Step | File | Tokens | Purpose |
 |---|---|---|---|
-| 1 | AGENT_BOOTSTRAP.md | ~520 | Context loading strategy |
-| 2 | AGENT.md | ~2,075 | Contracts, tiers, gates, patterns |
-| 3 | GUARDRAILS.md | ~600 | Hard prohibitions |
-| 4 | ARCHITECTURE.md | ~800 | System topology |
-| 5 | REPO_MAP.md | ~1,217 | File locations and module ownership |
-| Total | | ~5,212 | 16% of 32K window |
+| 1 | [AGENTS.md](AGENTS.md) | ~2,400 | Contracts, tiers, gates, patterns (primary SSOT) |
+| 2 | [GUARDRAILS.md](GUARDRAILS.md) | ~600 | Hard prohibitions |
+| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | ~800 | System topology |
+| 4 | [REPO_MAP.md](REPO_MAP.md) | ~1,217 | File locations and module ownership |
+| 5 | [llms.txt](llms.txt) | ~150 | Short index + doc links |
+| Total | | ~5,167 | Budget for first pass |
 
 ---
 
@@ -35,20 +35,20 @@
 
 | File | Est. Tokens | Load Priority |
 |---|---|---|
-| AGENT_BOOTSTRAP.md | ~520 | ALWAYS (first) |
-| AGENT.md | ~2,075 | ALWAYS |
-| CLAUDE.md | ~210 | Claude only |
+| AGENTS.md | ~2,400 | ALWAYS |
+| CLAUDE.md | ~210 | Claude-only addendum |
 | INVARIANTS.md | ~2,834 | On-demand |
 | REPO_MAP.md | ~1,217 | Trigger: new file |
 | EXECUTION_FLOWS.md | ~825 | Trigger: control flow |
 | DEPENDENCY_SURFACE.md | ~1,171 | Trigger: dep change |
-| CONFIG_ENV_CONTRACT.md | ~1,556 | Trigger: env vars |
+| CONFIG_ENV_CONTRACT.md | ~1,200 | Trigger: env vars (detail in docs/contracts/config/env-contract.yaml) |
+| docs/contracts/config/env-contract.yaml | variable | Machine SSOT for env vars |
 | CI_WHITELIST_REGISTER.md | ~1,485 | Trigger: CI failure |
-| AI_AGENT_REVIEW_CHECKLIST.md | ~1,570 | Always (PR review) |
+| AI_AGENT_REVIEW_CHECKLIST.md | ~1,570 | PR review |
 | TROUBLESHOOTING.md | ~680 | Trigger: errors |
-| .cursorrules (adjacent) | ~6,500 | Cursor/Copilot always |
-| GUARDRAILS.md (adjacent) | ~600 | ALWAYS |
-| Pack Total | ~16,354 | — |
+| .cursor/rules/*.mdc | varies | Cursor policy (repo) |
+| GUARDRAILS.md | ~600 | ALWAYS |
+| Pack Total | ~15,000+ | — |
 
 ---
 
@@ -56,15 +56,16 @@
 
 | Need | File | Section |
 |---|---|---|
-| What can I do without human review? | AGENT.md | Agent Autonomy Tiers |
+| What can I do without human review? | AGENTS.md | Autonomy Tiers |
 | What is forbidden? | GUARDRAILS.md | What agents MUST NOT do |
-| Which files can I never modify? | AGENT.md | Protected Files (T4/T5) |
-| What are the 7 gates? | AGENT.md | Mandatory Pre-Commit Command |
-| All env variables | CONFIG_ENV_CONTRACT.md | Environment Variables |
-| Handler signature pattern | AGENT.md | C-02 |
-| Canonical import patterns | AGENT.md | Canonical Import Patterns |
-| Forbidden code patterns | AGENT.md | Forbidden Patterns |
-| Module boundary rules | AGENT.md | C-01 |
+| Which files can I never modify? | AGENTS.md | Protected Files (T4/T5) |
+| What are the 7 gates? | AGENTS.md | Mandatory Pre-Commit Command |
+| All env variables | docs/contracts/config/env-contract.yaml | `variables` + `required_for_*` |
+| Env summary | CONFIG_ENV_CONTRACT.md | Human-oriented summary |
+| Handler signature pattern | AGENTS.md | C-02 |
+| Canonical import patterns | AGENTS.md | Canonical Import Patterns |
+| Forbidden code patterns | AGENTS.md | Forbidden Patterns |
+| Module boundary rules | AGENTS.md | C-01 |
 | Directory structure | REPO_MAP.md | Directory Map |
 | All invariants | INVARIANTS.md | INV-1 through INV-20 |
 | CI gate details + waivers | CI_WHITELIST_REGISTER.md | Merge-Blocking Gates |
@@ -83,14 +84,19 @@
 ## File Modification Rules
 
 ### NEVER Modify Without T4/T5 Human Review
-- app/engines/chassis_contract.py
-- app/engines/handlers.py
-- app/engines/graph_sync_client.py
-- app/models/ (any file)
-- kb/ (any rule file)
-- .github/workflows/ (any workflow)
-- GUARDRAILS.md, AGENTS.md, CLAUDE.md
-- Dockerfile, docker-compose.yml, docker-compose.prod.yml
+
+Per [AGENTS.md](AGENTS.md) protected files (verify table there if this list drifts):
+
+- `app/engines/handlers.py`
+- `app/engines/graph_sync_client.py`
+- `chassis/envelope.py` (TransportPacket envelope boundary)
+- `app/models/` (any file)
+- `kb/` (any rule file)
+- `.github/workflows/` (any workflow)
+- `GUARDRAILS.md`, `AGENTS.md`, `CLAUDE.md`
+- `Dockerfile`, `docker-compose.yml`, `docker-compose.prod.yml`
+
+> **Note:** Legacy `app/engines/chassis_contract.py` was removed; transport contract files are listed in [AGENTS.md](AGENTS.md) and enforced by `tools/verify_contracts.py` + `tools/l9_enrichment_manifest.yaml`.
 
 ### ALWAYS Create With L9_META Header
 Files managed by L9 templates must include the L9_META header block. Copy from any existing file in app/ or tools/.

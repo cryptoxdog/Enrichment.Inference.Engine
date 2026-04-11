@@ -1,33 +1,20 @@
 """
-GRAPH → ENRICH return channel for inference results.
+GRAPH -> ENRICH return channel for inference results.
 
-Receives GRAPH inference outputs (via chassis /v1/execute) and converts them
-into EnrichmentTarget records for injection into the convergence loop.
-
-Architecture (L9 compliant):
-  GRAPH node
-      └─► POST /v1/execute (action=graph_inference_result)
-              └─► Gate Node (chassis routing)
-                      └─► ENRICH /v1/execute handler
-                              └─► GraphReturnChannel.submit()
-                                      └─► EnrichmentTargetQueue (async)
-                                              └─► convergence_controller Pass N+1
-
-This replaces direct GRAPH→ENRICH HTTP calls with proper chassis routing.
+Receives GRAPH inference outputs as `TransportPacket` instances and converts
+them into `EnrichmentTarget` records for injection into the convergence loop.
 """
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from .contract_enforcement import ContractViolationError
+from constellation_node_sdk.transport import TransportPacket, create_transport_packet
+from constellation_node_sdk.transport.errors import TransportValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -58,76 +45,60 @@ class EnrichmentTarget:
         }
 
 
-@dataclass
-class GraphInferenceResultEnvelope:
-    """
-    Representation of a PacketEnvelope[type=graph_inference_result].
-    Validated before injection; raises ContractViolationError on any violation.
-    """
+CONFIDENCE_FLOOR = 0.55
 
-    packet_id: str
-    tenant_id: str
-    inference_outputs: list[dict[str, Any]]
-    content_hash: str
-    envelope_hash: str
 
-    CONFIDENCE_FLOOR: float = 0.55
+def validate_graph_inference_packet(packet: TransportPacket) -> None:
+    """Validate graph inference packet semantics on top of SDK validation."""
+    if packet.header.action != "graph-inference-result":
+        msg = f"expected action='graph-inference-result', got {packet.header.action!r}"
+        raise TransportValidationError(msg)
 
-    def validate(self) -> None:
-        """Hard-fail if the envelope does not meet contract requirements."""
-        if not self.packet_id:
-            raise ContractViolationError("GraphInferenceResultEnvelope.packet_id is empty")
-        if not self.tenant_id:
-            raise ContractViolationError("GraphInferenceResultEnvelope.tenant_id is empty")
-        if not self.content_hash:
-            raise ContractViolationError("GraphInferenceResultEnvelope.content_hash is missing")
-        if not self.envelope_hash:
-            raise ContractViolationError("GraphInferenceResultEnvelope.envelope_hash is missing")
+    outputs = packet.payload.get("inference_outputs")
+    if not isinstance(outputs, list):
+        raise TransportValidationError("'inference_outputs' must be a list")
 
-        payload_bytes = json.dumps(self.inference_outputs, sort_keys=True).encode()
-        expected = hashlib.sha256(payload_bytes).hexdigest()
-        if expected != self.content_hash:
-            raise ContractViolationError(
-                f"content_hash mismatch: expected={expected!r} got={self.content_hash!r}",
+
+def extract_targets_from_packet(packet: TransportPacket) -> list[EnrichmentTarget]:
+    """Convert validated inference outputs to return-channel targets."""
+    validate_graph_inference_packet(packet)
+
+    targets: list[EnrichmentTarget] = []
+    tenant_id = packet.tenant.org_id
+    packet_id = str(packet.header.packet_id)
+    for output in packet.payload.get("inference_outputs", []):
+        confidence = float(output.get("confidence", 0.0))
+        if confidence < CONFIDENCE_FLOOR:
+            logger.debug(
+                "Skipping low-confidence inference output (%.3f < %.3f) for entity=%s field=%s",
+                confidence,
+                CONFIDENCE_FLOOR,
+                output.get("entity_id"),
+                output.get("field"),
             )
-        if not isinstance(self.inference_outputs, list):
-            raise ContractViolationError("inference_outputs must be a list")
+            continue
 
-    def to_targets(self) -> list[EnrichmentTarget]:
-        """Convert validated outputs to EnrichmentTarget records."""
-        targets: list[EnrichmentTarget] = []
-        for output in self.inference_outputs:
-            confidence = float(output.get("confidence", 0.0))
-            if confidence < self.CONFIDENCE_FLOOR:
-                logger.debug(
-                    "Skipping low-confidence inference output (%.3f < %.3f) for entity=%s field=%s",
-                    confidence,
-                    self.CONFIDENCE_FLOOR,
-                    output.get("entity_id"),
-                    output.get("field"),
-                )
-                continue
-            targets.append(
-                EnrichmentTarget(
-                    entity_id=str(output["entity_id"]),
-                    tenant_id=self.tenant_id,
-                    field_name=str(output["field"]),
-                    seed_value=output.get("value"),
-                    source_confidence=confidence,
-                    origin_packet_id=self.packet_id,
-                    origin_inference_rule=str(output.get("rule", "unknown")),
-                )
+        targets.append(
+            EnrichmentTarget(
+                entity_id=str(output["entity_id"]),
+                tenant_id=tenant_id,
+                field_name=str(output["field"]),
+                seed_value=output.get("value"),
+                source_confidence=confidence,
+                origin_packet_id=packet_id,
+                origin_inference_rule=str(output.get("rule", "unknown")),
             )
-        return targets
+        )
+    return targets
 
 
 class GraphReturnChannel:
     """
     Async queue bridging GRAPH inference outputs back to ENRICH convergence loop.
 
-    Usage (chassis handler):
+    Usage (SDK handler):
         channel = GraphReturnChannel.get_instance()
-        await channel.submit(envelope)
+        await channel.submit(packet)
 
     Usage (convergence_controller):
         targets = await channel.drain(tenant_id="acme", timeout=0.5)
@@ -158,15 +129,16 @@ class GraphReturnChannel:
             self._queues[tenant_id] = asyncio.Queue(maxsize=self._maxsize)
         return self._queues[tenant_id]
 
-    async def submit(self, envelope: GraphInferenceResultEnvelope) -> int:
+    async def submit(self, packet: TransportPacket) -> int:
         """
-        Validate the envelope, convert outputs to targets, enqueue them.
+        Validate the packet, convert outputs to targets, enqueue them.
         Returns the number of targets enqueued.
-        Raises ContractViolationError if the envelope is invalid.
+        Raises TransportValidationError if the packet is invalid.
         """
-        envelope.validate()
-        targets = envelope.to_targets()
-        q = self._queue_for(envelope.tenant_id)
+        validate_graph_inference_packet(packet)
+        targets = extract_targets_from_packet(packet)
+        tenant_id = packet.tenant.org_id
+        q = self._queue_for(tenant_id)
         count = 0
         for target in targets:
             try:
@@ -176,7 +148,7 @@ class GraphReturnChannel:
                 self._rejected += 1
                 logger.warning(
                     "EnrichmentTargetQueue full for tenant=%s — dropping target entity=%s field=%s",
-                    envelope.tenant_id,
+                    tenant_id,
                     target.entity_id,
                     target.field_name,
                 )
@@ -184,8 +156,8 @@ class GraphReturnChannel:
         logger.info(
             "GraphReturnChannel: submitted %d targets for tenant=%s (packet=%s)",
             count,
-            envelope.tenant_id,
-            envelope.packet_id,
+            tenant_id,
+            packet.header.packet_id,
         )
         return count
 
@@ -222,7 +194,7 @@ class GraphReturnChannel:
             )
         return targets
 
-    def stats(self) -> dict[str, int]:
+    def stats(self) -> dict[str, Any]:
         return {
             "submitted": self._submitted,
             "drained": self._drained,
@@ -235,51 +207,36 @@ def build_graph_inference_result_envelope(
     *,
     tenant_id: str,
     inference_outputs: list[dict[str, Any]],
-) -> GraphInferenceResultEnvelope:
+) -> TransportPacket:
     """
-    Factory to build a properly hashed GraphInferenceResultEnvelope.
-    Used by GRAPH node when sending results via chassis.
+    Factory to build a valid graph inference TransportPacket.
     """
-    payload_bytes = json.dumps(inference_outputs, sort_keys=True).encode()
-    content_hash = hashlib.sha256(payload_bytes).hexdigest()
-    packet_id = f"gir_{uuid.uuid4().hex}"
-    envelope_payload = {
-        "packet_id": packet_id,
-        "tenant_id": tenant_id,
-        "content_hash": content_hash,
-    }
-    envelope_hash = hashlib.sha256(
-        json.dumps(envelope_payload, sort_keys=True).encode()
-    ).hexdigest()
-    return GraphInferenceResultEnvelope(
-        packet_id=packet_id,
-        tenant_id=tenant_id,
-        inference_outputs=inference_outputs,
-        content_hash=content_hash,
-        envelope_hash=envelope_hash,
+    return create_transport_packet(
+        action="graph-inference-result",
+        payload={"inference_outputs": inference_outputs},
+        tenant=tenant_id,
+        source_node="graph-service",
+        destination_node="gate",
+        reply_to="graph-service",
+        classification="internal",
+        compliance_tags=("GRAPH_INFERENCE",),
     )
 
 
-async def handle_graph_inference_result(payload: dict[str, Any]) -> dict[str, Any]:
+async def handle_graph_inference_result(
+    tenant: str,
+    payload: dict[str, Any],
+    packet: TransportPacket,
+) -> dict[str, Any]:
     """
-    Chassis handler for action=graph_inference_result.
-    
-    Register this in the chassis router:
-        chassis.router.register_handler("graph_inference_result", handle_graph_inference_result)
+    Runtime handler for action=graph-inference-result.
     """
-    envelope = GraphInferenceResultEnvelope(
-        packet_id=payload.get("packet_id", ""),
-        tenant_id=payload.get("tenant_id", ""),
-        inference_outputs=payload.get("inference_outputs", []),
-        content_hash=payload.get("content_hash", ""),
-        envelope_hash=payload.get("envelope_hash", ""),
-    )
-    
     channel = GraphReturnChannel.get_instance()
-    count = await channel.submit(envelope)
-    
+    count = await channel.submit(packet)
+
     return {
         "status": "accepted",
         "targets_queued": count,
-        "packet_id": envelope.packet_id,
+        "packet_id": str(packet.header.packet_id),
+        "tenant": tenant,
     }

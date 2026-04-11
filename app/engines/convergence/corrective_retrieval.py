@@ -12,7 +12,7 @@ Dependencies:
   app.models.enrichment   — InferenceResult, ConvergenceState, EnrichRequest
   app.models.common       — FieldStatus, FieldTrace
   app.engines.convergence — ConvergenceConfig
-  PacketEnvelope          — immutable I/O boundary (enforced by caller)
+  TransportPacket          — immutable I/O boundary (enforced by caller)
 
 L9 Compliance:
   - No routes, auth, rate-limiting, or infra
@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.engines.convergence.convergence_config import ConvergenceConfig
 from app.models.common import FieldStatus, FieldTrace
@@ -132,7 +132,7 @@ def _extract_missing_inputs(trace: FieldTrace) -> tuple[str, ...]:
 
 def _extract_confidence_gap(trace: FieldTrace, cfg: ConvergenceConfig) -> float:
     current = getattr(trace, "confidence", 0.0)
-    required = cfg.convergence_threshold
+    required = cfg.confidence_threshold
     return max(0.0, required - current)
 
 
@@ -202,7 +202,7 @@ def apply_corrective_override(
 ) -> ConvergenceState:
     """
     Return a new ConvergenceState with _corrective_targets injected into
-    metadata.  The original state is never mutated (PacketEnvelope immutability).
+    metadata.  The original state is never mutated (TransportPacket immutability).
     """
     if corrective.is_empty():
         return state
@@ -220,7 +220,7 @@ def apply_corrective_override(
             "idempotency_hash": corrective.idempotency_hash,
         },
     )
-    return state.replace(metadata=updated_meta)
+    return replace(state, metadata=updated_meta)
 
 
 def consume_corrective_override(
@@ -233,7 +233,7 @@ def consume_corrective_override(
     """
     meta = dict(state.metadata or {})
     corrective: CorrectiveState | None = meta.pop(_CORRECTIVE_TARGETS_KEY, None)
-    new_state = state.replace(metadata=meta)
+    new_state = replace(state, metadata=meta)
     if corrective:
         logger.debug(
             "corrective_override.consumed",

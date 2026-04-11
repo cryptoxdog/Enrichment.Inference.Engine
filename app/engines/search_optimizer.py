@@ -95,7 +95,7 @@ class SonarConfig:
     resolution_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for PacketEnvelope.metadata observability."""
+        """Serialize for TransportPacket.metadata observability."""
         return {
             "model": self.model.value,
             "search_context_size": self.search_context_size.value,

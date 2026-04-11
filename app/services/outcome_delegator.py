@@ -4,7 +4,7 @@ Pattern 3 — EvidenceRL/CRAG outcome-feedback loop: GRAPH rejection → ENRICH 
 
 Purpose:
   Receives GRAPH scoring verdicts via OutcomeEvent (emitted by handle_outcome),
-  converts GRAPH_REJECTED outcomes into targeted EnrichRequest objects with
+  converts REJECTED outcomes into targeted EnrichRequest objects with
   elevated consensus thresholds, and returns them for queue dispatch.
   Accepted / partial outcomes return None (no re-enrichment needed).
 
@@ -12,7 +12,7 @@ Dependencies:
   app.models.enrichment   — EnrichRequest
   app.models.events       — OutcomeEvent, OutcomeVerdict
   app.models.common       — EntityRef
-  PacketEnvelope          — immutable I/O boundary
+  TransportPacket          — immutable I/O boundary
 
 L9 Compliance:
   - No routes, auth, or rate-limiting
@@ -27,7 +27,6 @@ import hashlib
 import logging
 from typing import Any
 
-from app.models.common import EntityRef
 from app.models.enrichment import EnrichRequest
 from app.models.events import OutcomeEvent, OutcomeVerdict
 
@@ -126,7 +125,7 @@ def _select_target_fields(event: OutcomeEvent) -> list[str]:
 
 def build_corrective_request(event: OutcomeEvent) -> EnrichRequest | None:
     """
-    Convert a GRAPH_REJECTED OutcomeEvent into a targeted EnrichRequest.
+    Convert a REJECTED OutcomeEvent into a targeted EnrichRequest.
     Returns None for accepted / partial verdicts.
 
     The returned EnrichRequest carries:
@@ -141,7 +140,7 @@ def build_corrective_request(event: OutcomeEvent) -> EnrichRequest | None:
         if request:
             await task_queue.enqueue(request)
     """
-    if event.verdict != OutcomeVerdict.GRAPH_REJECTED:
+    if event.verdict != OutcomeVerdict.REJECTED:
         logger.debug(
             "outcome_delegator.skip",
             extra={
@@ -166,18 +165,28 @@ def build_corrective_request(event: OutcomeEvent) -> EnrichRequest | None:
         },
     )
 
-    return EnrichRequest(
-        entity_ref=EntityRef(entity_id=event.entity_id),
-        target_fields=target_fields,
-        pass_label=_CORRECTIVE_PASS_LABEL,
-        consensus_threshold=_ELEVATED_CONSENSUS_THRESHOLD,
-        max_variations=_ELEVATED_MAX_VARIATIONS,
-        idempotency_key=idempotency_key,
-        source_run_id=event.run_id,
-        metadata={
+    object_type = str(event.metadata.get("object_type", "unknown"))
+    schema_map = dict.fromkeys(target_fields, "string") if target_fields else None
+    entity_payload: dict[str, Any] = {
+        "entity_id": event.entity_id,
+        "_pass_label": _CORRECTIVE_PASS_LABEL,
+        "_source_run_id": event.run_id,
+        "_outcome_metadata": {
             "trigger": "graph_rejection",
             "graph_score": event.graph_score,
             "failed_gates": event.failed_gates,
             "confidence_deltas": event.confidence_deltas,
         },
+    }
+    return EnrichRequest(
+        entity=entity_payload,
+        object_type=object_type,
+        objective=(
+            f"Corrective enrichment after graph rejection (run {event.run_id}); "
+            f"target fields: {', '.join(target_fields) if target_fields else '(none)'}"
+        ),
+        schema=schema_map,
+        consensus_threshold=_ELEVATED_CONSENSUS_THRESHOLD,
+        max_variations=_ELEVATED_MAX_VARIATIONS,
+        idempotency_key=idempotency_key,
     )

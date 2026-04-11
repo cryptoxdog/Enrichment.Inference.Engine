@@ -9,14 +9,14 @@
 # token_estimate: 150
 # ssot_for: [coderabbit-specific-delta]
 # load_when: [coderabbit_review]
-# references: [AGENT.md, .coderabbit.yaml, AI_AGENT_REVIEW_CHECKLIST.md]
+# references: [AGENTS.md, .coderabbit.yaml, AI_AGENT_REVIEW_CHECKLIST.md]
 # --- /L9_META ---
 
 # CODERABBIT.md — CodeRabbit-Specific Delta
 
-**VERSION**: 1.0.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-01
+**VERSION**: 1.1.0 | **SHA_BASELINE**: 358d15d | **LAST_REVIEWED**: 2026-04-11
 
-> Delta-only file. Load AGENT.md first. This file contains ONLY CodeRabbit-specific overrides.
+> Delta-only file. Load [AGENTS.md](AGENTS.md) first. This file contains ONLY CodeRabbit-specific overrides.
 
 ## Primary Configuration
 

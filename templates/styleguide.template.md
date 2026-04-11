@@ -34,7 +34,7 @@
 ### Project Architectural Patterns
 
 {{ARCHITECTURAL_PATTERNS — describe your key patterns, e.g.:
-- **Inter-component messaging:** All communication uses PacketEnvelope protocol
+- **Inter-component messaging:** Gate-routed `TransportPacket` and chassis wire envelopes — no ad-hoc duplicate types
 - **Data access:** Never write to databases directly; use the substrate service layer
 - **Authorization:** All tool executions must pass governance checks before running
 }}
