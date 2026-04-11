@@ -95,7 +95,7 @@ Before any modification, run the 5 Gates:
 
 ```bash
 make agent-check
-````
+```
 
 All 7 gates must pass before any commit.
 
@@ -128,29 +128,29 @@ All PRs must pass:
 
 ## Architectural Contracts
 
-| ID   | Contract                                                                                                                                                                                                                                                                                                                               | Severity                                     |      |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ---- |
-| C-01 | `from fastapi import` only in app/api/, app/main.py, and transport-adjacent modules explicitly intended for HTTP routes                                                                                                                                                                                                                | CRITICAL                                     |      |
-| C-02 | Handler contract: `async def handle_*(tenant: str, payload: dict[str, Any]) -> dict[str, Any]` is the primary production signature for SDK-registered handlers. Optional packet/context parameters are allowed only where the SDK runtime explicitly supports them.                                                                    | CRITICAL                                     |      |
-| C-03 | Tenant isolation in all Neo4j queries: `WHERE n.tenant_id = $tenant`                                                                                                                                                                                                                                                                   | CRITICAL                                     |      |
-| C-04 | structlog only — `print()` forbidden in engine code                                                                                                                                                                                                                                                                                    | HIGH                                         |      |
-| C-05 | `list[T]`, `T                                                                                                                                                                                                                                                                                                                          | None`— never`List[]`, `Optional[]`, `Dict[]` | HIGH |
-| C-06 | `eval()`, `exec()`, `compile()`, `pickle` — forbidden always                                                                                                                                                                                                                                                                           | CRITICAL                                     |      |
-| C-07 | Cypher strings via `sanitize_label()` — no f-string injection                                                                                                                                                                                                                                                                          | CRITICAL                                     |      |
-| C-08 | `yaml.safe_load()` only — never `yaml.load()`                                                                                                                                                                                                                                                                                          | CRITICAL                                     |      |
-| C-09 | All env vars must use `L9_` prefix except approved infrastructure-standard names                                                                                                                                                                                                                                                       | HIGH                                         |      |
-| C-10 | Zero hardcoded credentials — env vars via pydantic-settings only                                                                                                                                                                                                                                                                       | CRITICAL                                     |      |
-| C-11 | `TransportPacket` and other SDK transport objects are immutable at boundaries — never mutate in place. Deprecated local chassis dict envelopes are not part of production dispatch.                                                                                                                                                    | CRITICAL                                     |      |
-| C-12 | No `Field(alias=...)` in Pydantic models                                                                                                                                                                                                                                                                                               | HIGH                                         |      |
-| C-13 | Transport contract lockstep: `app/main.py`, `app/api/v1/chassis_endpoint.py`, `app/services/chassis_handlers.py`, `app/engines/orchestration_layer.py`, `app/engines/handlers.py`, and `app/engines/graph_sync_client.py` must stay aligned when changing ingress, action registration, handler dispatch, or Gate transport semantics. | CRITICAL                                     |      |
-| C-14 | New SDK action registration requires corresponding handler + test in same PR                                                                                                                                                                                                                                                           | HIGH                                         |      |
-| C-15 | Coverage >= 60% — never lower the threshold                                                                                                                                                                                                                                                                                            | HIGH                                         |      |
-| C-16 | Python 3.12+ — no backports, no 3.11-only APIs                                                                                                                                                                                                                                                                                         | CRITICAL                                     |      |
-| C-17 | No camelCase Python field names                                                                                                                                                                                                                                                                                                        | HIGH                                         |      |
-| C-18 | Ruff ignore list is frozen — do not add/remove ignores                                                                                                                                                                                                                                                                                 | HIGH                                         |      |
-| C-19 | GDS jobs must be spec-driven from domain YAML gds_jobs section                                                                                                                                                                                                                                                                         | MEDIUM                                       |      |
-| C-20 | L9_META header required in all template-managed files                                                                                                                                                                                                                                                                                  | HIGH                                         |      |
-| C-21 | `/v1/execute` is owned by the SDK transport runtime. Do not route production ingress through `chassis/router.py` or `chassis/registry.py`.                                                                                                                                                                                             | CRITICAL                                     |      |
+| ID | Contract | Severity |
+|----|----------|----------|
+| C-01 | `from fastapi import` only in app/api/, app/main.py, and transport-adjacent modules explicitly intended for HTTP routes | CRITICAL |
+| C-02 | Handler contract: `async def handle_*(tenant, payload) -> dict` is the primary production signature for SDK-registered handlers | CRITICAL |
+| C-03 | Tenant isolation in all Neo4j queries: `WHERE n.tenant_id = $tenant` | CRITICAL |
+| C-04 | structlog only — `print()` forbidden in engine code | HIGH |
+| C-05 | `list[T]`, `T \| None` — never `List[]`, `Optional[]`, `Dict[]` | HIGH |
+| C-06 | `eval()`, `exec()`, `compile()`, `pickle` — forbidden always | CRITICAL |
+| C-07 | Cypher strings via `sanitize_label()` — no f-string injection | CRITICAL |
+| C-08 | `yaml.safe_load()` only — never `yaml.load()` | CRITICAL |
+| C-09 | All env vars must use `L9_` prefix except approved infrastructure-standard names | HIGH |
+| C-10 | Zero hardcoded credentials — env vars via pydantic-settings only | CRITICAL |
+| C-11 | `TransportPacket` and SDK transport objects are immutable at boundaries — never mutate in place. Deprecated local chassis dict envelopes are not part of production dispatch. | CRITICAL |
+| C-12 | No `Field(alias=...)` in Pydantic models | HIGH |
+| C-13 | Transport contract lockstep: `app/main.py`, `app/api/v1/chassis_endpoint.py`, `app/services/chassis_handlers.py`, `app/engines/orchestration_layer.py`, `app/engines/handlers.py`, and `app/engines/graph_sync_client.py` must stay aligned | CRITICAL |
+| C-14 | New SDK action registration requires corresponding handler + test in same PR | HIGH |
+| C-15 | Coverage >= 60% — never lower the threshold | HIGH |
+| C-16 | Python 3.12+ — no backports, no 3.11-only APIs | CRITICAL |
+| C-17 | No camelCase Python field names | HIGH |
+| C-18 | Ruff ignore list is frozen — do not add/remove ignores | HIGH |
+| C-19 | GDS jobs must be spec-driven from domain YAML gds_jobs section | MEDIUM |
+| C-20 | L9_META header required in all template-managed files | HIGH |
+| C-21 | `/v1/execute` is owned by the SDK transport runtime. Do not route production ingress through `chassis/router.py` or `chassis/registry.py`. | CRITICAL |
 
 ---
 

@@ -204,6 +204,10 @@ class ContractCallVisitor(ast.NodeVisitor):
         if arg_expr is None:
             return
 
+        if isinstance(arg_expr, (ast.Tuple, ast.List)):
+            self._enforce_collection(node, arg_expr, pair)
+            return
+
         kind, literal_value = _classify_expr(arg_expr)
 
         record: dict[str, str | int] = {
@@ -238,6 +242,38 @@ class ContractCallVisitor(ast.NodeVisitor):
         elif pair.dynamic_policy == "hybrid_warn":
             record["ast_dump"] = ast.dump(arg_expr)
             self.dynamic_proven.append(record)
+
+    def _enforce_collection(
+        self, node: ast.Call, collection: ast.Tuple | ast.List, pair: ContractPair
+    ) -> None:
+        """Unpack a tuple/list argument and validate each element individually."""
+        for elt in collection.elts:
+            kind, literal_value = _classify_expr(elt)
+            record: dict[str, str | int] = {
+                "file": str(self._filepath),
+                "line": node.lineno,
+                "method": pair.method,
+                "param": pair.param,
+                "kind": kind,
+            }
+            if kind == "literal":
+                record["value"] = literal_value if literal_value is not None else ""
+                if literal_value in pair.allowed_literals:
+                    self.literal_valid.append(record)
+                elif "__dynamic_only__" not in pair.allowed_literals:
+                    self.literal_invalid.append(record)
+            else:
+                if pair.dynamic_policy == "prove_dynamic":
+                    matched, pat_desc = _matches_dynamic_pattern(elt, self._dynamic_patterns)
+                    if matched:
+                        record["pattern"] = pat_desc if pat_desc else "unknown"
+                        self.dynamic_proven.append(record)
+                    else:
+                        record["ast_dump"] = ast.dump(elt)
+                        self.dynamic_unproven.append(record)
+                elif pair.dynamic_policy == "hybrid_warn":
+                    record["ast_dump"] = ast.dump(elt)
+                    self.dynamic_proven.append(record)
 
 
 # ══════════════════════════════════════════════════════════
@@ -401,7 +437,7 @@ class TestRepositoryContractCalls:
         contract_catalog: ContractCatalog,
     ) -> None:
         """Contract catalog YAML is valid and loads without error."""
-        assert contract_catalog.schema_version == "1.0.0"
+        assert contract_catalog.schema_version == "2.0.0"
         assert len(contract_catalog.pairs) > 0
         assert len(contract_catalog.scan.include_globs) > 0
         assert len(contract_catalog.scan.exclude_globs) > 0

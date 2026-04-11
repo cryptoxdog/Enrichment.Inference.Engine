@@ -70,7 +70,7 @@ Enriches CRM entity records (Odoo + Salesforce) with structured intelligence ext
 │  Storage Layer                                                  │
 │  PostgreSQL (state) │ Neo4j (graph) │ Redis (cache)             │
 └─────────────────────────────────────────────────────────────────┘
-````
+```
 
 ---
 

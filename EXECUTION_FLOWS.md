@@ -47,7 +47,7 @@ Client / caller
   -> runtime validates allowed action
   -> registered handler executes
   -> response returned through runtime
-````
+```
 
 Canonical runtime ownership:
 
