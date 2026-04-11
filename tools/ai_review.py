@@ -3,13 +3,15 @@
 
 Usage:
     # Review staged changes (pre-commit)
-    python scripts/ai_review.py --mode staged
+    python tools/ai_review.py --mode staged
 
     # Review a diff file (CI)
-    python scripts/ai_review.py --mode file --diff-path pr_diff.txt
+    python tools/ai_review.py --mode file --diff-path pr_diff.txt
 
     # Review specific files
-    python scripts/ai_review.py --mode files --paths app/main.py app/pipeline.py
+    python tools/ai_review.py --mode files --paths app/main.py app/pipeline.py
+
+Requires PERPLEXITY_API_KEY in .env or environment.
 """
 
 from __future__ import annotations
@@ -21,6 +23,9 @@ import sys
 from pathlib import Path
 
 import httpx
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 PERPLEXITY_URL = "https://api.perplexity.ai/chat/completions"
 
@@ -56,13 +61,36 @@ If no issues, return: {"issues": [], "summary": "No issues found.", "block": fal
 
 
 def get_api_key() -> str:
+    """Get Perplexity API key from app config or environment."""
     import os
 
+    # Try app config first (loads from .env)
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        if settings.perplexity_api_key:
+            return settings.perplexity_api_key
+    except ImportError:
+        pass  # Fall back to direct env var
+
+    # Fall back to direct environment variable
     key = os.environ.get("PERPLEXITY_API_KEY", "")
     if not key:
-        print("ERROR: PERPLEXITY_API_KEY not set", file=sys.stderr)
+        print("ERROR: PERPLEXITY_API_KEY not set in .env or environment", file=sys.stderr)
         sys.exit(1)
     return key
+
+
+def get_model() -> str:
+    """Get Perplexity model from app config or default."""
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        if settings.perplexity_model:
+            return settings.perplexity_model
+    except ImportError:
+        pass
+    return "sonar-pro"
 
 
 def call_review(code: str, api_key: str, model: str = "sonar-pro") -> dict:
@@ -150,11 +178,12 @@ def main():
     parser.add_argument("--mode", choices=["staged", "file", "files"], default="staged")
     parser.add_argument("--diff-path", help="Path to diff file (mode=file)")
     parser.add_argument("--paths", nargs="*", help="File paths to review (mode=files)")
-    parser.add_argument("--model", default="sonar-pro", help="Perplexity model")
+    parser.add_argument("--model", default=None, help="Perplexity model (default: from config)")
     parser.add_argument("--no-block", action="store_true", help="Never exit non-zero")
     args = parser.parse_args()
 
     api_key = get_api_key()
+    model = args.model or get_model()
 
     if args.mode == "staged":
         code = get_staged_diff()
@@ -174,8 +203,8 @@ def main():
     else:
         sys.exit(1)
 
-    print(f"🔍 Running AI review ({args.model})...")
-    result = call_review(code, api_key, model=args.model)
+    print(f"🔍 Running AI review ({model})...")
+    result = call_review(code, api_key, model=model)
     should_block = print_results(result)
 
     if should_block and not args.no_block:
