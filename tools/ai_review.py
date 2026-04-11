@@ -34,11 +34,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 PERPLEXITY_URL = "https://api.perplexity.ai/chat/completions"
 
 # Context files to include (in priority order, truncated to fit token budget)
+# These are the repo rules that code review agents need to know
 CONTEXT_FILES = [
-    ("AGENTS.md", 8000),           # Agent rules, tiers, prohibited actions
-    ("CLAUDE.md", 6000),           # AI coding context, 20 contracts summary
-    (".cursorrules", 4000),        # Full contract details (truncated)
-    ("docs/contracts/api/openapi.yaml", 3000),  # API contract
+    ("AGENTS.md", 12000),          # Agent rules, tiers, prohibited actions, directory ownership
+    ("ARCHITECTURE.md", 8000),     # System architecture, components, data flow
+    ("CLAUDE.md", 4000),           # AI coding context, contracts summary
 ]
 
 BASE_SYSTEM_PROMPT = """You are a senior Python engineer performing a code review for an L9 constellation engine.
