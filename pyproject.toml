@@ -36,8 +36,8 @@ dev = [
     "pytest-httpx>=0.34",
     "pytest-cov==7.1.0",
     "respx>=0.22",
-    "ruff==0.15.9",
-    "mypy==1.20.0",
+    "ruff==0.15.10",
+    "mypy==1.20.1",
     "coverage==7.13.5",
 ]
 
